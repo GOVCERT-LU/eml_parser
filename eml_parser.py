@@ -23,7 +23,7 @@
 #   https://github.com/iscoming/eml_parser/blob/master/eml_parser.py
 #
 
-
+import sys
 import email
 import getopt
 import re
