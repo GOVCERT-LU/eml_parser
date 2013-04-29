@@ -160,11 +160,14 @@ def decode_email(eml_file, include_raw_body=False, include_attachment_data=False
 
   for m in msg.get_all('Received'):
     m = re.sub(r'(\r|\n|\s|\t)+', ' ', m.lower())
-    f, b = m.split('by')
+
+    try:
+      f, b = m.split('by')
+    except:
+      continue
 
     b_d = re.search(r'(localhost|[a-z0-9.\-]+[.][a-z]{2,4})', b)
     f_d = re.search(r'from\s+(localhost|[a-z0-9\-]+|[a-z0-9.\-]+[.][a-z]{2,4})\s+(?:\((localhost|[a-z0-9.\-]+[.][a-z]{2,4})?\s*\[(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\]\))?', f)
-    f_d = re.search(r'from\s+(localhost|[a-z0-9\-]+|[a-z0-9.\-]+[.][a-z]{2,4})\s+(?:\((localhost|[a-z0-9.\-]+[.][a-z]{2,4})?\s*\[(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\]\))?', f.lower())
     for_d = re.search(r'for\s+<?([a-z0-9.\-]+@[a-z0-9.\-]+[.][a-z]{2,4})>?', m.lower())
 
     if for_d:
@@ -183,7 +186,7 @@ def decode_email(eml_file, include_raw_body=False, include_attachment_data=False
       f = '{0} ({1} [{2}])'.format(f_d.group(1), f_d_2, f_d_3)
       b = b_d.group(1)
 
-    maila['received'].append([f, b])
+      maila['received'].append([f, b])
 
   # get raw header
   raw_body = get_raw_body_text(msg)
