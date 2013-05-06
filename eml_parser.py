@@ -106,7 +106,15 @@ def decode_email(eml_file, include_raw_body=False, include_attachment_data=False
   fp = open(eml_file)
   msg = email.message_from_file(fp)
   fp.close()
+  return parse_email(msg, include_raw_body=False, include_attachment_data=False)
 
+
+def decode_email_s(eml_file, include_raw_body=False, include_attachment_data=False):
+  msg = email.message_from_string(eml_file)
+  return parse_email(msg, include_raw_body=False, include_attachment_data=False)
+
+
+def parse_email(msg, include_raw_body=False, include_attachment_data=False):
   maila = {}  
 
   # parse and decode subject
