@@ -83,6 +83,45 @@ def get_file_hashes(data):
   return hashes
 
 
+def traverse_multipart(msg, counter=0, include_attachment_data=False):
+  attachments = {}
+
+  if msg.is_multipart():
+    for part in msg.get_payload():
+      attachments.update(traverse_multipart(part, counter, include_attachment_data))
+  else:
+    lower_keys = [k.lower() for k in msg.keys()]
+
+    if 'content-disposition' in lower_keys:
+      # if it's an attachment-type, pull out the filename
+      # and calculate the size in bytes
+      data = msg.get_payload(decode=True)
+      file_size = len(data)
+
+      filename = msg.get_filename('')
+      if filename == '':
+        filename = 'part-%03d' % (counter)
+      else:
+        filename = decode_field(msg, filename, filename)
+
+      extension = get_file_extension(filename)
+      hashes = get_file_hashes(data)
+
+      file_id = str(uuid.uuid1())
+      attachments[file_id] = {}
+      attachments[file_id]['filename'] = filename
+      attachments[file_id]['size'] = file_size
+      attachments[file_id]['extension'] = extension
+      attachments[file_id]['hashes'] = hashes
+
+      if include_attachment_data:
+        attachments[file_id]['raw'] = base64.b64encode(data)
+
+      counter += 1
+
+  return attachments
+
+
 def decode_field(msg, field, default):
   '''Try to get the specified field using the Header module.
      If there is also an associated encoding, try to decode the
@@ -222,40 +261,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
   maila['urls'] = list_observed_urls
 
   # parse attachments
-  attachments = {}
-
-  if msg.is_multipart():
-    counter = 1
-
-    for part in msg.get_payload():
-      if part.has_key('content-disposition'):
-        # if it's an attachment-type, pull out the filename
-        # and calculate the size in bytes
-        data = part.get_payload(decode=True)
-        file_size = len(data)
-
-        filename = part.get_filename('')
-        if filename == '':
-          filename = 'part-%03d' % (counter)
-        else:
-          filename = decode_field(part, filename, filename)
-
-        extension = get_file_extension(filename)
-        hashes = get_file_hashes(data)
-
-        file_id = str(uuid.uuid1())
-        attachments[file_id] = {}
-        attachments[file_id]['filename'] = filename
-        attachments[file_id]['size'] = file_size
-        attachments[file_id]['extension'] = extension
-        attachments[file_id]['hashes'] = hashes
-
-        if include_attachment_data:
-          attachments[file_id]['raw'] = base64.b64encode(data)
-
-      counter += 1
-
-  maila['attachments'] = attachments
+  maila['attachments'] = traverse_multipart(msg, 0, include_attachment_data)
 
   return maila
 
