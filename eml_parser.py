@@ -32,7 +32,8 @@ import datetime
 import base64
 import hashlib
 import quopri
-
+import magic
+import time
 
 
 def get_raw_body_text(msg):
@@ -50,7 +51,10 @@ def get_raw_body_text(msg):
       if not charset:
         raw_body_str = msg.get_payload(decode=True)
       else:
-        raw_body_str = msg.get_payload(decode=True).decode(charset, 'ignore')
+        try:
+          raw_body_str = msg.get_payload(decode=True).decode(charset, 'ignore')
+        except:
+          raw_body_str = msg.get_payload(decode=True).decode('ascii', 'ignore')
 
       raw_body.append((encoding, raw_body_str))
   else:
@@ -90,9 +94,9 @@ def traverse_multipart(msg, counter=0, include_attachment_data=False):
     for part in msg.get_payload():
       attachments.update(traverse_multipart(part, counter, include_attachment_data))
   else:
-    lower_keys = [k.lower() for k in msg.keys()]
+    lower_keys = dict((k.lower(), v) for k, v in msg.items())
 
-    if 'content-disposition' in lower_keys:
+    if 'content-disposition' in lower_keys or not msg.get_content_maintype() == 'text':
       # if it's an attachment-type, pull out the filename
       # and calculate the size in bytes
       data = msg.get_payload(decode=True)
@@ -102,7 +106,7 @@ def traverse_multipart(msg, counter=0, include_attachment_data=False):
       if filename == '':
         filename = 'part-%03d' % (counter)
       else:
-        filename = decode_field(msg, filename, filename)
+        filename = decode_field(msg, filename, filename, force=True)
 
       extension = get_file_extension(filename)
       hashes = get_file_hashes(data)
@@ -113,6 +117,7 @@ def traverse_multipart(msg, counter=0, include_attachment_data=False):
       attachments[file_id]['size'] = file_size
       attachments[file_id]['extension'] = extension
       attachments[file_id]['hashes'] = hashes
+      attachments[file_id]['mime-type'] = magic.from_buffer(data, mime=True)
 
       if include_attachment_data:
         attachments[file_id]['raw'] = base64.b64encode(data)
@@ -122,7 +127,28 @@ def traverse_multipart(msg, counter=0, include_attachment_data=False):
   return attachments
 
 
-def decode_field(msg, field, default):
+def force_string_decode(string):
+  if string is None:
+    return ''
+
+  encodings = ('latin1', 'utf-8')
+  text = ''
+
+  for e in encodings:
+    try:
+      test = unicode(string.decode(e))
+      text = test
+      break
+    except UnicodeDecodeError:
+      pass
+
+  if text == '':
+    text = string.decode('ascii', 'ignore')
+
+  return text
+
+
+def decode_field(msg, field, default, force=False):
   '''Try to get the specified field using the Header module.
      If there is also an associated encoding, try to decode the
      field and return it, else return a specified default value.'''
@@ -134,9 +160,12 @@ def decode_field(msg, field, default):
     _text = _decoded[0][0]
     charset = _decoded[0][1]
     if charset:
-      text = _test.decode(charset, 'ignore')
-  except:
-    pass
+      text = _text.decode(charset, 'ignore')
+    elif force:
+      text = force_string_decode(text)
+  except UnicodeDecodeError:
+    if force:
+      text = force_string_decode(text)
 
   return text
 
@@ -158,7 +187,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
 
   # parse and decode subject
   subject = msg.get('subject')
-  maila['subject'] = decode_field(msg, 'subject', subject)
+  maila['subject'] = decode_field(msg, 'subject', subject, force=True)
 
   # messageid
   maila['message_id'] = msg.get('Message-ID', '')
@@ -187,14 +216,17 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
       maila['cc'].append(m[1].lower())
 
   # parse and decode Date
-  date_ = email.utils.parsedate_tz(msg.get('Date'))
+  # "." -> ":" replacement is for fixing bad clients (e.g. outlook express)
+  msg_date = msg.get('Date').replace('.', ':')
+  date_ = email.utils.parsedate_tz(msg_date)
 
   if date_:
     ts = email.utils.mktime_tz(date_)
     d = datetime.datetime.utcfromtimestamp(ts)
     maila['date'] = d
   else:
-    date_ = email.utils.parsedate(msg.get('Date'))
+    date_ = email.utils.parsedate(msg_date)
+    ts = time.mktime(date_)
     d = datetime.datetime.fromtimestamp(ts)
     maila['date'] = d
 
@@ -204,21 +236,26 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
   # mail receiver path
   # @TODO parse case where domain is specified but in parantheses only an IP
   maila['received'] = []
+  maila['received_raw'] = []
 
   for m in msg.get_all('Received'):
     m = re.sub(r'(\r|\n|\s|\t)+', ' ', m.lower())
 
+    maila['received_raw'].append(m)
+
     try:
       f, b = m.split('by')
+      b, undef = b.split('for')
     except:
       continue
 
-    b_d = re.search(r'(localhost|[a-z0-9.\-]+[.][a-z]{2,4})', b)
-    f_d = re.search(r'from\s+(localhost|[a-z0-9\-]+|[a-z0-9.\-]+[.][a-z]{2,4})\s+(?:\((localhost|[a-z0-9.\-]+[.][a-z]{2,4})?\s*\[(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\]\))?', f)
+    b_d = re.search(r'(localhost|[a-z0-9.\-]+(?:[.][a-z]{2,4})?)', b)
+    f_d = re.search(r'from(?:\s+(localhost|[a-z0-9\-]+|[a-z0-9.\-]+[.][a-z]{2,4}))?\s+(?:\(?(localhost|[a-z0-9.\-]+[.][a-z]{2,4})?\s*\[(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\]\)?)?', f)
     for_d = re.search(r'for\s+<?([a-z0-9.\-]+@[a-z0-9.\-]+[.][a-z]{2,4})>?', m.lower())
 
     if for_d:
       maila['to'].append(for_d.group(1))
+      maila['to'] = list(set(maila['to']))
 
     if f_d:
       if not f_d.group(2):
@@ -231,7 +268,11 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
         f_d_3 = f_d.group(3)
 
       f = '{0} ({1} [{2}])'.format(f_d.group(1), f_d_2, f_d_3)
-      b = b_d.group(1)
+
+      if b_d is None:
+        b = ''
+      else:
+        b = b_d.group(1)
 
       maila['received'].append([f, b])
 
