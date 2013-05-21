@@ -32,8 +32,12 @@ import datetime
 import base64
 import hashlib
 import quopri
-import magic
 import time
+
+try:
+  from python_magic import magic
+except ImportError:
+  magic = None
 
 
 def get_raw_body_text(msg):
@@ -117,7 +121,11 @@ def traverse_multipart(msg, counter=0, include_attachment_data=False):
       attachments[file_id]['size'] = file_size
       attachments[file_id]['extension'] = extension
       attachments[file_id]['hashes'] = hashes
-      attachments[file_id]['mime-type'] = magic.from_buffer(data, mime=True)
+
+      if magic:
+        attachments[file_id]['mime-type'] = magic.from_buffer(data, mime=True)
+      else:
+        attachments[file_id]['mime-type'] = 'undetermined'
 
       if include_attachment_data:
         attachments[file_id]['raw'] = base64.b64encode(data)
