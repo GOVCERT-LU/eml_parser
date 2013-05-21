@@ -165,7 +165,7 @@ def decode_field(msg, field, default, force=False):
       text = force_string_decode(text)
   except UnicodeDecodeError:
     if force:
-      text = force_string_decode(text)
+      text = force_string_decode(default)
 
   return text
 
@@ -174,12 +174,12 @@ def decode_email(eml_file, include_raw_body=False, include_attachment_data=False
   fp = open(eml_file)
   msg = email.message_from_file(fp)
   fp.close()
-  return parse_email(msg, include_raw_body=False, include_attachment_data=False)
+  return parse_email(msg, include_raw_body, include_attachment_data)
 
 
 def decode_email_s(eml_file, include_raw_body=False, include_attachment_data=False):
   msg = email.message_from_string(eml_file)
-  return parse_email(msg, include_raw_body=False, include_attachment_data=False)
+  return parse_email(msg, include_raw_body, include_attachment_data)
 
 
 def parse_email(msg, include_raw_body=False, include_attachment_data=False):
