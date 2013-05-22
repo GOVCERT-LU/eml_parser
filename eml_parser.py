@@ -40,6 +40,21 @@ except ImportError:
   magic = None
 
 
+# regex compilation
+# W3C HTML5 standard recommended regex for e-mail validation
+email_regex = re.compile(r'''([a-zA-Z0-9.!#$%&'*+-/=?\^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*)''', re.MULTILINE)
+#                 /^[a-zA-Z0-9.!#$%&'*+-/=?\^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$/
+domain_regex = re.compile(r'''(?:(?:from|by)\s+)?([a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)+)''', re.MULTILINE)
+ipv4_regex = re.compile(r'''((?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?))''', re.MULTILINE)
+
+b_d_regex = re.compile(r'(localhost|[a-z0-9.\-]+(?:[.][a-z]{2,4})?)')
+f_d_regex = re.compile(r'from(?:\s+(localhost|[a-z0-9\-]+|[a-z0-9.\-]+[.][a-z]{2,4}))?\s+(?:\(?(localhost|[a-z0-9.\-]+[.][a-z]{2,4})?\s*\[(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\]\)?)?')
+for_d_regex = re.compile(r'for\s+<?([a-z0-9.\-]+@[a-z0-9.\-]+[.][a-z]{2,4})>?')
+
+url_regex = re.compile(r'''(?i)\b((?:(hxxps?|https?|ftp)://|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}/)(?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))*\))+(?:\(([^\s()<>]+|(\([^\s()<>]+\)))*\)|[^\s`!()\[\]{};:'".,<>?]))''', re.VERBOSE | re.MULTILINE)
+################################################
+
+
 def get_raw_body_text(msg):
   raw_body = []
 
@@ -202,7 +217,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
   
   # parse and decode from
   # @TODO verify if this hack is necessary for other e-mail fields as well
-  m = re.search(r'<\s*([a-z0-9.\-]+@[a-z0-9.\-]+[.][a-z]{2,4})\s*>', msg.get('from', '').lower())
+  m = email_regex.search(msg.get('from', '').lower())
   if m:
     maila['from'] = m.group(1)
   else:
@@ -241,25 +256,50 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
   # sender ip
   maila['x-originating-ip'] = msg.get('x-originating-ip', '').strip('[]')
 
-  # mail receiver path
+  # mail receiver path / parse any domain, e-mail
   # @TODO parse case where domain is specified but in parantheses only an IP
   maila['received'] = []
   maila['received_raw'] = []
+  maila['received_emails'] = []
+  maila['received_domains'] = []
 
-  for m in msg.get_all('Received'):
-    m = re.sub(r'(\r|\n|\s|\t)+', ' ', m.lower())
 
-    maila['received_raw'].append(m)
 
+  for l in msg.get_all('Received'):
+    l = re.sub(r'(\r|\n|\s|\t)+', ' ', l.lower())
+    maila['received_raw'].append(l)
+
+    # search for domains / e-mail addresses
+    for m in domain_regex.findall(l):
+      checks = True
+      if '.' in m:
+        try:
+          test = int(re.sub(r'[.-]', '', m))
+
+          if not ipv4_regex.match(m) or m == '127.0.0.1':
+            checks = False
+        except ValueError:
+          pass
+
+      if checks:
+        maila['received_domains'].append(m)
+
+    m = email_regex.findall(l)
+    if m:
+      maila['received_emails'] += m
+
+    # ----------------------------------------------
+
+    # try to parse received lines and normalize them
     try:
-      f, b = m.split('by')
+      f, b = l.split('by')
       b, undef = b.split('for')
     except:
       continue
 
-    b_d = re.search(r'(localhost|[a-z0-9.\-]+(?:[.][a-z]{2,4})?)', b)
-    f_d = re.search(r'from(?:\s+(localhost|[a-z0-9\-]+|[a-z0-9.\-]+[.][a-z]{2,4}))?\s+(?:\(?(localhost|[a-z0-9.\-]+[.][a-z]{2,4})?\s*\[(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\]\)?)?', f)
-    for_d = re.search(r'for\s+<?([a-z0-9.\-]+@[a-z0-9.\-]+[.][a-z]{2,4})>?', m.lower())
+    b_d = b_d_regex.search(b)
+    f_d = f_d_regex.search(f)
+    for_d = for_d_regex.search(l)
 
     if for_d:
       maila['to'].append(for_d.group(1))
@@ -284,6 +324,9 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
 
       maila['received'].append([f, b])
 
+  maila['received_emails'] = list(set(maila['received_emails']))
+  maila['received_domains'] = list(set(maila['received_domains']))
+
   # get raw header
   raw_body = get_raw_body_text(msg)
   if include_raw_body:
@@ -292,16 +335,13 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
     maila['raw_body'] = []
 
   # parse any URLs found in the body
-  url = r'''(?i)\b((?:(hxxps?|https?|ftp)://|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}/)(?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))*\))+(?:\(([^\s()<>]+|(\([^\s()<>]+\)))*\)|[^\s`!()\[\]{};:'".,<>?]))'''
-  url_re = re.compile(url, re.VERBOSE | re.MULTILINE)
-  
   list_observed_urls = []
 
   for body_tup in raw_body: 
       encoding = body_tup[0]
       body = body_tup[1]
   
-      for match in url_re.findall(body):
+      for match in url_regex.findall(body):
           found_url = match[0].replace('hxxp', 'http')
           
           if found_url not in list_observed_urls:
