@@ -263,8 +263,6 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
   maila['received_emails'] = []
   maila['received_domains'] = []
 
-
-
   for l in msg.get_all('Received'):
     l = re.sub(r'(\r|\n|\s|\t)+', ' ', l.lower())
     maila['received_raw'].append(l)
