@@ -125,7 +125,7 @@ def traverse_multipart(msg, counter=0, include_attachment_data=False):
       if filename == '':
         filename = 'part-%03d' % (counter)
       else:
-        filename = decode_field(msg, filename, filename, force=True)
+        filename = decode_field(filename, force=True)
 
       extension = get_file_extension(filename)
       hashes = get_file_hashes(data)
@@ -171,24 +171,25 @@ def force_string_decode(string):
   return text
 
 
-def decode_field(msg, field, default, force=False):
+def decode_field(field, force=False):
   '''Try to get the specified field using the Header module.
      If there is also an associated encoding, try to decode the
      field and return it, else return a specified default value.'''
-  text = default
+  text = field
 
   try:
-    _raw = email.Header.Header(field)
-    _decoded = email.Header.decode_header(_raw)
-    _text = _decoded[0][0]
-    charset = _decoded[0][1]
-    if charset:
-      text = _text.decode(charset, 'ignore')
-    elif force:
-      text = force_string_decode(text)
-  except UnicodeDecodeError:
-    if force:
-      text = force_string_decode(default)
+    _decoded = email.Header.decode_header(field)
+  except email.errors.HeaderParseError:
+    return field
+
+  _text, charset = _decoded[0]
+
+  if charset:
+    try:
+      text = _text.decode(charset, 'ignore').encode('utf-8')
+    except UnicodeDecodeError:
+      if force:
+        text = force_string_decode(_text)
 
   return text
 
@@ -210,7 +211,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
 
   # parse and decode subject
   subject = msg.get('subject')
-  maila['subject'] = decode_field(msg, 'subject', subject, force=True)
+  maila['subject'] = decode_field(subject)
 
   # messageid
   maila['message_id'] = msg.get('Message-ID', '')
