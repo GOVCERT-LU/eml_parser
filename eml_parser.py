@@ -62,7 +62,7 @@ def get_raw_body_text(msg):
     # Treat text document attachments as belonging to the body of the mail.
     # Attachments with a file-extension of .htm/.html are implicitely treated
     # as text as well in order not to escape later checks (e.g. URL scan).
-    if (not msg.has_key('content-disposition') and msg.get_content_maintype() == 'text') or\
+    if (not 'content-disposition' in msg and msg.get_content_maintype() == 'text') or\
       (msg.get_filename('').lower().endswith('.html') or msg.get_filename('').lower().endswith('.htm')):
       encoding = msg.get('content-transfer-encoding', '').lower()
 
@@ -178,7 +178,10 @@ def decode_field(field, force=False):
   text = field
 
   try:
-    _decoded = email.Header.decode_header(field)
+    try:
+      _decoded = email.Header.decode_header(field)
+    except AttributeError:
+      _decoded = email.header.decode_header(field)
   except email.errors.HeaderParseError:
     return field
 
@@ -362,7 +365,7 @@ def main():
     if o == '-i':
       msgfile = k
 
-  print decode_email(msgfile)
+  print(decode_email(msgfile))
   #print decode_email(msgfile, include_raw_body=True, include_attachment_data=True)
 
 
