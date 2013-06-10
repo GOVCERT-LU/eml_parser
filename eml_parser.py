@@ -79,7 +79,7 @@ def get_raw_body_text(msg):
   else:
     for part in msg.get_payload():
       raw_body.extend(get_raw_body_text(part))
-  
+ 
   return raw_body
 
 
@@ -138,7 +138,7 @@ def traverse_multipart(msg, counter=0, include_attachment_data=False):
       attachments[file_id]['hashes'] = hashes
 
       if magic:
-        attachments[file_id]['mime-type'] = magic.from_buffer(data, mime=True)
+        attachments[file_id]['mime-type'] = magic.from_buffer(data, mime=True).decode('utf-8')
       else:
         attachments[file_id]['mime-type'] = 'undetermined'
 
@@ -189,7 +189,8 @@ def decode_field(field, force=False):
 
   if charset:
     try:
-      text = _text.decode(charset, 'ignore').encode('utf-8')
+      #text = _text.decode(charset, 'ignore').encode('utf-8')
+      text = _text.decode(charset, 'ignore')
     except UnicodeDecodeError:
       if force:
         text = force_string_decode(_text)
@@ -215,6 +216,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
   # parse and decode subject
   subject = msg.get('subject')
   maila['subject'] = decode_field(subject)
+
 
   # messageid
   maila['message_id'] = msg.get('Message-ID', '')
