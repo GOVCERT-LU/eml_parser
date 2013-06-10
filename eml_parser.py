@@ -159,7 +159,7 @@ def force_string_decode(string):
 
   for e in encodings:
     try:
-      test = unicode(string.decode(e))
+      test = string.decode(e)
       text = test
       break
     except UnicodeDecodeError:
@@ -183,7 +183,7 @@ def decode_field(field, force=False):
     except AttributeError:
       _decoded = email.header.decode_header(field)
   except email.errors.HeaderParseError:
-    return field
+    return field.decode('ascii', 'ignore')
 
   _text, charset = _decoded[0]
 
@@ -194,6 +194,8 @@ def decode_field(field, force=False):
     except UnicodeDecodeError:
       if force:
         text = force_string_decode(_text)
+  else:
+    text = force_string_decode(field)
 
   return text
 
