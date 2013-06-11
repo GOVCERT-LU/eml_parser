@@ -192,10 +192,11 @@ def decode_field(field, force=False):
       #text = _text.decode(charset, 'ignore').encode('utf-8')
       text = _text.decode(charset, 'ignore')
     except UnicodeDecodeError:
-      if force:
+      if force and sys.version_info < (3, 0):
         text = force_string_decode(_text)
   else:
-    text = force_string_decode(field)
+    if sys.version_info < (3, 0):
+      text = force_string_decode(field)
 
   return text
 
