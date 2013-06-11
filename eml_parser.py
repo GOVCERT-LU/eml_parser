@@ -75,14 +75,6 @@ def get_raw_body_text(msg):
         except:
           raw_body_str = msg.get_payload(decode=True).decode('ascii', 'ignore')
 
-      if sys.version_info >= (3, 0) and (isinstance(raw_body_str, bytes) or isinstance(raw_body_str, bytearray)) and encoding == 'quoted-printable':
-        raw_body_str = quopri.decodestring(raw_body_str)
-        raw_body_str = raw_body_str.decode('utf-8', 'ignore').encode('utf-8')
-        encoding = 'utf-8'
-      elif sys.version_info >= (3, 0) and (isinstance(raw_body_str, bytes) or isinstance(raw_body_str, bytearray)) and encoding == 'base64':
-        raw_body_str = base64.b64decode(raw_body_str).decode('utf-8', 'ignore').encode('utf-8')
-        encoding = 'utf-8'
-
       raw_body.append((encoding, raw_body_str))
   else:
     for part in msg.get_payload():
@@ -355,8 +347,8 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
   for body_tup in raw_body: 
       encoding, body = body_tup
 
-      if sys.version_info >= (3, 0):
-        body = body.decode(encoding)
+      if sys.version_info >= (3, 0) and (isinstance(body, bytes) or isinstance(body, bytearray)):
+        body = body.decode('utf-8', 'ignore')
 
       for match in url_regex.findall(body):
           found_url = match[0].replace('hxxp', 'http')
