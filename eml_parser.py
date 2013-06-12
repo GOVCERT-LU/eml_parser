@@ -217,7 +217,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
   maila = {}  
 
   # parse and decode subject
-  subject = msg.get('subject')
+  subject = msg.get('subject', '')
   maila['subject'] = decode_field(subject)
 
 
