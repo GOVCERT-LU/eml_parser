@@ -214,15 +214,14 @@ def decode_email_s(eml_file, include_raw_body=False, include_attachment_data=Fal
 
 
 def parse_email(msg, include_raw_body=False, include_attachment_data=False):
-  maila = {}  
+  maila = {} 
 
   # parse and decode subject
   subject = msg.get('subject', '')
   maila['subject'] = decode_field(subject)
 
-
   # messageid
-  maila['message_id'] = msg.get('Message-ID', '')
+  maila['message_id'] = msg.get('message-id', '')
   
   # parse and decode from
   # @TODO verify if this hack is necessary for other e-mail fields as well
@@ -241,7 +240,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
       maila['to'].append(m[1].lower())
 
   # parse and decode Cc
-  cc = email.utils.getaddresses(msg.get_all('Cc', []))
+  cc = email.utils.getaddresses(msg.get_all('cc', []))
   maila['cc'] = []
   for m in cc:
     if not m[1] == '':
@@ -249,7 +248,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
 
   # parse and decode Date
   # "." -> ":" replacement is for fixing bad clients (e.g. outlook express)
-  msg_date = msg.get('Date').replace('.', ':')
+  msg_date = msg.get('date').replace('.', ':')
   date_ = email.utils.parsedate_tz(msg_date)
 
   if date_:
@@ -272,7 +271,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
   maila['received_emails'] = []
   maila['received_domains'] = []
 
-  for l in msg.get_all('Received'):
+  for l in msg.get_all('received'):
     l = re.sub(r'(\r|\n|\s|\t)+', ' ', l.lower())
     maila['received_raw'].append(l)
 
