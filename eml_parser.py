@@ -79,7 +79,7 @@ def get_raw_body_text(msg):
   else:
     for part in msg.get_payload():
       raw_body.extend(get_raw_body_text(part))
- 
+
   return raw_body
 
 
@@ -88,8 +88,8 @@ def get_file_extension(filename):
   dot_idx = filename.rfind('.')
 
   if dot_idx != -1:
-    extension = filename[dot_idx+1:]
-  
+    extension = filename[dot_idx + 1:]
+
   return extension
 
 
@@ -214,7 +214,7 @@ def decode_email_s(eml_file, include_raw_body=False, include_attachment_data=Fal
 
 
 def parse_email(msg, include_raw_body=False, include_attachment_data=False):
-  maila = {} 
+  maila = {}
 
   # parse and decode subject
   subject = msg.get('subject', '')
@@ -222,7 +222,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
 
   # messageid
   maila['message_id'] = msg.get('message-id', '')
-  
+
   # parse and decode from
   # @TODO verify if this hack is necessary for other e-mail fields as well
   m = email_regex.search(msg.get('from', '').lower())
@@ -343,7 +343,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
   # parse any URLs found in the body
   list_observed_urls = []
 
-  for body_tup in raw_body: 
+  for body_tup in raw_body:
       encoding, body = body_tup
 
       if sys.version_info >= (3, 0) and (isinstance(body, bytes) or isinstance(body, bytearray)):
@@ -351,7 +351,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
 
       for match in url_regex.findall(body):
           found_url = match[0].replace('hxxp', 'http')
-          
+
           if found_url not in list_observed_urls:
               list_observed_urls.append(found_url)
 
@@ -366,7 +366,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
 def main():
   opts, args = getopt.getopt(sys.argv[1:], 'i:')
   msgfile = None
-  
+
   for o, k in opts:
     if o == '-i':
       msgfile = k
