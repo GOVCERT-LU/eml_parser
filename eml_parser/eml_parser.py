@@ -33,6 +33,7 @@ import base64
 import hashlib
 import quopri
 import time
+from urlparse import urlparse
 
 try:
   from python_magic import magic
@@ -51,7 +52,11 @@ b_d_regex = re.compile(r'(localhost|[a-z0-9.\-]+(?:[.][a-z]{2,4})?)')
 f_d_regex = re.compile(r'from(?:\s+(localhost|[a-z0-9\-]+|[a-z0-9.\-]+[.][a-z]{2,4}))?\s+(?:\(?(localhost|[a-z0-9.\-]+[.][a-z]{2,4})?\s*\[(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\]\)?)?')
 for_d_regex = re.compile(r'for\s+<?([a-z0-9.\-]+@[a-z0-9.\-]+[.][a-z]{2,4})>?')
 
-url_regex = re.compile(r'''(?i)\b((?:(hxxps?|https?|ftp)://|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}/)(?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))*\))+(?:\(([^\s()<>]+|(\([^\s()<>]+\)))*\)|[^\s`!()\[\]{};:'".,<>?]))''', re.VERBOSE | re.MULTILINE)
+# note: depending on the text this regex blocks in an infinite loop !
+url_regex = re.compile(r'''(?i)\b((?:(hxxps?|https?|ftps?)://|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}/)(?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))*\))+(?:\(([^\s()<>]+|(\([^\s()<>]+\)))*\)|[^\s`!()\[\]{};:'".,<>?]))''', re.VERBOSE | re.MULTILINE)
+
+# simple version for searching for URLs
+url_regex_simple = re.compile(r'''(?i)\b((?:(hxxps?|https?|ftps?)://)[^ ]+)''', re.VERBOSE | re.MULTILINE)
 ################################################
 
 
@@ -349,8 +354,11 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
       if sys.version_info >= (3, 0) and (isinstance(body, bytes) or isinstance(body, bytearray)):
         body = body.decode('utf-8', 'ignore')
 
-      for match in url_regex.findall(body):
+      for match in url_regex_simple.findall(body):
           found_url = match[0].replace('hxxp', 'http')
+          found_url = urlparse(found_url).geturl()
+          # let's try to be smart by stripping of noisy bogus parts
+          found_url = re.split(r'''[\', ", \,, \), \}, \\]''', found_url)[0]
 
           if found_url not in list_observed_urls:
               list_observed_urls.append(found_url)
