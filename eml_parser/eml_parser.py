@@ -29,6 +29,9 @@ import getopt
 import re
 import uuid
 import datetime
+import calendar
+import dateutil.tz
+import dateutil.parser
 import base64
 import hashlib
 import quopri
@@ -256,15 +259,21 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
   msg_date = msg.get('date').replace('.', ':')
   date_ = email.utils.parsedate_tz(msg_date)
 
-  if date_:
+  if date_ and not date_[9] is None:
     ts = email.utils.mktime_tz(date_)
-    d = datetime.datetime.utcfromtimestamp(ts)
-    maila['date'] = d
+    date_ = datetime.datetime.utcfromtimestamp(ts)
   else:
     date_ = email.utils.parsedate(msg_date)
-    ts = time.mktime(date_)
-    d = datetime.datetime.fromtimestamp(ts)
-    maila['date'] = d
+    if date_:
+      ts = calendar.timegm(date_)
+      date_ = datetime.datetime.utcfromtimestamp(ts)
+    else:
+      date_ = dateutil.parser.parse('1970-01-01 00:00:00 +0000')
+
+  if date_.tzname() is None:
+    date_ = date_.replace(tzinfo=dateutil.tz.tzutc())
+
+  maila['date'] = date_
 
   # sender ip
   maila['x-originating-ip'] = msg.get('x-originating-ip', '').strip('[]')
@@ -379,7 +388,10 @@ def main():
     if o == '-i':
       msgfile = k
 
-  print(decode_email(msgfile))
+  m = decode_email(msgfile)
+  print m
+  print
+  print m['date'].isoformat()
   #print decode_email(msgfile, include_raw_body=True, include_attachment_data=True)
 
 
