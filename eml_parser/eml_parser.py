@@ -189,7 +189,7 @@ def decode_field(field, force=False):
     try:
        if isinstance(field, unicode):
         return field.encode('utf-8', 'ignore')
-      else:
+       else:
         _decoded = email.Header.decode_header(field)
     except AttributeError:
       _decoded = email.header.decode_header(field)
