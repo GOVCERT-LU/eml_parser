@@ -3,6 +3,7 @@
 
 #
 # Georges Toth (c) 2013 <georges@trypill.org>
+# GOVCERT.LU (c) 2014 <georges.toth@govcert.etat.lu>
 #
 # eml_parser is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -22,6 +23,10 @@
 #   https://github.com/CybOXProject/Tools/blob/master/scripts/email_to_cybox/email_to_cybox.py
 #   https://github.com/iscoming/eml_parser/blob/master/eml_parser.py
 #
+# Known issues:
+#  - searching for IPs in the e-mail header sometimes leads to false positives
+#    if a mail-server (e.g. exchange) uses an ID which looks like a valid IP
+#
 
 import sys
 import email
@@ -37,6 +42,11 @@ import hashlib
 import quopri
 import time
 from urlparse import urlparse
+
+try:
+  import chardet
+except ImportError:
+  chardet = None
 
 try:
   from python_magic import magic
@@ -60,6 +70,9 @@ url_regex = re.compile(r'''(?i)\b((?:(hxxps?|https?|ftps?)://|www\d{0,3}[.]|[a-z
 
 # simple version for searching for URLs
 url_regex_simple = re.compile(r'''(?i)\b((?:(hxxps?|https?|ftps?)://)[^ ]+)''', re.VERBOSE | re.MULTILINE)
+
+# quoted printable regex
+re_quopri = re.compile(r'(?:=[A-F][0-9]=)+')
 ################################################
 
 
@@ -200,16 +213,43 @@ def decode_field(field, force=False):
 
   if charset:
     try:
-      #text = _text.decode(charset, 'ignore').encode('utf-8')
-      text = _text.decode(charset, 'ignore')
+      text = _text.decode(charset)
     except UnicodeDecodeError:
-      if force and sys.version_info < (3, 0):
-        text = force_string_decode(_text)
+      try:
+        text = decode_q_string(_text)
+      except UnicodeDecodeError:
+        if force and sys.version_info < (3, 0):
+          text = force_string_decode(_text)
   else:
     if sys.version_info < (3, 0):
-      text = force_string_decode(field)
+      try:
+        text = decode_q_string(_text)
+      except UnicodeDecodeError:
+        text = force_string_decode(field)
 
   return text
+
+
+def decode_q_string(string):
+  if string == '':
+    return string
+
+  value = string.replace('_', ' ')
+
+  if re_quopri.search(value):
+    value = quopri.decodestring(value)
+
+  try:
+    value = value.decode('utf-8')
+  except UnicodeDecodeError:
+    if chardet:
+      enc = chardet.detect(value)
+      if not (enc['confidence'] == 1 and enc['encoding'] == 'ascii'):
+        value = value.decode(enc['encoding'])
+      else:
+        value = value.decode('ascii', 'ignore')
+
+  return value
 
 
 def decode_email(eml_file, include_raw_body=False, include_attachment_data=False):
