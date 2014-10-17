@@ -75,13 +75,13 @@ url_regex = re.compile(r'''(?i)\b((?:(hxxps?|https?|ftps?)://|www\d{0,3}[.]|[a-z
 url_regex_simple = re.compile(r'''(?i)\b((?:(hxxps?|https?|ftps?)://)[^ ]+)''', re.VERBOSE | re.MULTILINE)
 
 # encoded string =?<encoding>?[QB]?<string>?=
-re_encoded_string = re.compile(r'\=\?[^?]+\?[QB]\?[^?]+?\?\=', (re.X|re.M|re.I))
+re_encoded_string = re.compile(r'\=\?[^?]+\?[QB]\?[^?]+?\?\=', (re.X | re.M | re.I))
 
 re_quoted_string = re.compile(r'''(                               # Group around entire regex to include it in matches
                                    \=\?[^?]+\?([QB])\?[^?]+?\?\=  # Quoted String with subgroup for encoding method
                                    |                              # or
                                    .+?(?=\=\?|$)                  # Plain String
-                                  )''', (re.X|re.M|re.I))
+                                  )''', (re.X | re.M | re.I))
 
 re_q_value = re.compile(r'\=\?(.+)?\?[Qq]\?(.+)?\?\=')
 re_b_value = re.compile(r'\=\?(.+)?\?[Bb]\?(.+)?\?\=')
@@ -96,7 +96,7 @@ def get_raw_body_text(msg):
     # Attachments with a file-extension of .htm/.html are implicitely treated
     # as text as well in order not to escape later checks (e.g. URL scan).
     if (not 'content-disposition' in msg and msg.get_content_maintype() == 'text') or\
-      (msg.get_filename('').lower().endswith('.html') or msg.get_filename('').lower().endswith('.htm')):
+       (msg.get_filename('').lower().endswith('.html') or msg.get_filename('').lower().endswith('.htm')):
       encoding = msg.get('content-transfer-encoding', '').lower()
 
       charset = msg.get_content_charset()
