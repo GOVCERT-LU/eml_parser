@@ -71,8 +71,17 @@ url_regex = re.compile(r'''(?i)\b((?:(hxxps?|https?|ftps?)://|www\d{0,3}[.]|[a-z
 # simple version for searching for URLs
 url_regex_simple = re.compile(r'''(?i)\b((?:(hxxps?|https?|ftps?)://)[^ ]+)''', re.VERBOSE | re.MULTILINE)
 
-# quoted printable regex
-re_quopri = re.compile(r'(?:=[A-F][0-9]=)+')
+# encoded string =?<encoding>?[QB]?<string>?=
+re_encoded_string = re.compile(r'\=\?[^?]+\?[QB]\?[^?]+?\?\=', (re.X|re.M|re.I))
+
+re_quoted_string = re.compile(r'''(                               # Group around entire regex to include it in matches
+                                   \=\?[^?]+\?([QB])\?[^?]+?\?\=  # Quoted String with subgroup for encoding method
+                                   |                              # or
+                                   .+?(?=\=\?|$)                  # Plain String
+                                  )''', (re.X|re.M|re.I))
+
+re_q_value = re.compile(r'\=\?(.+)?\?[Qq]\?(.+)?\?\=')
+re_b_value = re.compile(r'\=\?(.+)?\?[Bb]\?(.+)?\?\=')
 ################################################
 
 
@@ -146,7 +155,7 @@ def traverse_multipart(msg, counter=0, include_attachment_data=False):
       if filename == '':
         filename = 'part-%03d' % (counter)
       else:
-        filename = decode_field(filename, force=True)
+        filename = decode_field(filename)
 
       extension = get_file_extension(filename)
       hashes = get_file_hashes(data)
@@ -192,64 +201,114 @@ def force_string_decode(string):
   return text
 
 
-def decode_field(field, force=False):
+def decode_field(field):
   '''Try to get the specified field using the Header module.
      If there is also an associated encoding, try to decode the
      field and return it, else return a specified default value.'''
   text = field
 
   try:
-    try:
-       if isinstance(field, unicode):
-        return field.encode('utf-8', 'ignore')
-       else:
-        _decoded = email.Header.decode_header(field)
-    except AttributeError:
-      _decoded = email.header.decode_header(field)
+    _decoded = email.Header.decode_header(field)
+    _text, charset = _decoded[0]
   except email.errors.HeaderParseError:
-    return field.decode('ascii', 'ignore')
-
-  _text, charset = _decoded[0]
+    _text, charset = None, None
 
   if charset:
     try:
-      text = _text.decode(charset)
+      text = decode_string(_text, charset)
     except UnicodeDecodeError:
-      try:
-        text = decode_q_string(_text)
-      except UnicodeDecodeError:
-        if force and sys.version_info < (3, 0):
-          text = force_string_decode(_text)
-  else:
-    if sys.version_info < (3, 0):
-      try:
-        text = decode_q_string(_text)
-      except UnicodeDecodeError:
-        text = force_string_decode(field)
+      pass
+
+  try:
+    text = decode_value(text)
+  except UnicodeDecodeError:
+    text = decode_string(text, 'latin-1')
 
   return text
 
 
-def decode_q_string(string):
-  if string == '':
-    return string
-
-  value = string.replace('_', ' ')
-
-  if re_quopri.search(value):
-    value = quopri.decodestring(value)
-
+def decode_string(string, encoding):
   try:
-    value = value.decode('utf-8')
+    value = string.decode(encoding)
   except UnicodeDecodeError:
     if chardet:
-      enc = chardet.detect(value)
-      if not (enc['confidence'] == 1 and enc['encoding'] == 'ascii'):
-        value = value.decode(enc['encoding'])
-      else:
-        value = value.decode('ascii', 'ignore')
+      enc = chardet.detect(string)
+      try:
+        if not (enc['confidence'] == 1 and enc['encoding'] == 'ascii'):
+          value = value.decode(enc['encoding'])
+        else:
+          value = value.decode('ascii', 'ignore')
+      except UnicodeDecodeError:
+        value = force_string_decode(string)
 
   return value
+
+
+def q_value_decode(string):
+  m = re_q_value.match(string)
+  if m:
+    encoding, e_string = m.groups()
+    d_string = quopri.decodestring(e_string).decode(encoding, 'ignore')
+  else:
+    d_string = e_string.decode('utf-8', 'ignore')
+
+  return d_string
+
+
+def b_value_decode(string):
+  m = re_b_value.match(string)
+  if m:
+    encoding, e_string = m.groups()
+    d_string = base64.decodestring(e_string).decode(encoding, 'ignore')
+  else:
+    d_string = e_string.decode('utf-8', 'ignore')
+
+  return d_string
+
+
+# Decodes a given string as Base64 or Quoted Printable, depending on what
+# type it is.
+#
+# String has to be of the format =?<encoding>?[QB]?<string>?=
+def decode_value(string):
+  # Optimization: If there's no encoded-words in the stringing, just return it
+  if not re_encoded_string.search(string):
+    return string
+
+  # Split on white-space boundaries with capture, so we capture the white-space as well
+  string_ = u''
+  for line in string.replace('\r', '').split('\n'):
+    line_ = u''
+
+    for text in re.split(r'([ \t])', line):
+      if '=?' in text:
+        # Search for occurences of quoted stringings or plain stringings
+        for m in re_quoted_string.finditer(text):
+          match_s, method = m.groups()
+
+          if '=?' in match_s:
+            if method.lower() == 'q':
+              text = q_value_decode(match_s)
+            elif method.lower() == 'b':
+              text = b_value_decode(match_s)
+            else:
+              raise Exception('NOTIMPLEMENTED: Unknown method "{0}"'.format(method))
+
+            text = text.replace('_', ' ')
+
+            if text[0] == ' ':
+              text = text[1:]
+          else:
+            line_ += match_s
+
+      line_ += text
+
+    if len(string_) > 0 and not (string_[-1] == ' ' or line_[0] == ' '):
+      string_ += ' '
+
+    string_ += line_
+
+  return string_
 
 
 def decode_email(eml_file, include_raw_body=False, include_attachment_data=False):
@@ -266,36 +325,37 @@ def decode_email_s(eml_file, include_raw_body=False, include_attachment_data=Fal
 
 def parse_email(msg, include_raw_body=False, include_attachment_data=False):
   maila = {}
+  header = {}
 
   # parse and decode subject
   subject = msg.get('subject', '')
-  maila['subject'] = decode_field(subject)
+  header['subject'] = decode_field(subject)
 
   # messageid
-  maila['message_id'] = msg.get('message-id', '')
+  header['message-id'] = msg.get('message-id', '')
 
   # parse and decode from
   # @TODO verify if this hack is necessary for other e-mail fields as well
   m = email_regex.search(msg.get('from', '').lower())
   if m:
-    maila['from'] = m.group(1)
+    header['from'] = m.group(1)
   else:
     from_ = email.utils.parseaddr(msg.get('from', '').lower())
-    maila['from'] = from_[1]
+    header['from'] = from_[1]
 
   # parse and decode to
   to = email.utils.getaddresses(msg.get_all('to', []))
-  maila['to'] = []
+  header['to'] = []
   for m in to:
     if not m[1] == '':
-      maila['to'].append(m[1].lower())
+      header['to'].append(m[1].lower())
 
   # parse and decode Cc
   cc = email.utils.getaddresses(msg.get_all('cc', []))
-  maila['cc'] = []
+  header['cc'] = []
   for m in cc:
     if not m[1] == '':
-      maila['cc'].append(m[1].lower())
+      header['cc'].append(m[1].lower())
 
   # parse and decode Date
   # "." -> ":" replacement is for fixing bad clients (e.g. outlook express)
@@ -316,21 +376,21 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
   if date_.tzname() is None:
     date_ = date_.replace(tzinfo=dateutil.tz.tzutc())
 
-  maila['date'] = date_
+  header['date'] = date_
 
   # sender ip
-  maila['x-originating-ip'] = msg.get('x-originating-ip', '').strip('[]')
+  header['x-originating-ip'] = msg.get('x-originating-ip', '').strip('[]')
 
   # mail receiver path / parse any domain, e-mail
   # @TODO parse case where domain is specified but in parantheses only an IP
+  header['received'] = []
   maila['received'] = []
-  maila['received_raw'] = []
   maila['received_emails'] = []
   maila['received_domains'] = []
 
   for l in msg.get_all('received'):
     l = re.sub(r'(\r|\n|\s|\t)+', ' ', l.lower())
-    maila['received_raw'].append(l)
+    header['received'].append(l)
 
     # search for domains / e-mail addresses
     for m in domain_regex.findall(l):
@@ -365,8 +425,8 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
     for_d = for_d_regex.search(l)
 
     if for_d:
-      maila['to'].append(for_d.group(1))
-      maila['to'] = list(set(maila['to']))
+      header['to'].append(for_d.group(1))
+      header['to'] = list(set(header['to']))
 
     if f_d:
       if not f_d.group(2):
@@ -387,6 +447,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
 
       maila['received'].append([f, b])
 
+  header['received'] = tuple(header['received'])
   maila['received_emails'] = list(set(maila['received_emails']))
   maila['received_domains'] = list(set(maila['received_domains']))
 
@@ -419,6 +480,15 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
 
   # parse attachments
   maila['attachments'] = traverse_multipart(msg, 0, include_attachment_data)
+
+  for k, v in msg.items():
+    if not k.lower() in header:
+      if v[0] == '<' and v[-1] == '>':
+        v = v[1:-1]
+
+      header[k.lower()] = v
+
+  maila['header'] = header
 
   return maila
 
