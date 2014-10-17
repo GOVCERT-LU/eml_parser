@@ -23,6 +23,9 @@
 #   https://github.com/CybOXProject/Tools/blob/master/scripts/email_to_cybox/email_to_cybox.py
 #   https://github.com/iscoming/eml_parser/blob/master/eml_parser.py
 #
+# Regular expressions and subject field decoding inspired by:
+#   "A Really Ruby Mail Library" - https://github.com/mikel/mail (MIT)
+#
 # Known issues:
 #  - searching for IPs in the e-mail header sometimes leads to false positives
 #    if a mail-server (e.g. exchange) uses an ID which looks like a valid IP
