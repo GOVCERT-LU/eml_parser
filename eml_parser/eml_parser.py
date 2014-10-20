@@ -486,7 +486,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
 
   for k, v in msg.items():
     if not k.lower() in header:
-      if v[0] == '<' and v[-1] == '>':
+      if len(v) >= 2 and v[0] == '<' and v[-1] == '>':
         v = v[1:-1]
 
       header[k.lower()] = v
