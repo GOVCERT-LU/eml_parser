@@ -72,7 +72,9 @@ for_d_regex = re.compile(r'for\s+<?([a-z0-9.\-]+@[a-z0-9.\-]+[.][a-z]{2,4})>?')
 url_regex = re.compile(r'''(?i)\b((?:(hxxps?|https?|ftps?)://|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}/)(?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))*\))+(?:\(([^\s()<>]+|(\([^\s()<>]+\)))*\)|[^\s`!()\[\]{};:'".,<>?]))''', re.VERBOSE | re.MULTILINE)
 
 # simple version for searching for URLs
-url_regex_simple = re.compile(r'''(?i)\b((?:(hxxps?|https?|ftps?)://)[^ ]+)''', re.VERBOSE | re.MULTILINE)
+# character set based on http://tools.ietf.org/html/rfc3986
+#url_regex_simple = re.compile(r'''(?i)\b((?:(hxxps?|https?|ftps?)://)[^ ]+)''', re.VERBOSE | re.MULTILINE)
+url_regex_simple = re.compile(r'''(([a-z]{3,}s?://)[a-z0-9\-_]+(\.[a-z0-9\-_]+)*(/[a-z0-9_\-\.~!*'();:@&=+$,/?%#\[\]]*)?)''', re.VERBOSE | re.MULTILINE | re.I)
 
 # encoded string =?<encoding>?[QB]?<string>?=
 re_encoded_string = re.compile(r'\=\?[^?]+\?[QB]\?[^?]+?\?\=', (re.X | re.M | re.I))
