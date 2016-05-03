@@ -32,6 +32,7 @@
 #
 
 import sys
+import json
 import email
 import getopt
 import re
@@ -43,6 +44,7 @@ import dateutil.parser
 import base64
 import hashlib
 import quopri
+import pprint
 import time
 from urlparse import urlparse
 
@@ -99,30 +101,29 @@ re_b_value = re.compile(r'\=\?(.+)?\?[Bb]\?(.+)?\?\=')
 
 def get_raw_body_text(msg):
     raw_body = []
-
-    if not msg.is_multipart():
+    # FIXME comprend pas, si pas multipart pas d'attachement...
+    if msg.is_multipart():
+        for part in msg.get_payload():
+            raw_body.extend(get_raw_body_text(part))
+    else:
         # Treat text document attachments as belonging to the body of the mail.
         # Attachments with a file-extension of .htm/.html are implicitely treated
         # as text as well in order not to escape later checks (e.g. URL scan).
         if ('content-disposition' not in msg and msg.get_content_maintype() == 'text') \
              or (msg.get_filename('').lower().endswith('.html') or
            msg.get_filename('').lower().endswith('.htm')):
-                encoding = msg.get('content-transfer-encoding', '').lower()
+            encoding = msg.get('content-transfer-encoding', '').lower()
 
-        charset = msg.get_content_charset()
-        if not charset:
-            raw_body_str = msg.get_payload(decode=True)
-        else:
-            try:
-                raw_body_str = msg.get_payload(decode=True).decode(charset, 'ignore')
-            except:
-                raw_body_str = msg.get_payload(decode=True).decode('ascii', 'ignore')
+            charset = msg.get_content_charset()
+            if not charset:
+                raw_body_str = msg.get_payload(decode=True)
+            else:
+                try:
+                    raw_body_str = msg.get_payload(decode=True).decode(charset, 'ignore')
+                except:
+                    raw_body_str = msg.get_payload(decode=True).decode('ascii', 'ignore')
 
-        raw_body.append((encoding, raw_body_str))
-    else:
-        for part in msg.get_payload():
-            raw_body.extend(get_raw_body_text(part))
-
+            raw_body.append((encoding, raw_body_str))
     return raw_body
 
 
@@ -158,37 +159,37 @@ def traverse_multipart(msg, counter=0, include_attachment_data=False):
     else:
         lower_keys = dict((k.lower(), v) for k, v in msg.items())
 
-    if 'content-disposition' in lower_keys or not msg.get_content_maintype() == 'text':
-        # if it's an attachment-type, pull out the filename
-        # and calculate the size in bytes
-        data = msg.get_payload(decode=True)
-        file_size = len(data)
+        if 'content-disposition' in lower_keys or not msg.get_content_maintype() == 'text':
+            # if it's an attachment-type, pull out the filename
+            # and calculate the size in bytes
+            data = msg.get_payload(decode=True)
+            file_size = len(data)
 
-        filename = msg.get_filename('')
-        if filename == '':
-            filename = 'part-%03d' % (counter)
-        else:
-            filename = decode_field(filename)
+            filename = msg.get_filename('')
+            if filename == '':
+                filename = 'part-%03d' % (counter)
+            else:
+                filename = decode_field(filename)
 
-        extension = get_file_extension(filename)
-        hashes = get_file_hashes(data)
+            extension = get_file_extension(filename)
+            hashes = get_file_hashes(data)
 
-        file_id = str(uuid.uuid1())
-        attachments[file_id] = {}
-        attachments[file_id]['filename'] = filename
-        attachments[file_id]['size'] = file_size
-        attachments[file_id]['extension'] = extension
-        attachments[file_id]['hashes'] = hashes
+            file_id = str(uuid.uuid1())
+            attachments[file_id] = {}
+            attachments[file_id]['filename'] = filename
+            attachments[file_id]['size'] = file_size
+            attachments[file_id]['extension'] = extension
+            attachments[file_id]['hashes'] = hashes
 
-        if magic:
-            attachments[file_id]['mime-type'] = magic.from_buffer(data, mime=True).decode('utf-8')
-        else:
-            attachments[file_id]['mime-type'] = 'undetermined'
+            if magic:
+                attachments[file_id]['mime-type'] = magic.from_buffer(data, mime=True).decode('utf-8')
+            else:
+                attachments[file_id]['mime-type'] = 'undetermined'
 
-        if include_attachment_data:
-            attachments[file_id]['raw'] = base64.b64encode(data)
+            if include_attachment_data:
+                attachments[file_id]['raw'] = base64.b64encode(data)
 
-        counter += 1
+            counter += 1
 
     return attachments
 
@@ -380,11 +381,11 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
         date_ = datetime.datetime.utcfromtimestamp(ts)
     else:
         date_ = email.utils.parsedate(msg_date)
-    if date_:
-        ts = calendar.timegm(date_)
-        date_ = datetime.datetime.utcfromtimestamp(ts)
-    else:
-        date_ = dateutil.parser.parse('1970-01-01 00:00:00 +0000')
+        if date_:
+            ts = calendar.timegm(date_)
+            date_ = datetime.datetime.utcfromtimestamp(ts)
+        else:
+            date_ = dateutil.parser.parse('1970-01-01 00:00:00 +0000')
 
     if date_.tzname() is None:
         date_ = date_.replace(tzinfo=dateutil.tz.tzutc())
@@ -420,45 +421,45 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
             if checks:
                 maila['received_domains'].append(m)
 
-    m = email_regex.findall(l)
-    if m:
-        maila['received_emails'] += m
+        m = email_regex.findall(l)
+        if m:
+            maila['received_emails'] += m
 
     # ----------------------------------------------
 
-    # try to parse received lines and normalize them
-    try:
-        f, b = l.split('by')
-        b, undef = b.split('for')
-    except:
-        continue
+        # try to parse received lines and normalize them
+        try:
+            f, b = l.split('by')
+            b, undef = b.split('for')
+        except:
+            continue
 
-    b_d = b_d_regex.search(b)
-    f_d = f_d_regex.search(f)
-    for_d = for_d_regex.search(l)
+        b_d = b_d_regex.search(b)
+        f_d = f_d_regex.search(f)
+        for_d = for_d_regex.search(l)
 
-    if for_d:
-        header['to'].append(for_d.group(1))
-        header['to'] = list(set(header['to']))
+        if for_d:
+            header['to'].append(for_d.group(1))
+            header['to'] = list(set(header['to']))
 
-    if f_d:
-        if not f_d.group(2):
-            f_d_2 = ''
-        else:
-            f_d_2 = f_d.group(2)
-        if not f_d.group(3):
-            f_d_3 = ''
-        else:
-            f_d_3 = f_d.group(3)
+        if f_d:
+            if not f_d.group(2):
+                f_d_2 = ''
+            else:
+                f_d_2 = f_d.group(2)
+            if not f_d.group(3):
+                f_d_3 = ''
+            else:
+                f_d_3 = f_d.group(3)
 
-        f = '{0} ({1} [{2}])'.format(f_d.group(1), f_d_2, f_d_3)
+            f = '{0} ({1} [{2}])'.format(f_d.group(1), f_d_2, f_d_3)
 
-        if b_d is None:
-            b = ''
-        else:
-            b = b_d.group(1)
+            if b_d is None:
+                b = ''
+            else:
+                b = b_d.group(1)
 
-        maila['received'].append([f, b])
+            maila['received'].append([f, b])
 
     header['received'] = tuple(header['received'])
     maila['received_emails'] = list(set(maila['received_emails']))
@@ -504,6 +505,15 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
     return maila
 
 
+def json_serial(obj):
+    """JSON serializer for objects not serializable by default json code"""
+
+    if isinstance(obj, datetime.datetime):
+        serial = obj.isoformat()
+        return serial
+    raise TypeError("Type not serializable")
+
+
 def main():
     opts, args = getopt.getopt(sys.argv[1:], 'i:')
     msgfile = None
@@ -513,11 +523,11 @@ def main():
             msgfile = k
 
     m = decode_email(msgfile)
-    print m
-    print
-    print m['date'].isoformat()
+    print json.dumps(m, default=json_serial)
+    '''if m.get('date'):
+        m.get('date').isoformat()
     # print decode_email(msgfile, include_raw_body=True, include_attachment_data=True)
-
+    '''
 
 if __name__ == '__main__':
     main()
