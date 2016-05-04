@@ -4,6 +4,7 @@
 #
 # Georges Toth (c) 2013 <georges@trypill.org>
 # GOVCERT.LU (c) 2014 <georges.toth@govcert.etat.lu>
+# GOVCERT.LU (c) 2016 <paul.jung@ext.govcert.etat.lu>
 #
 # eml_parser is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -54,7 +55,7 @@ except ImportError:
     chardet = None
 
 try:
-    from python_magic import magic
+    from magic import magic
 except ImportError:
     magic = None
 
@@ -63,7 +64,9 @@ except ImportError:
 # W3C HTML5 standard recommended regex for e-mail validation
 email_regex = re.compile(r'''([a-zA-Z0-9.!#$%&'*+-/=?\^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*)''', re.MULTILINE)
 #                 /^[a-zA-Z0-9.!#$%&'*+-/=?\^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$/
-domain_regex = re.compile(r'''(?:(?:from|by)\s+)([a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]{2,})+)''', re.MULTILINE)
+recv_dom_regex = re.compile(r'''(?:(?:from|by)\s+)([a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]{2,})+)''', re.MULTILINE)
+
+dom_regex = re.compile(r'''(?:\s|[\/<>'])([a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]{2,})+)(?:$|\s|[\/<>'])''', re.MULTILINE)
 ipv4_regex = re.compile(r'''((?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?))''', re.MULTILINE)
 
 b_d_regex = re.compile(r'(localhost|[a-z0-9.\-]+(?:[.][a-z]{2,4})?)')
@@ -123,7 +126,7 @@ def get_raw_body_text(msg):
                 except:
                     raw_body_str = msg.get_payload(decode=True).decode('ascii', 'ignore')
 
-            raw_body.append((encoding, raw_body_str))
+            raw_body.append((encoding, raw_body_str, msg.items()))
     return raw_body
 
 
@@ -337,77 +340,99 @@ def decode_email_s(eml_file, include_raw_body=False, include_attachment_data=Fal
     return parse_email(msg, include_raw_body, include_attachment_data)
 
 
+# Convert emails to a list from a given header field.
+def headeremail2list(mail, header):
+    # parse and decode to
+    field = email.utils.getaddresses(mail.get_all(header, []))
+    return_field = []
+    for m in field:
+        if not m[1] == '':
+            return_field.append(m[1].lower())
+    return return_field
+
+
+#  Parse an email an return a structure.
+#
 def parse_email(msg, include_raw_body=False, include_attachment_data=False):
     maila = {}
     header = {}
+    report_struc = {}  # Final structure
+    headers_struc = {}  # header_structure
+    attachements_struc = {}  # attachements structure
+    bodys_struc = {}  # body structure
 
     # parse and decode subject
     subject = msg.get('subject', '')
-    header['subject'] = decode_field(subject)
+    headers_struc['subject'] = decode_field(subject)
 
     # messageid
-    header['message-id'] = msg.get('message-id', '')
+    headers_struc['message-id'] = msg.get('message-id', '')
 
     # parse and decode from
     # @TODO verify if this hack is necessary for other e-mail fields as well
     m = email_regex.search(msg.get('from', '').lower())
     if m:
-        header['from'] = m.group(1)
+        headers_struc['from'] = m.group(1)
     else:
         from_ = email.utils.parseaddr(msg.get('from', '').lower())
-        header['from'] = from_[1]
+        headers_struc['from'] = from_[1]
 
     # parse and decode to
-    to = email.utils.getaddresses(msg.get_all('to', []))
-    header['to'] = []
-    for m in to:
-        if not m[1] == '':
-            header['to'].append(m[1].lower())
-
+    headers_struc['to'] = headeremail2list(msg, 'to')
     # parse and decode Cc
-    cc = email.utils.getaddresses(msg.get_all('cc', []))
-    header['cc'] = []
-    for m in cc:
-        if not m[1] == '':
-            header['cc'].append(m[1].lower())
+    headers_struc['cc'] = headeremail2list(msg, 'cc')
+    if len(headers_struc['cc']) == 0:
+        headers_struc.pop('cc')
+
+    # parse and decode delivered-to
+    headers_struc['delivered-to'] = headeremail2list(msg, 'delivered-to')
+    if len(headers_struc['delivered-to']) == 0:
+        headers_struc.pop('delivered-to')
 
     # parse and decode Date
-    # "." -> ":" replacement is for fixing bad clients (e.g. outlook express)
-    msg_date = msg.get('date').replace('.', ':')
-    date_ = email.utils.parsedate_tz(msg_date)
+    # If date field is present
+    if msg.get('date'):
 
-    if date_ and not date_[9] is None:
-        ts = email.utils.mktime_tz(date_)
-        date_ = datetime.datetime.utcfromtimestamp(ts)
-    else:
-        date_ = email.utils.parsedate(msg_date)
-        if date_:
-            ts = calendar.timegm(date_)
+        # "." -> ":" replacement is for fixing bad clients (e.g. outlook express)
+        msg_date = msg.get('date').replace('.', ':')
+        date_ = email.utils.parsedate_tz(msg_date)
+
+        if date_ and not date_[9] is None:
+            ts = email.utils.mktime_tz(date_)
             date_ = datetime.datetime.utcfromtimestamp(ts)
         else:
-            date_ = dateutil.parser.parse('1970-01-01 00:00:00 +0000')
+            date_ = email.utils.parsedate(msg_date)
+            if date_:
+                ts = calendar.timegm(date_)
+                date_ = datetime.datetime.utcfromtimestamp(ts)
+            else:
+                # Now we are facing an invalid date.
+                date_ = dateutil.parser.parse('1970-01-01 00:00:00 +0000')
 
-    if date_.tzname() is None:
-        date_ = date_.replace(tzinfo=dateutil.tz.tzutc())
+        if date_.tzname() is None:
+            date_ = date_.replace(tzinfo=dateutil.tz.tzutc())
+        headers_struc['date'] = date_
+    else:
+        # If date field is absent...
+        headers_struc['date'] = dateutil.parser.parse('1970-01-01 00:00:00 +0000')
+    headers_struc['parse_date'] = datetime.datetime.utcnow()
 
-    header['date'] = date_
-
-    # sender ip
-    header['x-originating-ip'] = msg.get('x-originating-ip', '').strip('[]')
+    # TODO ...
+    # x-originating IP suspended.
+    # header['x-originating-ip'] = msg.get('x-originating-ip', '').strip('[]')
 
     # mail receiver path / parse any domain, e-mail
     # @TODO parse case where domain is specified but in parantheses only an IP
-    header['received'] = []
-    maila['received'] = []
-    maila['received_emails'] = []
-    maila['received_domains'] = []
+    headers_struc['received'] = []
+    headers_struc['received_emails'] = []
+    headers_struc['received_domains'] = []
 
     for l in msg.get_all('received'):
         l = re.sub(r'(\r|\n|\s|\t)+', ' ', l.lower())
-        header['received'].append(l)
+        headers_struc['received'].append(l)
 
         # search for domains / e-mail addresses
-        for m in domain_regex.findall(l):
+        for m in recv_dom_regex.findall(l):
             checks = True
             if '.' in m:
                 try:
@@ -419,11 +444,11 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
                     pass
 
             if checks:
-                maila['received_domains'].append(m)
+                headers_struc['received_domains'].append(m)
 
         m = email_regex.findall(l)
         if m:
-            maila['received_emails'] += m
+            headers_struc['received_emails'] += m
 
     # ----------------------------------------------
 
@@ -435,13 +460,18 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
             continue
 
         b_d = b_d_regex.search(b)
-        f_d = f_d_regex.search(f)
+
+        '''
+        # Catch of for emails in received.. we catch all email for now
         for_d = for_d_regex.search(l)
-
+        # Add to TO address from routing headers "for xxxx@xxxx"
         if for_d:
-            header['to'].append(for_d.group(1))
-            header['to'] = list(set(header['to']))
-
+            headers_struc['received_emails'].append(for_d.group(1))
+            headers_struc['received_emails'] = list(set(headers_struc['to']))
+        '''
+        '''
+        # Catch FROM --- TO tuple .. but still with (detail)...
+        f_d = f_d_regex.search(f)
         if f_d:
             if not f_d.group(2):
                 f_d_2 = ''
@@ -458,25 +488,38 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
                 b = ''
             else:
                 b = b_d.group(1)
+            headers_struc['received'].append([f, b])
 
-            maila['received'].append([f, b])
+        headers_struc['received'] = tuple(headers_struc['received'])
+        '''
+    headers_struc['received_emails'] = list(set(headers_struc['received_emails']))
+    headers_struc['received_domains'] = list(set(headers_struc['received_domains']))
+    # Clean up if empty
+    if len(headers_struc['received_emails']) == 0:
+        headers_struc.pop('received_emails')
+    if len(headers_struc['received_domains']) == 0:
+        headers_struc.pop('received_domains')
 
-    header['received'] = tuple(header['received'])
-    maila['received_emails'] = list(set(maila['received_emails']))
-    maila['received_domains'] = list(set(maila['received_domains']))
-
+    # Parse TEXT BODYS
     # get raw header
+    # FIXME. could not get body from non multipart mail.
+    # needed for mailm0n project.
     raw_body = get_raw_body_text(msg)
+    include_raw_body = True
     if include_raw_body:
-        maila['raw_body'] = raw_body
-    else:
-        maila['raw_body'] = []
+        bodys_struc['raw_body'] = raw_body
 
-    # parse any URLs found in the body
-    list_observed_urls = []
-
+    bodys = []
+    multipart = True  # Is it a multipart email ?
+    if len(raw_body) == 1:
+        multipart = False  # No only "one" Part
     for body_tup in raw_body:
-        encoding, body = body_tup
+        bodie = {}
+        encoding, body, body_multhead = body_tup
+        # Parse any URLs and mail found in the body
+        list_observed_urls = []
+        list_observed_emails = []
+        list_observed_dom = []
 
         if sys.version_info >= (3, 0) and (isinstance(body, bytes) or isinstance(body, bytearray)):
             body = body.decode('utf-8', 'ignore')
@@ -489,21 +532,90 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
 
             if found_url not in list_observed_urls:
                 list_observed_urls.append(found_url)
-    maila['urls'] = list_observed_urls
+
+        for match in email_regex.findall(body):
+            list_observed_emails.append(match.lower())
+
+        for match in dom_regex.findall(body):
+            list_observed_dom.append(match.lower())
+
+        if list_observed_urls:
+            bodie['uris'] = list(set(list_observed_urls))
+
+        if list_observed_emails:
+            bodie['emails'] = list(set(list_observed_emails))
+
+        if list_observed_dom:
+            bodie['domains'] = list(set(list_observed_dom))
+
+        # For mail without multipart we will only get the "content....something" headers
+        # all other headers are in "header"
+        # but we need to convert header tuples in dict..
+        # "a","toto"           a: [toto,titi]
+        # "a","titi"   --->    c: truc
+        # "c","truc"
+        ch = {}
+        for k, v in body_multhead:
+            k = k.lower()  # Lot of lowers, precompute :) .
+            if multipart:
+                if k in ch:
+                    val = ch[k]
+                    if type(val) == str:
+                        val = [val]
+                    val.append(v)
+                    ch[k] = val
+                else:
+                    ch[k] = v
+            else:  # if not multipart, store only content-xx related header with part
+                if k.startswith('content'):  # otherwise, we got all header headers
+                    if k in ch:
+                        val = ch[k]
+                        if type(val) == str:
+                            val = [val]
+                        val.append(v)
+                        ch[k] = val
+                    else:
+                        ch[k] = v
+        bodie['content_headers'] = ch  # Store content headers dict
+
+        # Sometimes dirty peoples plays with multiple header.
+        # We "display" the "LAST" .. as do a thunderbird
+        val = ch.get('content-type')
+        if val:
+            if type(val) == list:
+                val = str(val[-1:])
+            bodie['content-type'] = val.split(';')[0].strip()
+        bodie['content'] = body
+        bodys.append(bodie)
+
+    bodys_struc = bodys
 
     # parse attachments
-    maila['attachments'] = traverse_multipart(msg, 0, include_attachment_data)
+    # maila['attachments'] = traverse_multipart(msg, 0, include_attachment_data)
 
+    # Get all other bulk raw headers
+    # "a","toto"           a: [toto,titi]
+    # "a","titi"   --->    c: truc
+    # "c","truc"
+    #
     for k, v in msg.items():
-        if not k.lower() in header:
-            if len(v) >= 2 and v[0] == '<' and v[-1] == '>':
-                v = v[1:-1]
+        k = k.lower()  # Lot of lower, precompute...
+        if k in header:
+            val = header[k]
+            if type(val) == str:
+                val = [val]
+            val.append(v)
+            header[k] = val
+        else:
+            header[k] = v
+    headers_struc['headers'] = header
 
-            header[k.lower()] = v
+    # Get all other bulk headers
+    report_struc['header'] = headers_struc
+    report_struc['bodys'] = bodys_struc
+    report_struc['attachements'] = attachements_struc
 
-    maila['header'] = header
-    return maila
-
+    return report_struc
 
 def json_serial(obj):
     """JSON serializer for objects not serializable by default json code"""
