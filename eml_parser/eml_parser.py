@@ -55,7 +55,7 @@ except ImportError:
     chardet = None
 
 try:
-    from magic import magic
+    import magic
 except ImportError:
     magic = None
 
@@ -156,6 +156,10 @@ def get_file_hashes(data):
 def traverse_multipart(msg, counter=0, include_attachment_data=False):
     attachments = {}
 
+    if magic:
+        ms = magic.open(magic.NONE)
+        ms.load()
+
     if msg.is_multipart():
         for part in msg.get_payload():
             attachments.update(traverse_multipart(part, counter, include_attachment_data))
@@ -181,16 +185,31 @@ def traverse_multipart(msg, counter=0, include_attachment_data=False):
             attachments[file_id] = {}
             attachments[file_id]['filename'] = filename
             attachments[file_id]['size'] = file_size
-            attachments[file_id]['extension'] = extension
+
+            if extension:
+                attachments[file_id]['extension'] = extension
             attachments[file_id]['hashes'] = hashes
 
             if magic:
-                attachments[file_id]['mime-type'] = magic.from_buffer(data, mime=True).decode('utf-8')
-            else:
-                attachments[file_id]['mime-type'] = 'undetermined'
+                attachments[file_id]['mime-type'] = ms.buffer(data).decode('utf-8')
+                attachments[file_id]['mime-type-short'] = attachments[file_id]['mime-type'].split(",")[0]
 
             if include_attachment_data:
                 attachments[file_id]['raw'] = base64.b64encode(data)
+
+            ch = {}
+            for k, v in msg.items():
+                k = k.lower()
+                if k in ch:
+                    val = ch[k]
+                    if type(val) == str:
+                        val = [val]
+                    val.append(v)
+                    ch[k] = val
+                else:
+                    ch[k] = v
+
+            attachments[file_id]['content-headers'] = ch
 
             counter += 1
 
@@ -365,6 +384,10 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
     subject = msg.get('subject', '')
     headers_struc['subject'] = decode_field(subject)
 
+    # If parsing had problem... report it...
+    if msg.defects:
+        headers_struc['defect'] = msg.defects
+
     # messageid
     headers_struc['message-id'] = msg.get('message-id', '')
 
@@ -494,6 +517,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
         '''
     headers_struc['received_emails'] = list(set(headers_struc['received_emails']))
     headers_struc['received_domains'] = list(set(headers_struc['received_domains']))
+
     # Clean up if empty
     if len(headers_struc['received_emails']) == 0:
         headers_struc.pop('received_emails')
@@ -505,11 +529,11 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
     # FIXME. could not get body from non multipart mail.
     # needed for mailm0n project.
     raw_body = get_raw_body_text(msg)
-    include_raw_body = True
+    # include_raw_body = True
     if include_raw_body:
         bodys_struc['raw_body'] = raw_body
 
-    bodys = []
+    bodys = {}
     multipart = True  # Is it a multipart email ?
     if len(raw_body) == 1:
         multipart = False  # No only "one" Part
@@ -578,6 +602,9 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
                         ch[k] = v
         bodie['content_headers'] = ch  # Store content headers dict
 
+        if include_raw_body:
+            bodie['content'] = body
+
         # Sometimes dirty peoples plays with multiple header.
         # We "display" the "LAST" .. as do a thunderbird
         val = ch.get('content-type')
@@ -585,13 +612,10 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
             if type(val) == list:
                 val = str(val[-1:])
             bodie['content-type'] = val.split(';')[0].strip()
-        bodie['content'] = body
-        bodys.append(bodie)
+        bodie['hash'] = hashlib.sha256(body.encode('utf-8')).hexdigest()
+        bodys[str(uuid.uuid1())] = bodie
 
     bodys_struc = bodys
-
-    # parse attachments
-    # maila['attachments'] = traverse_multipart(msg, 0, include_attachment_data)
 
     # Get all other bulk raw headers
     # "a","toto"           a: [toto,titi]
@@ -610,12 +634,18 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
             header[k] = v
     headers_struc['headers'] = header
 
+    # parse attachments
+    report_struc['attachments'] = traverse_multipart(msg, 0, include_attachment_data)
+    if len(report_struc['attachments']) == 0:
+        report_struc.pop('attachments')
+
     # Get all other bulk headers
     report_struc['header'] = headers_struc
     report_struc['bodys'] = bodys_struc
-    report_struc['attachements'] = attachements_struc
+    # report_struc['attachments'] = attachements_struc
 
     return report_struc
+
 
 def json_serial(obj):
     """JSON serializer for objects not serializable by default json code"""
