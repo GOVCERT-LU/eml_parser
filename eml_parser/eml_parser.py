@@ -563,14 +563,30 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
         for match in dom_regex.findall(body):
             list_observed_dom.append(match.lower())
 
-        if list_observed_urls:
-            bodie['uris'] = list(set(list_observed_urls))
+        # Report uris,email and observed domains or hashes if no raw body
+        if include_raw_body:
+            if list_observed_urls:
+                bodie['uris'] = list(set(list_observed_urls))
 
-        if list_observed_emails:
-            bodie['emails'] = list(set(list_observed_emails))
+            if list_observed_emails:
+                bodie['emails'] = list(set(list_observed_emails))
 
-        if list_observed_dom:
-            bodie['domains'] = list(set(list_observed_dom))
+            if list_observed_dom:
+                bodie['domains'] = list(set(list_observed_dom))
+        else:
+            if list_observed_urls:
+                bodie['uris-hash'] = []
+                for uri in list(set(list_observed_urls)):
+                    bodie['uris-hash'].append(hashlib.sha256(uri.lower()).hexdigest())
+            if list_observed_emails:
+                bodie['emails-hash'] = []
+                for uri in list(set(list_observed_emails)):
+                    # Email already lowered
+                    bodie['emails-hash'].append(hashlib.sha256(uri).hexdigest())
+            if list_observed_dom:
+                bodie['emails-dom'] = []
+                for uri in list(set(list_observed_dom)):
+                    bodie['emails-dom'].append(hashlib.sha256(uri.lower()).hexdigest())
 
         # For mail without multipart we will only get the "content....something" headers
         # all other headers are in "header"
