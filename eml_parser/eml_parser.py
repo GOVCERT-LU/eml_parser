@@ -575,18 +575,18 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
                 bodie['domains'] = list(set(list_observed_dom))
         else:
             if list_observed_urls:
-                bodie['uris-hash'] = []
+                bodie['uris-hashes'] = []
                 for uri in list(set(list_observed_urls)):
-                    bodie['uris-hash'].append(hashlib.sha256(uri.lower()).hexdigest())
+                    bodie['uris-hashes'].append(hashlib.sha256(uri.lower()).hexdigest())
             if list_observed_emails:
-                bodie['emails-hash'] = []
+                bodie['emails-hashes'] = []
                 for uri in list(set(list_observed_emails)):
-                    # Email already lowered
-                    bodie['emails-hash'].append(hashlib.sha256(uri).hexdigest())
+                    # Email already lowered
+                    bodie['emails-hashes'].append(hashlib.sha256(uri).hexdigest())
             if list_observed_dom:
-                bodie['emails-dom'] = []
+                bodie['dom-hashes'] = []
                 for uri in list(set(list_observed_dom)):
-                    bodie['emails-dom'].append(hashlib.sha256(uri.lower()).hexdigest())
+                    bodie['dom-hashes'].append(hashlib.sha256(uri.lower()).hexdigest())
 
         # For mail without multipart we will only get the "content....something" headers
         # all other headers are in "header"
