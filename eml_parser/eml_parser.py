@@ -680,7 +680,7 @@ def main():
         if o == '-i':
             msgfile = k
 
-    m = decode_email(msgfile)
+    m = decode_email(msgfile, True)
     print json.dumps(m, default=json_serial)
     '''if m.get('date'):
         m.get('date').isoformat()
