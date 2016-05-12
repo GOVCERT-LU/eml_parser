@@ -201,13 +201,9 @@ def traverse_multipart(msg, counter=0, include_attachment_data=False):
             for k, v in msg.items():
                 k = k.lower()
                 if k in ch:
-                    val = ch[k]
-                    if type(val) == str:
-                        val = [val]
-                    val.append(v)
-                    ch[k] = val
+                    ch[k] = ch[k].append(v)
                 else:
-                    ch[k] = v
+                    ch[k] = [v]
 
             attachments[file_id]['content-headers'] = ch
 
@@ -599,23 +595,15 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
             k = k.lower()  # Lot of lowers, precompute :) .
             if multipart:
                 if k in ch:
-                    val = ch[k]
-                    if type(val) == str:
-                        val = [val]
-                    val.append(v)
-                    ch[k] = val
+                    ch[k].append(v)
                 else:
-                    ch[k] = v
+                    ch[k] = [v]
             else:  # if not multipart, store only content-xx related header with part
                 if k.startswith('content'):  # otherwise, we got all header headers
                     if k in ch:
-                        val = ch[k]
-                        if type(val) == str:
-                            val = [val]
-                        val.append(v)
-                        ch[k] = val
+                        ch[k].append(v)
                     else:
-                        ch[k] = v
+                        ch[k] = [v]
         bodie['content_headers'] = ch  # Store content headers dict
 
         if include_raw_body:
@@ -635,19 +623,15 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
 
     # Get all other bulk raw headers
     # "a","toto"           a: [toto,titi]
-    # "a","titi"   --->    c: truc
+    # "a","titi"   --->    c: [truc]
     # "c","truc"
     #
     for k, v in msg.items():
         k = k.lower()  # Lot of lower, precompute...
         if k in header:
-            val = header[k]
-            if type(val) == str:
-                val = [val]
-            val.append(v)
-            header[k] = val
+            header[k].append(v)
         else:
-            header[k] = v
+            header[k] = [v]
     headers_struc['headers'] = header
 
     # parse attachments
@@ -680,7 +664,7 @@ def main():
         if o == '-i':
             msgfile = k
 
-    m = decode_email(msgfile, True)
+    m = decode_email(msgfile, False)
     print json.dumps(m, default=json_serial)
     '''if m.get('date'):
         m.get('date').isoformat()
