@@ -201,6 +201,7 @@ def traverse_multipart(msg, counter=0, include_attachment_data=False):
             for k, v in msg.items():
                 k = k.lower()
                 if k in ch:
+                    # print "%s %s" % (v, k)
                     ch[k] = ch[k].append(v)
                 else:
                     ch[k] = [v]
@@ -632,17 +633,17 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
             header[k].append(v)
         else:
             header[k] = [v]
-    headers_struc['headers'] = header
+    headers_struc['header'] = header
 
     # parse attachments
-    report_struc['attachments'] = traverse_multipart(msg, 0, include_attachment_data)
-    if len(report_struc['attachments']) == 0:
-        report_struc.pop('attachments')
+    report_struc['attachment'] = traverse_multipart(msg, 0, include_attachment_data)
+    if len(report_struc['attachment']) == 0:
+        report_struc.pop('attachment')
 
     # Get all other bulk headers
     report_struc['header'] = headers_struc
-    report_struc['bodys'] = bodys_struc
-    # report_struc['attachments'] = attachements_struc
+    report_struc['body'] = bodys_struc
+    # report_struc['attachment'] = attachements_struc
 
     return report_struc
 
