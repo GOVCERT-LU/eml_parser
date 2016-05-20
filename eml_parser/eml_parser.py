@@ -483,10 +483,10 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
 
                         if not ipv4_regex.match(m) or m == '127.0.0.1':
                             checks = False
-                  except ValueError:
+                    except ValueError:
                         pass
 
-              if checks:
+                if checks:
                     headers_struc['received_domains'].append(m)
 
             m = email_regex.findall(l)
