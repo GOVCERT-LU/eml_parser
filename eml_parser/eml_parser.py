@@ -492,19 +492,19 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
             m = email_regex.findall(l)
             if m:
                 headers_struc['received_emails'] += m
+
+            # try to parse received lines and normalize them
+            try:
+                f, b = l.split('by')
+                b, undef = b.split('for')
+            except:
+                continue
+
+            b_d = b_d_regex.search(b)
+
     except TypeError:  # Ready to parse emails without received headers.
         pass
 
-    # ----------------------------------------------
-
-        # try to parse received lines and normalize them
-        try:
-            f, b = l.split('by')
-            b, undef = b.split('for')
-        except:
-            continue
-
-        b_d = b_d_regex.search(b)
 
     headers_struc['received_emails'] = list(set(headers_struc['received_emails']))
     headers_struc['received_domains'] = list(set(headers_struc['received_domains']))
