@@ -469,28 +469,31 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
     headers_struc['received_emails'] = []
     headers_struc['received_domains'] = []
 
-    for l in msg.get_all('received'):
-        l = re.sub(r'(\r|\n|\s|\t)+', ' ', l.lower())
-        headers_struc['received'].append(l)
+    try:
+        for l in msg.get_all('received'):
+            l = re.sub(r'(\r|\n|\s|\t)+', ' ', l.lower())
+            headers_struc['received'].append(l)
 
-        # search for domains / e-mail addresses
-        for m in recv_dom_regex.findall(l):
-            checks = True
-            if '.' in m:
-                try:
-                    test = int(re.sub(r'[.-]', '', m))
+            # search for domains / e-mail addresses
+            for m in recv_dom_regex.findall(l):
+                checks = True
+                if '.' in m:
+                    try:
+                        test = int(re.sub(r'[.-]', '', m))
 
-                    if not ipv4_regex.match(m) or m == '127.0.0.1':
-                        checks = False
-                except ValueError:
-                    pass
+                        if not ipv4_regex.match(m) or m == '127.0.0.1':
+                            checks = False
+                  except ValueError:
+                        pass
 
-            if checks:
-                headers_struc['received_domains'].append(m)
+              if checks:
+                    headers_struc['received_domains'].append(m)
 
-        m = email_regex.findall(l)
-        if m:
-            headers_struc['received_emails'] += m
+            m = email_regex.findall(l)
+            if m:
+                headers_struc['received_emails'] += m
+    except TypeError:  # Ready to parse emails without received headers.
+        pass
 
     # ----------------------------------------------
 
@@ -537,7 +540,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
             body = body.decode('utf-8', 'ignore')
 
         # If we start directly a findall on 500K+ body we got time and memory issues...
-        # if more than 4K.. lets cheat, we will cut around the thing we search "://, @, ." 
+        # if more than 4K.. lets cheat, we will cut around the thing we search "://, @, ."
         # in order to reduce regex complexity.
         if len(body) < 4096:
             list_observed_urls = get_uris_ondata(body)
