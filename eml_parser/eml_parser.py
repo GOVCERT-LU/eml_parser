@@ -66,7 +66,8 @@ email_regex = re.compile(r'''([a-zA-Z0-9.!#$%&'*+-/=?\^_`{|}~-]+@[a-zA-Z0-9-]+(?
 #                 /^[a-zA-Z0-9.!#$%&'*+-/=?\^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$/
 recv_dom_regex = re.compile(r'''(?:(?:from|by)\s+)([a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]{2,})+)''', re.MULTILINE)
 
-dom_regex = re.compile(r'''(?:\s|[\/<>'])([a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]{2,})+)(?:$|\s|[\/<>'])''', re.MULTILINE)
+#dom_regex = re.compile(r'''(?:\s|[\/<>'])([a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]{2,})+)(?:$|\s|[\/<>'])''', re.MULTILINE)
+dom_regex = re.compile(r'''(?:\s|[\/<>|@'])([a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]{2,})+)(?:$|\?|\s|#|&|[\/<>'])''', re.MULTILINE)
 ipv4_regex = re.compile(r'''((?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?))''', re.MULTILINE)
 
 b_d_regex = re.compile(r'(localhost|[a-z0-9.\-]+(?:[.][a-z]{2,4})?)')
@@ -86,7 +87,7 @@ url_regex = re.compile(r'''(?i)\b((?:(hxxps?|https?|ftps?)://|www\d{0,3}[.]|[a-z
 # simple version for searching for URLs
 # character set based on http://tools.ietf.org/html/rfc3986
 # url_regex_simple = re.compile(r'''(?i)\b((?:(hxxps?|https?|ftps?)://)[^ ]+)''', re.VERBOSE | re.MULTILINE)
-url_regex_simple = re.compile(r'''(([a-z]{3,}s?://)[a-z0-9\-_]+(\.[a-z0-9\-_]+)*(/[a-z0-9_\-\.~!*'();:@&=+$,/?%#\[\]]*)?)''', re.VERBOSE | re.MULTILINE | re.I)
+url_regex_simple = re.compile(r'''(([a-z]{3,}s?:\/\/)[a-z0-9\-_]+(\.[a-z0-9\-_]+)*(\/[a-z0-9_\-\.~!*'();:@&=+$,\/  ?%#\[\]]*)?)''', re.VERBOSE | re.MULTILINE | re.I)
 
 # encoded string =?<encoding>?[QB]?<string>?=
 re_encoded_string = re.compile(r'\=\?[^?]+\?[QB]\?[^?]+?\?\=', (re.X | re.M | re.I))
@@ -356,6 +357,19 @@ def decode_email_s(eml_file, include_raw_body=False, include_attachment_data=Fal
     return parse_email(msg, include_raw_body, include_attachment_data)
 
 
+# Regex extract uris from data, return list
+def get_uris_ondata(body):
+    list_observed_urls = []
+    found_url = []
+    for match in url_regex_simple.findall(body):
+        found_url = match[0].replace('hxxp', 'http')
+        found_url = urlparse(found_url).geturl()
+        # let's try to be smart by stripping of noisy bogus parts
+        found_url = re.split(r'''[\', ", \,, \), \}, \\]''', found_url)[0]
+        list_observed_urls.append(found_url)
+    return(list_observed_urls)
+
+
 # Convert emails to a list from a given header field.
 def headeremail2list(mail, header):
     # parse and decode to
@@ -365,6 +379,14 @@ def headeremail2list(mail, header):
         if not m[1] == '':
             return_field.append(m[1].lower())
     return return_field
+
+
+# Iterator that give all position of a given pattern (no regex)
+def findall(pat, data):
+    i = data.find(pat)
+    while i != -1:
+        yield i
+        i = data.find(pat, i+1)
 
 
 #  Parse an email an return a structure.
@@ -481,37 +503,6 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
 
         b_d = b_d_regex.search(b)
 
-        '''
-        # Catch of for emails in received.. we catch all email for now
-        for_d = for_d_regex.search(l)
-        # Add to TO address from routing headers "for xxxx@xxxx"
-        if for_d:
-            headers_struc['received_emails'].append(for_d.group(1))
-            headers_struc['received_emails'] = list(set(headers_struc['to']))
-        '''
-        '''
-        # Catch FROM --- TO tuple .. but still with (detail)...
-        f_d = f_d_regex.search(f)
-        if f_d:
-            if not f_d.group(2):
-                f_d_2 = ''
-            else:
-                f_d_2 = f_d.group(2)
-            if not f_d.group(3):
-                f_d_3 = ''
-            else:
-                f_d_3 = f_d.group(3)
-
-            f = '{0} ({1} [{2}])'.format(f_d.group(1), f_d_2, f_d_3)
-
-            if b_d is None:
-                b = ''
-            else:
-                b = b_d.group(1)
-            headers_struc['received'].append([f, b])
-
-        headers_struc['received'] = tuple(headers_struc['received'])
-        '''
     headers_struc['received_emails'] = list(set(headers_struc['received_emails']))
     headers_struc['received_domains'] = list(set(headers_struc['received_domains']))
 
@@ -545,20 +536,27 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
         if sys.version_info >= (3, 0) and (isinstance(body, bytes) or isinstance(body, bytearray)):
             body = body.decode('utf-8', 'ignore')
 
-        for match in url_regex_simple.findall(body):
-            found_url = match[0].replace('hxxp', 'http')
-            found_url = urlparse(found_url).geturl()
-            # let's try to be smart by stripping of noisy bogus parts
-            found_url = re.split(r'''[\', ", \,, \), \}, \\]''', found_url)[0]
-
-            if found_url not in list_observed_urls:
-                list_observed_urls.append(found_url)
-
-        for match in email_regex.findall(body):
-            list_observed_emails.append(match.lower())
-
-        for match in dom_regex.findall(body):
-            list_observed_dom.append(match.lower())
+        # If we start directly a findall on 500K+ body we got time and memory issues...
+        # if more than 4K.. lets cheat, we will cut around the thing we search "://, @, ." 
+        # in order to reduce regex complexity.
+        if len(body) < 4096:
+            list_observed_urls = get_uris_ondata(body)
+            for match in email_regex.findall(body):
+                list_observed_emails.append(match.lower())
+            for match in dom_regex.findall(body):
+                list_observed_dom.append(match.lower())
+        else:
+            for scn_pt in findall('://', body):
+                list_observed_urls = get_uris_ondata(body[scn_pt-16:scn_pt+4096]) + list_observed_urls
+            for scn_pt in findall('@', body):
+                # RFC 3696, 5322, 5321 for email size limitations
+                for match in email_regex.findall(body[scn_pt-64:scn_pt+255]):
+                    list_observed_emails.append(match.lower())
+            for scn_pt in findall('.', body):
+                # The maximum length of a fqdn, not a hostname, is 1004 characters RFC1035
+                # The maximum length of a hostname is 253 characters. Imputed from RFC952, RFC1123 and RFC1035.
+                for match in dom_regex.findall(body[scn_pt-253:scn_pt+1004]):
+                    list_observed_dom.append(match.lower())
 
         # Report uris,email and observed domains or hashes if no raw body
         if include_raw_body:
@@ -665,12 +663,8 @@ def main():
         if o == '-i':
             msgfile = k
 
-    m = decode_email(msgfile, False)
+    m = decode_email(msgfile, True)
     print json.dumps(m, default=json_serial)
-    '''if m.get('date'):
-        m.get('date').isoformat()
-    # print decode_email(msgfile, include_raw_body=True, include_attachment_data=True)
-    '''
 
 if __name__ == '__main__':
     main()
