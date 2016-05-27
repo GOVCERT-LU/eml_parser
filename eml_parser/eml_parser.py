@@ -66,7 +66,6 @@ email_regex = re.compile(r'''([a-zA-Z0-9.!#$%&'*+-/=?\^_`{|}~-]+@[a-zA-Z0-9-]+(?
 #                 /^[a-zA-Z0-9.!#$%&'*+-/=?\^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$/
 recv_dom_regex = re.compile(r'''(?:(?:from|by)\s+)([a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]{2,})+)''', re.MULTILINE)
 
-#dom_regex = re.compile(r'''(?:\s|[\/<>'])([a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]{2,})+)(?:$|\s|[\/<>'])''', re.MULTILINE)
 dom_regex = re.compile(r'''(?:\s|[\/<>|@'])([a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]{2,})+)(?:$|\?|\s|#|&|[\/<>'])''', re.MULTILINE)
 ipv4_regex = re.compile(r'''((?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?))''', re.MULTILINE)
 
@@ -87,7 +86,9 @@ url_regex = re.compile(r'''(?i)\b((?:(hxxps?|https?|ftps?)://|www\d{0,3}[.]|[a-z
 # simple version for searching for URLs
 # character set based on http://tools.ietf.org/html/rfc3986
 # url_regex_simple = re.compile(r'''(?i)\b((?:(hxxps?|https?|ftps?)://)[^ ]+)''', re.VERBOSE | re.MULTILINE)
-url_regex_simple = re.compile(r'''(([a-z]{3,}s?:\/\/)[a-z0-9\-_]+(\.[a-z0-9\-_]+)*(\/[a-z0-9_\-\.~!*'();:@&=+$,\/  ?%#\[\]]*)?)''', re.VERBOSE | re.MULTILINE | re.I)
+url_regex_simple = re.compile(r'''(([a-z]{3,}s?:\/\/)[a-z0-9\-_]+(\.[a-z0-9\-_]+)*''' +
+                              '''(\/[a-z0-9_\-\.~!*'();:@&=+$,\/  ?%#\[\]]*)?)''',
+                              re.VERBOSE | re.MULTILINE | re.I)
 
 # encoded string =?<encoding>?[QB]?<string>?=
 re_encoded_string = re.compile(r'\=\?[^?]+\?[QB]\?[^?]+?\?\=', (re.X | re.M | re.I))
@@ -505,7 +506,6 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
     except TypeError:  # Ready to parse emails without received headers.
         pass
 
-
     headers_struc['received_emails'] = list(set(headers_struc['received_emails']))
     headers_struc['received_domains'] = list(set(headers_struc['received_domains']))
 
@@ -590,7 +590,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
         # all other headers are in "header"
         # but we need to convert header tuples in dict..
         # "a","toto"           a: [toto,titi]
-        # "a","titi"   --->    c: truc
+        # "a","titi"   --->    c: [truc]
         # "c","truc"
         ch = {}
         for k, v in body_multhead:
