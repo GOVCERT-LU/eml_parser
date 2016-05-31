@@ -1,0 +1,33 @@
+Mail Part,Name,Preprocessing,Value,Data type,Purpose,Status
+body,hash,None,sha256,string,Hash of the whole body,Ok
+body,content_header,None,Plain,dict of list of string,All content headers and associated values,Ok
+body,content_type,none,Plain,string,Given mime type of the body part,Ok
+body,domain-hash,Lower,sha256,list of string,FQDN found in the body part,Ok
+body,email-hash,Lower,sha256,list of string,Emails found in the body part,Ok
+body,uri-hash,None,sha256,list of string,Uris found in the body part,Ok
+body,ip-hash,Lower,sha256,list of string,Ips found in the body part,Todo
+,,,,,,
+,,,,,,
+attachment,mime_type,None,Plain,string,Real mime type of the body part,Ok
+attachment,filename,None,Plain,string,name of the file,Ok
+attachment,extension,None,Plain,string,extention of the file,Ok
+attachment,content_header,None,Plain,dict of list of string,All attachement headers and associated values,Ok
+attachment,hash  ,None,mhash,list of string,"Contains sha 1,256,512 and md5 of the file",Ok
+attachment,size,None,Plain,integer,len of the file,Ok
+attachment,mime_type_short,None,Plain,string,real mime type of the attachement,Ok
+,,,,,,
+,,,,,,
+header,received,trim newlines,Plain,list of string,Line of routing informations,Ok
+header,delivered_to,None,Plain,list of string,Header delivered-to data ,Ok
+header,message_id,None,Plain,string,Header message-ip data,Ok
+header,from,None,Plain,string,Header from data,Ok
+header,to,None,Plain,list of string,All destination,Ok
+header,header,None,Plain,dict of list of string,All mail headers and associated values,Ok
+header,parse_date,None,Plain,datetime,Time of parsing by mailm0n,Ok
+header,date,None,Plain,datetime,Time of mail in the header,Ok
+header,received_email,Utc conv,Plain,string,All email parsed in routing headers,Ok
+header,received_domain,Utc conv,Plain,string,All domains parsed in routing headers,Ok
+header,subject,None,Plain,string,Subject of the email,Ok
+header,received_ip,Lower,Plain,string,All IP parsed in routing headers,Todo
+header,cc ,None,Plain,list of string,All blind destinationt,Ok
+header,defect,None,Plain,string,Email Parsing error,Ok

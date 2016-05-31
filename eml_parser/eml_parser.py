@@ -142,17 +142,17 @@ def get_file_extension(filename):
     return extension
 
 
-def get_file_hashes(data):
+def get_file_hash(data):
     hashalgo = ['md5', 'sha1', 'sha256', 'sha512']
-    hashes = {}
+    hash = {}
 
     for k in hashalgo:
         ha = getattr(hashlib, k)
         h = ha()
         h.update(data)
-        hashes[k] = h.hexdigest()
+        hash[k] = h.hexdigest()
 
-    return hashes
+    return hash
 
 
 def traverse_multipart(msg, counter=0, include_attachment_data=False):
@@ -181,7 +181,7 @@ def traverse_multipart(msg, counter=0, include_attachment_data=False):
                 filename = decode_field(filename)
 
             extension = get_file_extension(filename)
-            hashes = get_file_hashes(data)
+            hash = get_file_hash(data)
 
             file_id = str(uuid.uuid1())
             attachments[file_id] = {}
@@ -190,11 +190,11 @@ def traverse_multipart(msg, counter=0, include_attachment_data=False):
 
             if extension:
                 attachments[file_id]['extension'] = extension
-            attachments[file_id]['hashes'] = hashes
+            attachments[file_id]['hash'] = hash
 
             if magic:
-                attachments[file_id]['mime-type'] = ms.buffer(data).decode('utf-8')
-                attachments[file_id]['mime-type-short'] = attachments[file_id]['mime-type'].split(",")[0]
+                attachments[file_id]['mime_type'] = ms.buffer(data).decode('utf-8')
+                attachments[file_id]['mime_type_short'] = attachments[file_id]['mime_type'].split(",")[0]
 
             if include_attachment_data:
                 attachments[file_id]['raw'] = base64.b64encode(data)
@@ -208,7 +208,7 @@ def traverse_multipart(msg, counter=0, include_attachment_data=False):
                 else:
                     ch[k] = [v]
 
-            attachments[file_id]['content-headers'] = ch
+            attachments[file_id]['content_header'] = ch
 
             counter += 1
 
@@ -358,8 +358,8 @@ def decode_email_s(eml_file, include_raw_body=False, include_attachment_data=Fal
     return parse_email(msg, include_raw_body, include_attachment_data)
 
 
-# Regex extract uris from data, return list
-def get_uris_ondata(body):
+# Regex extract uri from data, return list
+def get_uri_ondata(body):
     list_observed_urls = []
     found_url = []
     for match in url_regex_simple.findall(body):
@@ -371,7 +371,7 @@ def get_uris_ondata(body):
     return(list_observed_urls)
 
 
-# Convert emails to a list from a given header field.
+# Convert email to a list from a given header field.
 def headeremail2list(mail, header):
     # parse and decode to
     field = email.utils.getaddresses(mail.get_all(header, []))
@@ -409,7 +409,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
         headers_struc['defect'] = msg.defects
 
     # messageid
-    headers_struc['message-id'] = msg.get('message-id', '')
+    headers_struc['message_id'] = msg.get('message-id', '')
 
     # parse and decode from
     # @TODO verify if this hack is necessary for other e-mail fields as well
@@ -428,9 +428,9 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
         headers_struc.pop('cc')
 
     # parse and decode delivered-to
-    headers_struc['delivered-to'] = headeremail2list(msg, 'delivered-to')
-    if len(headers_struc['delivered-to']) == 0:
-        headers_struc.pop('delivered-to')
+    headers_struc['delivered_to'] = headeremail2list(msg, 'delivered-to')
+    if len(headers_struc['delivered_to']) == 0:
+        headers_struc.pop('delivered_to')
 
     # parse and decode Date
     # If date field is present
@@ -467,15 +467,15 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
     # mail receiver path / parse any domain, e-mail
     # @TODO parse case where domain is specified but in parantheses only an IP
     headers_struc['received'] = []
-    headers_struc['received_emails'] = []
-    headers_struc['received_domains'] = []
+    headers_struc['received_email'] = []
+    headers_struc['received_domain'] = []
 
     try:
         for l in msg.get_all('received'):
             l = re.sub(r'(\r|\n|\s|\t)+', ' ', l.lower())
             headers_struc['received'].append(l)
 
-            # search for domains / e-mail addresses
+            # search for domain / e-mail addresses
             for m in recv_dom_regex.findall(l):
                 checks = True
                 if '.' in m:
@@ -488,11 +488,11 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
                         pass
 
                 if checks:
-                    headers_struc['received_domains'].append(m)
+                    headers_struc['received_domain'].append(m)
 
             m = email_regex.findall(l)
             if m:
-                headers_struc['received_emails'] += m
+                headers_struc['received_email'] += m
 
             # try to parse received lines and normalize them
             try:
@@ -503,17 +503,17 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
 
             b_d = b_d_regex.search(b)
 
-    except TypeError:  # Ready to parse emails without received headers.
+    except TypeError:  # Ready to parse email without received headers.
         pass
 
-    headers_struc['received_emails'] = list(set(headers_struc['received_emails']))
-    headers_struc['received_domains'] = list(set(headers_struc['received_domains']))
+    headers_struc['received_email'] = list(set(headers_struc['received_email']))
+    headers_struc['received_domain'] = list(set(headers_struc['received_domain']))
 
     # Clean up if empty
-    if len(headers_struc['received_emails']) == 0:
-        headers_struc.pop('received_emails')
-    if len(headers_struc['received_domains']) == 0:
-        headers_struc.pop('received_domains')
+    if len(headers_struc['received_email']) == 0:
+        headers_struc.pop('received_email')
+    if len(headers_struc['received_domain']) == 0:
+        headers_struc.pop('received_domain')
 
     # Parse TEXT BODYS
     # get raw header
@@ -533,7 +533,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
         encoding, body, body_multhead = body_tup
         # Parse any URLs and mail found in the body
         list_observed_urls = []
-        list_observed_emails = []
+        list_observed_email = []
         list_observed_dom = []
 
         if sys.version_info >= (3, 0) and (isinstance(body, bytes) or isinstance(body, bytearray)):
@@ -543,48 +543,48 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
         # if more than 4K.. lets cheat, we will cut around the thing we search "://, @, ."
         # in order to reduce regex complexity.
         if len(body) < 4096:
-            list_observed_urls = get_uris_ondata(body)
+            list_observed_urls = get_uri_ondata(body)
             for match in email_regex.findall(body):
-                list_observed_emails.append(match.lower())
+                list_observed_email.append(match.lower())
             for match in dom_regex.findall(body):
                 list_observed_dom.append(match.lower())
         else:
             for scn_pt in findall('://', body):
-                list_observed_urls = get_uris_ondata(body[scn_pt-16:scn_pt+4096]) + list_observed_urls
+                list_observed_urls = get_uri_ondata(body[scn_pt-16:scn_pt+4096]) + list_observed_urls
             for scn_pt in findall('@', body):
                 # RFC 3696, 5322, 5321 for email size limitations
                 for match in email_regex.findall(body[scn_pt-64:scn_pt+255]):
-                    list_observed_emails.append(match.lower())
+                    list_observed_email.append(match.lower())
             for scn_pt in findall('.', body):
                 # The maximum length of a fqdn, not a hostname, is 1004 characters RFC1035
                 # The maximum length of a hostname is 253 characters. Imputed from RFC952, RFC1123 and RFC1035.
                 for match in dom_regex.findall(body[scn_pt-253:scn_pt+1004]):
                     list_observed_dom.append(match.lower())
 
-        # Report uris,email and observed domains or hashes if no raw body
+        # Report uri,email and observed domain or hash if no raw body
         if include_raw_body:
             if list_observed_urls:
-                bodie['uris'] = list(set(list_observed_urls))
+                bodie['uri'] = list(set(list_observed_urls))
 
-            if list_observed_emails:
-                bodie['emails'] = list(set(list_observed_emails))
+            if list_observed_email:
+                bodie['email'] = list(set(list_observed_email))
 
             if list_observed_dom:
-                bodie['domains'] = list(set(list_observed_dom))
+                bodie['domain'] = list(set(list_observed_dom))
         else:
             if list_observed_urls:
-                bodie['uris-hashes'] = []
+                bodie['uri_hash'] = []
                 for uri in list(set(list_observed_urls)):
-                    bodie['uris-hashes'].append(hashlib.sha256(uri.lower()).hexdigest())
-            if list_observed_emails:
-                bodie['emails-hashes'] = []
-                for uri in list(set(list_observed_emails)):
+                    bodie['uri_hash'].append(hashlib.sha256(uri.lower()).hexdigest())
+            if list_observed_email:
+                bodie['email_hash'] = []
+                for uri in list(set(list_observed_email)):
                     # Email already lowered
-                    bodie['emails-hashes'].append(hashlib.sha256(uri).hexdigest())
+                    bodie['email_hash'].append(hashlib.sha256(uri).hexdigest())
             if list_observed_dom:
-                bodie['dom-hashes'] = []
+                bodie['domain_hash'] = []
                 for uri in list(set(list_observed_dom)):
-                    bodie['dom-hashes'].append(hashlib.sha256(uri.lower()).hexdigest())
+                    bodie['domain_hash'].append(hashlib.sha256(uri.lower()).hexdigest())
 
         # For mail without multipart we will only get the "content....something" headers
         # all other headers are in "header"
@@ -606,7 +606,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
                         ch[k].append(v)
                     else:
                         ch[k] = [v]
-        bodie['content_headers'] = ch  # Store content headers dict
+        bodie['content_header'] = ch  # Store content headers dict
 
         if include_raw_body:
             bodie['content'] = body
@@ -616,8 +616,8 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
         val = ch.get('content-type')
         if val:
             if type(val) == list:
-                val = str(val[-1:])
-            bodie['content-type'] = val.split(';')[0].strip()
+                val = val[-1]
+            bodie['content_type'] = val.split(';')[0].strip()
         bodie['hash'] = hashlib.sha256(body.encode('utf-8')).hexdigest()
         bodys[str(uuid.uuid1())] = bodie
 
@@ -644,7 +644,6 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
     # Get all other bulk headers
     report_struc['header'] = headers_struc
     report_struc['body'] = bodys_struc
-    # report_struc['attachment'] = attachements_struc
 
     return report_struc
 
@@ -661,12 +660,15 @@ def json_serial(obj):
 def main():
     opts, args = getopt.getopt(sys.argv[1:], 'i:')
     msgfile = None
+    full = False  # Display or Hash ?
 
     for o, k in opts:
         if o == '-i':
             msgfile = k
+        if o == '-d':
+            full = True
 
-    m = decode_email(msgfile, True)
+    m = decode_email(msgfile, full)
     print json.dumps(m, default=json_serial)
 
 if __name__ == '__main__':
