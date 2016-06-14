@@ -133,6 +133,7 @@ def get_raw_body_text(msg):
 
 
 def get_file_extension(filename):
+    ''' Return the file extention of a given filename '''
     extension = ''
     dot_idx = filename.rfind('.')
 
@@ -301,11 +302,13 @@ def b_value_decode(string):
     return d_string
 
 
-# Decodes a given string as Base64 or Quoted Printable, depending on what
-# type it is.
-#
-# String has to be of the format =?<encoding>?[QB]?<string>?=
 def decode_value(string):
+    '''
+    Decodes a given string as Base64 or Quoted Printable, depending on what
+    type it is.
+
+    String has to be of the format =?<encoding>?[QB]?<string>?=
+    '''
     # Optimization: If there's no encoded-words in the stringing, just return it
     if not re_encoded_string.search(string):
         return string
@@ -618,7 +621,8 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
             if type(val) == list:
                 val = val[-1]
             bodie['content_type'] = val.split(';')[0].strip()
-        bodie['hash'] = hashlib.sha256(body.encode('utf-8')).hexdigest()
+        #bodie['hash'] = hashlib.sha256(body.encode('utf-8')).hexdigest()
+        bodie['hash'] = hashlib.sha256(body).hexdigest()
         bodys[str(uuid.uuid1())] = bodie
 
     bodys_struc = bodys
