@@ -204,8 +204,8 @@ def traverse_multipart(msg, counter=0, include_attachment_data=False):
             for k, v in msg.items():
                 k = k.lower()
                 if k in ch:
-                    # print "%s %s" % (v, k)
-                    ch[k] = ch[k].append(v)
+                    # print "%s<<<>>>%s" % (k, v)
+                    ch[k].append(v)
                 else:
                     ch[k] = [v]
 
@@ -409,7 +409,9 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
 
     # If parsing had problem... report it...
     if msg.defects:
-        headers_struc['defect'] = msg.defects
+        headers_struc['defect'] = []
+        for exception in msg.defects:
+                headers_struc['defect'].append(str(exception))
 
     # messageid
     headers_struc['message_id'] = msg.get('message-id', '')
@@ -621,8 +623,12 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
             if type(val) == list:
                 val = val[-1]
             bodie['content_type'] = val.split(';')[0].strip()
-        #bodie['hash'] = hashlib.sha256(body.encode('utf-8')).hexdigest()
-        bodie['hash'] = hashlib.sha256(body).hexdigest()
+
+        # Try hashing.. with failback for incorrect encoding (non ascii)
+        try:
+            bodie['hash'] = hashlib.sha256(body).hexdigest()
+        except:
+            bodie['hash'] = hashlib.sha256(body.encode('UTF-8')).hexdigest()
         bodys[str(uuid.uuid1())] = bodie
 
     bodys_struc = bodys
@@ -658,6 +664,7 @@ def json_serial(obj):
     if isinstance(obj, datetime.datetime):
         serial = obj.isoformat()
         return serial
+    
     raise TypeError("Type not serializable")
 
 
