@@ -156,6 +156,18 @@ def get_file_hash(data):
     return hash
 
 
+def ad(string):
+    '''
+    Ascii Decode
+    return the decoded string
+    could be usefull in some dirty headers
+    '''
+    try:
+        return string.decode('latin-1')
+    except:
+        return string.decode('utf-8', replace)
+
+
 def traverse_multipart(msg, counter=0, include_attachment_data=False):
     attachments = {}
 
@@ -420,10 +432,10 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
     # @TODO verify if this hack is necessary for other e-mail fields as well
     m = email_regex.search(msg.get('from', '').lower())
     if m:
-        headers_struc['from'] = m.group(1)
+        headers_struc['from'] = ad(m.group(1))
     else:
         from_ = email.utils.parseaddr(msg.get('from', '').lower())
-        headers_struc['from'] = from_[1]
+        headers_struc['from'] = ad(from_[1])
 
     # parse and decode to
     headers_struc['to'] = headeremail2list(msg, 'to')
@@ -602,15 +614,15 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
             k = k.lower()  # Lot of lowers, precompute :) .
             if multipart:
                 if k in ch:
-                    ch[k].append(v)
+                    ch[k].append(ad(v))
                 else:
-                    ch[k] = [v]
+                    ch[k] = [ad(v)]
             else:  # if not multipart, store only content-xx related header with part
                 if k.startswith('content'):  # otherwise, we got all header headers
                     if k in ch:
-                        ch[k].append(v)
+                        ch[k].append(ad(v))
                     else:
-                        ch[k] = [v]
+                        ch[k] = [ad(v)]
         bodie['content_header'] = ch  # Store content headers dict
 
         if include_raw_body:
@@ -641,9 +653,9 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
     for k, v in msg.items():
         k = k.lower()  # Lot of lower, precompute...
         if k in header:
-            header[k].append(v)
+            header[k].append(ad(v))
         else:
-            header[k] = [v]
+            header[k] = [ad(v)]
     headers_struc['header'] = header
 
     # parse attachments
@@ -680,7 +692,8 @@ def main():
             full = True
 
     m = decode_email(msgfile, full)
-    print json.dumps(m, default=json_serial)
+    #pprint.pprint(m)
+    print (json.dumps(m, default=json_serial))
 
 if __name__ == '__main__':
     main()
