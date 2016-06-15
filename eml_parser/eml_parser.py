@@ -417,7 +417,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
 
     # parse and decode subject
     subject = msg.get('subject', '')
-    headers_struc['subject'] = decode_field(subject)
+    headers_struc['subject'] = ad(decode_field(subject))
 
     # If parsing had problem... report it...
     if msg.defects:
@@ -611,7 +611,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
         # "c","truc"
         ch = {}
         for k, v in body_multhead:
-            k = k.lower()  # Lot of lowers, precompute :) .
+            k = ad(k.lower())  # Lot of lowers, precompute :) .
             # print v
             if multipart:
                 if k in ch:
@@ -652,7 +652,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
     # "c","truc"
     #
     for k, v in msg.items():
-        k = k.lower()  # Lot of lower, precompute...
+        k = ad(k.lower())  # Lot of lower, precompute...
         if k in header:
             header[k].append(ad(v))
         else:
