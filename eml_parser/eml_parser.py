@@ -165,7 +165,7 @@ def ad(string):
     try:
         return string.decode('latin-1').encode('utf-8')
     except:
-        return string.decode('utf-8', replace)
+        return string.encode('utf-8', replace)
 
 
 def traverse_multipart(msg, counter=0, include_attachment_data=False):
