@@ -163,7 +163,7 @@ def ad(string):
     could be usefull in some dirty headers
     '''
     try:
-        return string.decode('latin-1')
+        return string.decode('latin-1').encode('utf-8')
     except:
         return string.decode('utf-8', replace)
 
@@ -198,11 +198,11 @@ def traverse_multipart(msg, counter=0, include_attachment_data=False):
 
             file_id = str(uuid.uuid1())
             attachments[file_id] = {}
-            attachments[file_id]['filename'] = filename
+            attachments[file_id]['filename'] = ad(filename)
             attachments[file_id]['size'] = file_size
 
             if extension:
-                attachments[file_id]['extension'] = extension
+                attachments[file_id]['extension'] = ad(extension)
             attachments[file_id]['hash'] = hash
 
             if magic:
@@ -214,12 +214,12 @@ def traverse_multipart(msg, counter=0, include_attachment_data=False):
 
             ch = {}
             for k, v in msg.items():
-                k = k.lower()
+                k = ad(k.lower())
                 if k in ch:
                     # print "%s<<<>>>%s" % (k, v)
-                    ch[k].append(v)
+                    ch[k].append(ad(v))
                 else:
-                    ch[k] = [v]
+                    ch[k] = [ad(v)]
 
             attachments[file_id]['content_header'] = ch
 
@@ -612,6 +612,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
         ch = {}
         for k, v in body_multhead:
             k = k.lower()  # Lot of lowers, precompute :) .
+            # print v
             if multipart:
                 if k in ch:
                     ch[k].append(ad(v))
