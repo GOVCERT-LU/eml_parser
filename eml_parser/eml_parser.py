@@ -325,6 +325,16 @@ def decode_value(string):
     if not re_encoded_string.search(string):
         return string
 
+    # First, convert CRLF to CR
+    strings = []
+    for line in string.replace('\r', '').split('\n'):
+        strings.append(line)
+
+    # Detect Invalide encoding !! and return as-is (as do thunderbird)
+    for line in strings:
+        if line.startswith("=?") and not line.endswith("?="):
+            return "".join(strings)
+
     # Split on white-space boundaries with capture, so we capture the white-space as well
     string_ = u''
     for line in string.replace('\r', '').split('\n'):
