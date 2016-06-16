@@ -259,8 +259,10 @@ def decode_field(field):
     try:
         _decoded = email.Header.decode_header(field)
         _text, charset = _decoded[0]
-    except email.errors.HeaderParseError:
+    except (email.errors.HeaderParseError, UnicodeEncodeError):
         _text, charset = None, None
+        pass
+
 
     if charset:
         try:
