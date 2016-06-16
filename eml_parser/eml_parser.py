@@ -286,9 +286,9 @@ def decode_string(string, encoding):
             enc = chardet.detect(string)
             try:
                 if not (enc['confidence'] == 1 and enc['encoding'] == 'ascii'):
-                    value = value.decode(enc['encoding'])
+                    value = string.decode(enc['encoding'])
                 else:
-                    value = value.decode('ascii', 'ignore')
+                    value = string.decode('ascii', 'ignore')
             except UnicodeDecodeError:
                 value = force_string_decode(string)
 
