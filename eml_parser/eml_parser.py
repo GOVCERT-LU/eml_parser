@@ -263,8 +263,6 @@ def decode_field(field):
         _text, charset = None, None
         pass
 
-
-    if charset:
         try:
             text = decode_string(_text, charset)
         except UnicodeDecodeError:
@@ -623,7 +621,8 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
         # "c","truc"
         ch = {}
         for k, v in body_multhead:
-            k = ad(k.lower())  # Lot of lowers, precompute :) .
+            # We are using replace . to : for avoiding issue in mongo
+            k = ad(k.lower()).replace('.', ':')  # Lot of lowers, precompute :) .
             # print v
             if multipart:
                 if k in ch:
@@ -632,6 +631,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
                     ch[k] = [ad(v)]
             else:  # if not multipart, store only content-xx related header with part
                 if k.startswith('content'):  # otherwise, we got all header headers
+                    k = ad(k.lower()).replace('.', ':')
                     if k in ch:
                         ch[k].append(ad(v))
                     else:
@@ -664,7 +664,8 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
     # "c","truc"
     #
     for k, v in msg.items():
-        k = ad(k.lower())  # Lot of lower, precompute...
+        # We are using replace . to : for avoiding issue in mongo
+        k = ad(k.lower()).replace('.', ':')  # Lot of lower, precompute...
         if k in header:
             header[k].append(ad(v))
         else:
@@ -689,7 +690,7 @@ def json_serial(obj):
     if isinstance(obj, datetime.datetime):
         serial = obj.isoformat()
         return serial
-    
+
     raise TypeError("Type not serializable")
 
 
@@ -705,7 +706,6 @@ def main():
             full = True
 
     m = decode_email(msgfile, full)
-    #pprint.pprint(m)
     print (json.dumps(m, default=json_serial))
 
 if __name__ == '__main__':
