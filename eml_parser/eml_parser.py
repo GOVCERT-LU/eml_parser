@@ -335,12 +335,18 @@ def decode_value(string):
         if line.startswith("=?") and not line.endswith("?="):
             return "".join(strings)
 
+    # Detect if space in it, in not do no split on space
+    csplit = r'([ \t])'
+    if line.startswith("=?") and line.endswith("?="):
+        if " " in line:
+            csplit = r'('')'
+
     # Split on white-space boundaries with capture, so we capture the white-space as well
     string_ = u''
     for line in string.replace('\r', '').split('\n'):
         line_ = u''
 
-        for text in re.split(r'([ \t])', line):
+        for text in re.split(csplit, line):
             if '=?' in text:
                 # Search for occurences of quoted stringings or plain stringings
                 for m in re_quoted_string.finditer(text):
