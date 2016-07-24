@@ -391,7 +391,8 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
   maila['received_emails'] = []
   maila['received_domains'] = []
 
-  for l in msg.get_all('received'):
+  received = msg.get_all('received')
+  for l in received if received is not None else []:
     l = re.sub(r'(\r|\n|\s|\t)+', ' ', l.lower())
     header['received'].append(l)
 
