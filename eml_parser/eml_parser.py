@@ -69,6 +69,10 @@ recv_dom_regex = re.compile(r'''(?:(?:from|by)\s+)([a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-
 dom_regex = re.compile(r'''(?:\s|[\/<>|@'])([a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]{2,})+)(?:$|\?|\s|#|&|[\/<>'])''', re.MULTILINE)
 ipv4_regex = re.compile(r'''((?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?))''', re.MULTILINE)
 
+
+# From https://gist.github.com/mnordhoff/2213179 : IPv6 with zone ID (RFC 6874)
+ipv6_regex = re.compile('((?:[0-9A-Fa-f]{1,4}:){6}(?:[0-9A-Fa-f]{1,4}:[0-9A-Fa-f]{1,4}|(?:(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))|::(?:[0-9A-Fa-f]{1,4}:){5}(?:[0-9A-Fa-f]{1,4}:[0-9A-Fa-f]{1,4}|(?:(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))|(?:[0-9A-Fa-f]{1,4})?::(?:[0-9A-Fa-f]{1,4}:){4}(?:[0-9A-Fa-f]{1,4}:[0-9A-Fa-f]{1,4}|(?:(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))|(?:[0-9A-Fa-f]{1,4}:[0-9A-Fa-f]{1,4})?::(?:[0-9A-Fa-f]{1,4}:){3}(?:[0-9A-Fa-f]{1,4}:[0-9A-Fa-f]{1,4}|(?:(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))|(?:(?:[0-9A-Fa-f]{1,4}:){,2}[0-9A-Fa-f]{1,4})?::(?:[0-9A-Fa-f]{1,4}:){2}(?:[0-9A-Fa-f]{1,4}:[0-9A-Fa-f]{1,4}|(?:(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))|(?:(?:[0-9A-Fa-f]{1,4}:){,3}[0-9A-Fa-f]{1,4})?::[0-9A-Fa-f]{1,4}:(?:[0-9A-Fa-f]{1,4}:[0-9A-Fa-f]{1,4}|(?:(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))|(?:(?:[0-9A-Fa-f]{1,4}:){,4}[0-9A-Fa-f]{1,4})?::(?:[0-9A-Fa-f]{1,4}:[0-9A-Fa-f]{1,4}|(?:(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))|(?:(?:[0-9A-Fa-f]{1,4}:){,5}[0-9A-Fa-f]{1,4})?::[0-9A-Fa-f]{1,4}|(?:(?:[0-9A-Fa-f]{1,4}:){,6}[0-9A-Fa-f]{1,4})?::)')
+
 b_d_regex = re.compile(r'(localhost|[a-z0-9.\-]+(?:[.][a-z]{2,4})?)')
 
 f_d_regex = re.compile(r'from(?:\s+(localhost|[a-z0-9\-]+|[a-z0-9.\-]+' +
@@ -78,7 +82,7 @@ f_d_regex = re.compile(r'from(?:\s+(localhost|[a-z0-9\-]+|[a-z0-9.\-]+' +
 for_d_regex = re.compile(r'for\s+<?([a-z0-9.\-]+@[a-z0-9.\-]+[.][a-z]{2,4})>?')
 
 # note: depending on the text this regex blocks in an infinite loop !
-url_regex = re.compile(r'''(?i)\b((?:(hxxps?|https?|ftps?)://|www\d{0,3}[.]|[a-z0-9.\-]+[.]' +
+url_regex = re.compile(r'''(?i)\b((?:(hxxps?|https?|ftps?)://|www\d{0,3}[.]|[a-z:0-9.\-]+[.]' +
                        '[a-z]{2,4}/)(?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))*\))+' +
                        '(?:\(([^\s()<>]+|(\([^\s()<>]+\)))*\)|[^\s`!()\[\]{};:'".,<>?]))''',
                        re.VERBOSE | re.MULTILINE)
@@ -86,7 +90,7 @@ url_regex = re.compile(r'''(?i)\b((?:(hxxps?|https?|ftps?)://|www\d{0,3}[.]|[a-z
 # simple version for searching for URLs
 # character set based on http://tools.ietf.org/html/rfc3986
 # url_regex_simple = re.compile(r'''(?i)\b((?:(hxxps?|https?|ftps?)://)[^ ]+)''', re.VERBOSE | re.MULTILINE)
-url_regex_simple = re.compile(r'''(([a-z]{3,}s?:\/\/)[a-z0-9\-_]+(\.[a-z0-9\-_]+)*''' +
+url_regex_simple = re.compile(r'''(([a-z]{3,}s?:\/\/)[a-z0-9\-_:]+(\.[a-z0-9\-_]+)*''' +
                               '''(\/[a-z0-9_\-\.~!*'();:@&=+$,\/  ?%#\[\]]*)?)''',
                               re.VERBOSE | re.MULTILINE | re.I)
 
@@ -502,11 +506,16 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
     headers_struc['received'] = []
     headers_struc['received_email'] = []
     headers_struc['received_domain'] = []
-
+    headers_struc['received_ip'] = []
     try:
         for l in msg.get_all('received'):
             l = re.sub(r'(\r|\n|\s|\t)+', ' ', l.lower())
             headers_struc['received'].append(l)
+
+            for ips in ipv6_regex.findall(l):
+                headers_struc['received_ip'].append(ips.lower())
+            for ips in ipv4_regex.findall(l):
+                headers_struc['received_ip'].append(ips.lower())
 
             # search for domain / e-mail addresses
             for m in recv_dom_regex.findall(l):
@@ -514,12 +523,10 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
                 if '.' in m:
                     try:
                         test = int(re.sub(r'[.-]', '', m))
-
                         if not ipv4_regex.match(m) or m == '127.0.0.1':
                             checks = False
                     except ValueError:
                         pass
-
                 if checks:
                     headers_struc['received_domain'].append(m)
 
@@ -539,14 +546,18 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
     except TypeError:  # Ready to parse email without received headers.
         pass
 
+    # Uniq data found
     headers_struc['received_email'] = list(set(headers_struc['received_email']))
     headers_struc['received_domain'] = list(set(headers_struc['received_domain']))
+    headers_struc['received_ip'] = list(set(headers_struc['received_ip']))
 
     # Clean up if empty
     if len(headers_struc['received_email']) == 0:
         headers_struc.pop('received_email')
     if len(headers_struc['received_domain']) == 0:
         headers_struc.pop('received_domain')
+    if len(headers_struc['received_ip']) == 0:
+        headers_struc.pop('received_ip')
 
     # Parse TEXT BODYS
     # get raw header
@@ -568,6 +579,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
         list_observed_urls = []
         list_observed_email = []
         list_observed_dom = []
+        list_observed_ip = []
 
         if sys.version_info >= (3, 0) and (isinstance(body, bytes) or isinstance(body, bytearray)):
             body = body.decode('utf-8', 'ignore')
@@ -581,6 +593,10 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
                 list_observed_email.append(match.lower())
             for match in dom_regex.findall(body):
                 list_observed_dom.append(match.lower())
+            for match in ipv4_regex.findall(body):
+                list_observed_ip.append(match)
+            for match in ipv6_regex.findall(body):
+                list_observed_ip.append(match.lower())
         else:
             for scn_pt in findall('://', body):
                 list_observed_urls = get_uri_ondata(body[scn_pt-16:scn_pt+4096]) + list_observed_urls
@@ -593,6 +609,11 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
                 # The maximum length of a hostname is 253 characters. Imputed from RFC952, RFC1123 and RFC1035.
                 for match in dom_regex.findall(body[scn_pt-253:scn_pt+1004]):
                     list_observed_dom.append(match.lower())
+            for scn_pt in findall(':', body):
+                # The maximum length of IPv6 is 32 Char + 7 ":"
+                for match in ipv6_regex.findall(body[scn_pt-4:scn_pt+35]):
+                    list_observed_ip.append(match.lower())
+
 
         # Report uri,email and observed domain or hash if no raw body
         if include_raw_body:
@@ -604,6 +625,10 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
 
             if list_observed_dom:
                 bodie['domain'] = list(set(list_observed_dom))
+
+            if list_observed_dom:
+                bodie['ip'] = list(set(list_observed_ip))
+
         else:
             if list_observed_urls:
                 bodie['uri_hash'] = []
@@ -611,13 +636,18 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
                     bodie['uri_hash'].append(hashlib.sha256(uri.lower()).hexdigest())
             if list_observed_email:
                 bodie['email_hash'] = []
-                for uri in list(set(list_observed_email)):
+                for emel in list(set(list_observed_email)):
                     # Email already lowered
-                    bodie['email_hash'].append(hashlib.sha256(uri).hexdigest())
+                    bodie['email_hash'].append(hashlib.sha256(emel).hexdigest())
             if list_observed_dom:
                 bodie['domain_hash'] = []
                 for uri in list(set(list_observed_dom)):
                     bodie['domain_hash'].append(hashlib.sha256(uri.lower()).hexdigest())
+            if list_observed_ip:
+                bodie['ip_hash'] = []
+                for fip in list(set(list_observed_ip)):
+                    # IP (v6) already lowered
+                    bodie['ip_hash'].append(hashlib.sha256(fip).hexdigest())
 
         # For mail without multipart we will only get the "content....something" headers
         # all other headers are in "header"
@@ -703,7 +733,7 @@ def json_serial(obj):
 def main():
     opts, args = getopt.getopt(sys.argv[1:], 'i:')
     msgfile = None
-    full = False  # Display or Hash ?
+    full = True # ; alse  # Display or Hash ?
 
     for o, k in opts:
         if o == '-i':
