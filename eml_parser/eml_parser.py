@@ -211,7 +211,10 @@ def traverse_multipart(msg, counter=0, include_attachment_data=False):
 
             if magic:
                 attachments[file_id]['mime_type'] = ms.buffer(data).decode('utf-8')
-                attachments[file_id]['mime_type_short'] = attachments[file_id]['mime_type'].split(",")[0]
+                # attachments[file_id]['mime_type_short'] = attachments[file_id]['mime_type'].split(",")[0]
+                ms = magic.open(magic.MAGIC_MIME_TYPE)
+                ms.load()
+                attachments[file_id]['mime_type_short'] = ms.buffer(data).decode('utf-8')
 
             if include_attachment_data:
                 attachments[file_id]['raw'] = base64.b64encode(data)
@@ -226,9 +229,9 @@ def traverse_multipart(msg, counter=0, include_attachment_data=False):
                     ch[k] = [ad(v)]
 
             attachments[file_id]['content_header'] = ch
+            attachments[file_id]['uid'] = file_id
 
             counter += 1
-
     return attachments
 
 
@@ -690,7 +693,9 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
             bodie['hash'] = hashlib.sha256(body).hexdigest()
         except:
             bodie['hash'] = hashlib.sha256(body.encode('UTF-8')).hexdigest()
-        bodys[str(uuid.uuid1())] = bodie
+            uid = str(uuid.uuid1())
+            bodie['uid'] = uid
+        bodys[uid] = bodie
 
     bodys_struc = bodys
 
@@ -710,12 +715,26 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
 
     # parse attachments
     report_struc['attachment'] = traverse_multipart(msg, 0, include_attachment_data)
+   
+    # Dirty hack... transphorm hash in list.. need to be done in the function.
+    # Mandatory to search efficiently in mongodb
+    # See Bug 11 of eml_parser
     if len(report_struc['attachment']) == 0:
         report_struc.pop('attachment')
+    else:
+        newattach = []
+        for attachment in report_struc['attachment']:
+            newattach.append(report_struc['attachment'][attachment])
+        report_struc['attachment'] = newattach
+
+    newbody = []
+    for body in bodys_struc:
+            newbody.append(bodys_struc[body])
+    report_struc['body'] = newbody
+    ## End of dirty hack
 
     # Get all other bulk headers
     report_struc['header'] = headers_struc
-    report_struc['body'] = bodys_struc
 
     return report_struc
 
