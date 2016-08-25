@@ -617,7 +617,6 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
                 for match in ipv6_regex.findall(body[scn_pt-4:scn_pt+35]):
                     list_observed_ip.append(match.lower())
 
-
         # Report uri,email and observed domain or hash if no raw body
         if include_raw_body:
             if list_observed_urls:
@@ -693,8 +692,9 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
             bodie['hash'] = hashlib.sha256(body).hexdigest()
         except:
             bodie['hash'] = hashlib.sha256(body.encode('UTF-8')).hexdigest()
-            uid = str(uuid.uuid1())
-            bodie['uid'] = uid
+
+        uid = str(uuid.uuid1())
+        bodie['uid'] = uid
         bodys[uid] = bodie
 
     bodys_struc = bodys
@@ -715,7 +715,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
 
     # parse attachments
     report_struc['attachment'] = traverse_multipart(msg, 0, include_attachment_data)
-   
+
     # Dirty hack... transphorm hash in list.. need to be done in the function.
     # Mandatory to search efficiently in mongodb
     # See Bug 11 of eml_parser
@@ -731,7 +731,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
     for body in bodys_struc:
             newbody.append(bodys_struc[body])
     report_struc['body'] = newbody
-    ## End of dirty hack
+    # End of dirty hack
 
     # Get all other bulk headers
     report_struc['header'] = headers_struc
@@ -752,7 +752,7 @@ def json_serial(obj):
 def main():
     opts, args = getopt.getopt(sys.argv[1:], 'i:')
     msgfile = None
-    full = True # ; alse  # Display or Hash ?
+    full = True
 
     for o, k in opts:
         if o == '-i':
