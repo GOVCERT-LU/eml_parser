@@ -105,6 +105,10 @@ re_quoted_string = re.compile(r'''(                               # Group around
 
 re_q_value = re.compile(r'\=\?(.+)?\?[Qq]\?(.+)?\?\=')
 re_b_value = re.compile(r'\=\?(.+)?\?[Bb]\?(.+)?\?\=')
+
+priv_ip_regex = re.compile(r"^(((10(\.\d{1,3}){3})|(192\.168(\.\d{1,3}){2})|(172\.(([1][6-9])|([2]\d)|([3][0-1]))(\.\d{1,3}){2}))|(127(\.\d{1,3}){3})|(::1))")
+
+
 ################################################
 
 
@@ -496,10 +500,6 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
         headers_struc['date'] = dateutil.parser.parse('1970-01-01 00:00:00 +0000')
     headers_struc['parse_date'] = datetime.datetime.utcnow()
 
-    # TODO ...
-    # x-originating IP suspended.
-    # header['x-originating-ip'] = msg.get('x-originating-ip', '').strip('[]')
-
     # mail receiver path / parse any domain, e-mail
     # @TODO parse case where domain is specified but in parantheses only an IP
     headers_struc['received'] = []
@@ -514,7 +514,8 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
             for ips in ipv6_regex.findall(l):
                 headers_struc['received_ip'].append(ips.lower())
             for ips in ipv4_regex.findall(l):
-                headers_struc['received_ip'].append(ips.lower())
+                if not priv_ip_regex.match(ips):
+                    headers_struc['received_ip'].append(ips.lower())
 
             # search for domain / e-mail addresses
             for m in recv_dom_regex.findall(l):
@@ -593,25 +594,36 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
             for match in dom_regex.findall(body):
                 list_observed_dom.append(match.lower())
             for match in ipv4_regex.findall(body):
-                list_observed_ip.append(match)
+                if not priv_ip_regex.match(match):
+                    list_observed_ip.append(match)
             for match in ipv6_regex.findall(body):
-                list_observed_ip.append(match.lower())
+                if not priv_ip_regex.match(match):
+                    list_observed_ip.append(match.lower())
         else:
             for scn_pt in findall('://', body):
                 list_observed_urls = get_uri_ondata(body[scn_pt-16:scn_pt+4096]) + list_observed_urls
+
             for scn_pt in findall('@', body):
                 # RFC 3696, 5322, 5321 for email size limitations
                 for match in email_regex.findall(body[scn_pt-64:scn_pt+255]):
                     list_observed_email.append(match.lower())
+
             for scn_pt in findall('.', body):
                 # The maximum length of a fqdn, not a hostname, is 1004 characters RFC1035
                 # The maximum length of a hostname is 253 characters. Imputed from RFC952, RFC1123 and RFC1035.
                 for match in dom_regex.findall(body[scn_pt-253:scn_pt+1004]):
                     list_observed_dom.append(match.lower())
+
+                # Find IPv4 addresses
+                for match in ipv4_regex.findall(body)[scn_pt-11:scn_pt+3]:
+                    if not priv_ip_regex.match(match):
+                        list_observed_ip.append(match)
+
             for scn_pt in findall(':', body):
                 # The maximum length of IPv6 is 32 Char + 7 ":"
                 for match in ipv6_regex.findall(body[scn_pt-4:scn_pt+35]):
-                    list_observed_ip.append(match.lower())
+                    if not priv_ip_regex.match(match):
+                        list_observed_ip.append(match.lower())
 
         # Report uri,email and observed domain or hash if no raw body
         if include_raw_body:
