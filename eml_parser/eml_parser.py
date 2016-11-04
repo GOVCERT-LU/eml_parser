@@ -447,9 +447,6 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
         for exception in msg.defects:
                 headers_struc['defect'].append(str(exception))
 
-    # messageid
-    headers_struc['message_id'] = msg.get('message-id', '')
-
     # parse and decode from
     # @TODO verify if this hack is necessary for other e-mail fields as well
     m = email_regex.search(msg.get('from', '').lower())
