@@ -636,7 +636,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
             if list_observed_dom:
                 bodie['domain'] = list(set(list_observed_dom))
 
-            if list_observed_dom:
+            if list_observed_ip:
                 bodie['ip'] = list(set(list_observed_ip))
 
         else:
