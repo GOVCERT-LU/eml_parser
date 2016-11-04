@@ -229,7 +229,6 @@ def traverse_multipart(msg, counter=0, include_attachment_data=False):
                     ch[k] = [ad(v)]
 
             attachments[file_id]['content_header'] = ch
-            attachments[file_id]['uid'] = file_id
 
             counter += 1
     return attachments
@@ -694,7 +693,6 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
             bodie['hash'] = hashlib.sha256(body.encode('UTF-8')).hexdigest()
 
         uid = str(uuid.uuid1())
-        bodie['uid'] = uid
         bodys[uid] = bodie
 
     bodys_struc = bodys
