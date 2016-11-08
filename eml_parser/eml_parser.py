@@ -387,16 +387,16 @@ def decode_value(string):
         return string_
 
 
-def decode_email(eml_file, include_raw_body=False, include_attachment_data=False):
+def decode_email(eml_file, include_raw_body=False, include_attachment_data=False, config=False):
     fp = open(eml_file)
     msg = email.message_from_file(fp)
     fp.close()
-    return parse_email(msg, include_raw_body, include_attachment_data)
+    return parse_email(msg, include_raw_body, include_attachment_data, config)
 
 
-def decode_email_s(eml_file, include_raw_body=False, include_attachment_data=False):
+def decode_email_s(eml_file, include_raw_body=False, include_attachment_data=False, config=False):
     msg = email.message_from_string(eml_file)
-    return parse_email(msg, include_raw_body, include_attachment_data)
+    return parse_email(msg, include_raw_body, include_attachment_data, config)
 
 
 # Regex extract uri from data, return list
@@ -433,7 +433,13 @@ def findall(pat, data):
 
 #  Parse an email an return a structure.
 #
-def parse_email(msg, include_raw_body=False, include_attachment_data=False):
+def parse_email(msg, include_raw_body=False, include_attachment_data=False, config=None):
+    '''
+    IN msg email string
+    IN include_raw_body
+    IN include_attachement_data
+
+    '''
     maila = {}
     header = {}
     report_struc = {}  # Final structure
@@ -757,18 +763,34 @@ def json_serial(obj):
 
 
 def main():
-    opts, args = getopt.getopt(sys.argv[1:], 'i:d')
+    opts, args = getopt.getopt(sys.argv[1:], 'hi:db:r')
     msgfile = None
+    banip = None
     full = False
+    conf = None
+    fulldata = None
 
     for o, k in opts:
+        if o == '-h':
+            print ('Eml_parser options')
+            print ('    -i input file')
+            print ('    -d debug (no hashing)')
+            print ('    -r includes raw data of attachments')
+            print ('    -b ban ipv4 or ipv6 ip from parsing, iplist comma separated')
+            print ('    -h this help')
+            return
         if o == '-i':
             msgfile = k
         if o == '-d':
             full = True
+        if o == '-r':
+            fulldata = True
+        if o == '-b':
+            conf['banip'] = [k]
 
-    m = decode_email(msgfile, full)
-    print (json.dumps(m, default=json_serial))
+    if msgfile:
+        m = decode_email(msgfile, full, fulldata, conf)
+        print (json.dumps(m, default=json_serial))
 
 if __name__ == '__main__':
     main()
