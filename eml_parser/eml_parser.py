@@ -757,9 +757,9 @@ def json_serial(obj):
 
 
 def main():
-    opts, args = getopt.getopt(sys.argv[1:], 'i:')
+    opts, args = getopt.getopt(sys.argv[1:], 'i:d')
     msgfile = None
-    full = True
+    full = False
 
     for o, k in opts:
         if o == '-i':
