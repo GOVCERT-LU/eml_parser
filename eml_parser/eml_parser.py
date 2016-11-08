@@ -433,7 +433,7 @@ def findall(pat, data):
 
 #  Parse an email an return a structure.
 #
-def parse_email(msg, include_raw_body=False, include_attachment_data=False, pconf=None):
+def parse_email(msg, include_raw_body=False, include_attachment_data=False, pconf={}):
     '''
     IN msg email string
     IN include_raw_body
