@@ -387,14 +387,14 @@ def decode_value(string):
         return string_
 
 
-def decode_email(eml_file, include_raw_body=False, include_attachment_data=False, config=False):
+def decode_email(eml_file, include_raw_body=False, include_attachment_data=False, pconfig=False):
     fp = open(eml_file)
     msg = email.message_from_file(fp)
     fp.close()
     return parse_email(msg, include_raw_body, include_attachment_data, config)
 
 
-def decode_email_s(eml_file, include_raw_body=False, include_attachment_data=False, config=False):
+def decode_email_s(eml_file, include_raw_body=False, include_attachment_data=False, pconfig=False):
     msg = email.message_from_string(eml_file)
     return parse_email(msg, include_raw_body, include_attachment_data, config)
 
@@ -433,12 +433,12 @@ def findall(pat, data):
 
 #  Parse an email an return a structure.
 #
-def parse_email(msg, include_raw_body=False, include_attachment_data=False, config=None):
+def parse_email(msg, include_raw_body=False, include_attachment_data=False, pconfig=None):
     '''
     IN msg email string
     IN include_raw_body
     IN include_attachement_data
-
+    IN pconfig struct with tunig ( whiteliing Ip etc... )
     '''
     maila = {}
     header = {}
@@ -446,6 +446,10 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, conf
     headers_struc = {}  # header_structure
     attachements_struc = {}  # attachements structure
     bodys_struc = {}  # body structure
+
+    # If no whitelisting of if is required initiate the empty variable arry
+    if not pconfig.get('whiteip'):
+        pconfig['whiteip'] = []
 
     # parse and decode subject
     subject = msg.get('subject', '')
@@ -517,11 +521,15 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, conf
             l = re.sub(r'(\r|\n|\s|\t)+', ' ', l.lower())
             headers_struc['received'].append(l)
 
+            # Parse IP in "received headers"
             for ips in ipv6_regex.findall(l):
-                headers_struc['received_ip'].append(ips.lower())
+                if not priv_ip_regex.match(ips):
+                    if ips.lower() not in pconfig['whiteip']:
+                        headers_struc['received_ip'].append(ips.lower())
             for ips in ipv4_regex.findall(l):
                 if not priv_ip_regex.match(ips):
-                    headers_struc['received_ip'].append(ips.lower())
+                    if ips not in pconfig['whiteip']:
+                        headers_struc['received_ip'].append(ips.lower())
 
             # search for domain / e-mail addresses
             for m in recv_dom_regex.findall(l):
@@ -601,10 +609,12 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, conf
                 list_observed_dom.append(match.lower())
             for match in ipv4_regex.findall(body):
                 if not priv_ip_regex.match(match):
-                    list_observed_ip.append(match)
+                    if match not in pconfig['whiteip']:
+                        list_observed_ip.append(match)
             for match in ipv6_regex.findall(body):
                 if not priv_ip_regex.match(match):
-                    list_observed_ip.append(match.lower())
+                    if match.lower() not in pconfig['whiteip']:
+                        list_observed_ip.append(match.lower())
         else:
             for scn_pt in findall('://', body):
                 list_observed_urls = get_uri_ondata(body[scn_pt-16:scn_pt+4096]) + list_observed_urls
@@ -623,13 +633,15 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, conf
                 # Find IPv4 addresses
                 for match in ipv4_regex.findall(body)[scn_pt-11:scn_pt+3]:
                     if not priv_ip_regex.match(match):
-                        list_observed_ip.append(match)
+                        if match not in pconfig['whiteip']:
+                            list_observed_ip.append(match)
 
             for scn_pt in findall(':', body):
                 # The maximum length of IPv6 is 32 Char + 7 ":"
                 for match in ipv6_regex.findall(body[scn_pt-4:scn_pt+35]):
                     if not priv_ip_regex.match(match):
-                        list_observed_ip.append(match.lower())
+                        if match.lower() not in pconfig['whiteip']:
+                            list_observed_ip.append(match.lower())
 
         # Report uri,email and observed domain or hash if no raw body
         if include_raw_body:
@@ -765,9 +777,9 @@ def json_serial(obj):
 def main():
     opts, args = getopt.getopt(sys.argv[1:], 'hi:db:r')
     msgfile = None
-    banip = None
+    whiteip = None
     full = False
-    conf = None
+    conf = {}
     fulldata = None
 
     for o, k in opts:
@@ -776,7 +788,7 @@ def main():
             print ('    -i input file')
             print ('    -d debug (no hashing)')
             print ('    -r includes raw data of attachments')
-            print ('    -b ban ipv4 or ipv6 ip from parsing, iplist comma separated')
+            print ('    -b whitelist ipv4 or ipv6 ip from parsing, iplist comma separated, no space !')
             print ('    -h this help')
             return
         if o == '-i':
@@ -785,11 +797,11 @@ def main():
             full = True
         if o == '-r':
             fulldata = True
-        if o == '-b':
-            conf['banip'] = [k]
+        if o == '-w':
+            pconf['whiteip'] = k.split(',')
 
     if msgfile:
-        m = decode_email(msgfile, full, fulldata, conf)
+        m = decode_email(msgfile, full, fulldata, pconf)
         print (json.dumps(m, default=json_serial))
 
 if __name__ == '__main__':
