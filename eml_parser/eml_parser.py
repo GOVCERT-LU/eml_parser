@@ -448,7 +448,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
     bodys_struc = {}  # body structure
 
     # If no whitelisting of if is required initiate the empty variable arry
-    if not pconf.get('whiteip'):
+    if not 'whiteip' in pconf:
         pconf['whiteip'] = []
 
     # parse and decode subject
@@ -484,8 +484,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
 
     # parse and decode Date
     # If date field is present
-    if msg.get('date'):
-
+    if 'date' in msg:
         # "." -> ":" replacement is for fixing bad clients (e.g. outlook express)
         msg_date = msg.get('date').replace('.', ':')
         date_ = email.utils.parsedate_tz(msg_date)
