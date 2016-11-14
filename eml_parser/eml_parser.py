@@ -676,6 +676,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
                     headers_struc['received_domain'].append(m)
 
             # Extracts emails, but not the ones in the FOR on this received headers line.
+            # Process Here line per line not finally to not miss a email not in from
             m = email_regex.findall(l)
             if m:
                 for mail_candidate in m:
@@ -688,13 +689,24 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
     except TypeError:  # Ready to parse email without received headers.
         pass
 
+    # Concatenate for emails into one array | uniq
+    # for rapid "find"
+    if headers_struc['received']:
+        headers_struc['received_foremail'] = []
+        for line in headers_struc['received']:
+            if line.get('for'):
+                headers_struc['received_foremail'] += line.get('for')
+
     # Uniq data found
     headers_struc['received_email'] = list(set(headers_struc['received_email']))
     headers_struc['received_domain'] = list(set(headers_struc['received_domain']))
     headers_struc['received_ip'] = list(set(headers_struc['received_ip']))
+    headers_struc['received_foremail'] = list(set(headers_struc['received_foremail']))
 
     # Clean up if empty
     if len(headers_struc['received_email']) == 0:
+        headers_struc.pop('received_email')
+    if len(headers_struc['received_foremail']) == 0:
         headers_struc.pop('received_email')
     if len(headers_struc['received_domain']) == 0:
         headers_struc.pop('received_domain')
