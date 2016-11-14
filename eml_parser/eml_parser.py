@@ -455,6 +455,31 @@ def regprep(line):
     return (line)
 
 
+def robust_string2date(line):
+    # "." -> ":" replacement is for fixing bad clients (e.g. outlook express)
+    msg_date = line.replace('.', ':')
+    date_ = email.utils.parsedate_tz(msg_date)
+
+    if date_ and not date_[9] is None:
+        ts = email.utils.mktime_tz(date_)
+        date_ = datetime.datetime.utcfromtimestamp(ts)
+    else:
+        date_ = email.utils.parsedate(msg_date)
+        if date_:
+            ts = calendar.timegm(date_)
+            date_ = datetime.datetime.utcfromtimestamp(ts)
+        else:
+            # Now we are facing an invalid date.
+            date_ = dateutil.parser.parse('1970-01-01 00:00:00 +0000')
+
+    if date_.tzname() is None:
+        date_ = date_.replace(tzinfo=dateutil.tz.tzutc())
+        return(date_)
+    else:
+        # If date field is absent...
+        return(dateutil.parser.parse('1970-01-01 00:00:00 +0000'))
+
+
 def parserouting(line):
     #    if re.findall(reg_date, line):
     #        return 'date\n'
@@ -536,7 +561,7 @@ def parserouting(line):
             out[item] = reparseg.group(item)
         except:
             pass
-    out['date'] = npdate
+    out['date'] = robust_string2date(npdate)
 
     # Fixup for "From" in "for" field
     # ie google, do that...
@@ -607,25 +632,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
     # parse and decode Date
     # If date field is present
     if 'date' in msg:
-        # "." -> ":" replacement is for fixing bad clients (e.g. outlook express)
-        msg_date = msg.get('date').replace('.', ':')
-        date_ = email.utils.parsedate_tz(msg_date)
-
-        if date_ and not date_[9] is None:
-            ts = email.utils.mktime_tz(date_)
-            date_ = datetime.datetime.utcfromtimestamp(ts)
-        else:
-            date_ = email.utils.parsedate(msg_date)
-            if date_:
-                ts = calendar.timegm(date_)
-                date_ = datetime.datetime.utcfromtimestamp(ts)
-            else:
-                # Now we are facing an invalid date.
-                date_ = dateutil.parser.parse('1970-01-01 00:00:00 +0000')
-
-        if date_.tzname() is None:
-            date_ = date_.replace(tzinfo=dateutil.tz.tzutc())
-        headers_struc['date'] = date_
+        headers_struc['date'] = robust_string2date(msg.get('date'))
     else:
         # If date field is absent...
         headers_struc['date'] = dateutil.parser.parse('1970-01-01 00:00:00 +0000')
@@ -670,13 +677,12 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
                 headers_struc['received_email'] += m
 
             # try to parse received lines and normalize them
-            try:
-                f, b = l.split('by')
-                b, undef = b.split('for')
-            except:
-                continue
-
-            b_d = b_d_regex.search(b)
+            # try:
+            #    f, b = l.split('by')
+            #    b, undef = b.split('for')
+            # except:
+            #    continue
+            # b_d = b_d_regex.search(b)
 
     except TypeError:  # Ready to parse email without received headers.
         pass
