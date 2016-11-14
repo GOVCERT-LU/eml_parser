@@ -108,6 +108,9 @@ re_b_value = re.compile(r'\=\?(.+)?\?[Bb]\?(.+)?\?\=')
 
 priv_ip_regex = re.compile(r"^(((10(\.\d{1,3}){3})|(192\.168(\.\d{1,3}){2})|(172\.(([1][6-9])|([2]\d)|([3][0-1]))(\.\d{1,3}){2}))|(127(\.\d{1,3}){3})|(::1))")
 
+reg_date = re.compile(r';[ \w\s:,+\-\(\)]+$')
+no_par = re.compile(r'\([^()]*\)')
+
 
 ################################################
 
@@ -431,6 +434,125 @@ def findall(pat, data):
         i = data.find(pat, i+1)
 
 
+# Remove nested parenthesis, until they're are present
+def noparenthesis(line):
+    idem = False
+    while not idem:
+        lline = line
+        line = re.sub(no_par, '', line)
+        if lline == line:
+            idem = True
+    return line
+
+
+def getkey(item):
+    return item[0]
+
+
+def regprep(line):
+    for ch in '^$[]()+?.':
+        line = re.sub("\\" + ch, '\\\\' + ch, line)
+    return (line)
+
+
+def parserouting(line):
+    #    if re.findall(reg_date, line):
+    #        return 'date\n'
+    # Preprocess the line to simplify from/by/with/for border detection.
+    out = {}  # Result
+    out['src'] = line
+    line = line.lower()  # Convert everything to lowercase
+    npline = re.sub('\)', ' ) ', line)  # nORMALISE sPACE # Re-space () ")by " exists often
+    npline = re.sub('\(', ' ( ', npline)  # nORMALISE sPACE # Re-space ()
+    npline = re.sub(';', ' ; ', npline)  # nORMALISE sPACE # Re-space ;
+    npline = noparenthesis(npline)  # Remove any "()"
+    npline = re.sub('  *', ' ', npline)  # nORMALISE sPACE
+    npline = npline.strip('\n')  # Remove any NL
+    npdate = re.findall(reg_date, npline)  # eXTRACT date on end line.
+
+    # Detect "sticked lines"
+    if " received: " in npline:
+        out['warning'] = ['Merged Received headers']
+        return (out)
+
+    if npdate:
+        npdate = npdate[0]  # Remove spaces and starting ; 
+    else:
+        npdate = ""
+    npline = npline.replace(npdate, "")  # Remove date from input line
+    npline = npline.strip(' ')  # Remove any border WhiteSpace
+    npdate = npdate.lstrip(";")  # Remove Spaces and stating ; from date
+    npdate = npdate.strip(" ")
+
+    borders = ['from', 'by', 'with', 'for']
+    canditate = []
+    result = []
+
+    # Scan the line to determine the order, and presence of each "from/by/with/for" words
+    for word in borders:
+        candidate = list(borders)
+        candidate.remove(word)
+        for endword in candidate:
+            if word in npline:
+                loc = npline.find(word)
+                end = npline.find(endword)
+                if end < loc or end == -1:
+                    end = 0xfffffff   # Kindof MAX 31 bits
+                    result.append({'name_in': word, 'pos': loc, 'name_out': endword, 'weight': end+loc})
+
+    # Create the word list... "from/by/with/for" by sorting the list.
+    if len(result) == 0:
+        out['warning'] = ['Nothing Parsable']
+        return (out)
+
+    tout = []
+    for word in borders:
+        result_max = 0xffffffff
+        line_max = {}
+        for eline in result:
+            if eline['name_in'] == word:
+                if eline['weight'] <= result_max:
+                    result_max = eline['weight']
+                    line_max = eline
+
+        if len(line_max) is not 0:
+            tout.append([line_max.get('pos'), line_max.get('name_in')])
+
+    tout = sorted(tout, key=getkey)
+
+    # build rexex.
+    reg = ""
+    for item in tout:
+        reg = reg + item[1] + " (?P<" + item[1] + ">.*)"
+    if npdate:
+        reg = reg + regprep(npdate)
+
+    reparse = re.compile(reg)
+    reparseg = reparse.search(line)
+
+    # Fill the data
+    for item in borders:
+        try:
+            out[item] = reparseg.group(item)
+        except:
+            pass
+    out['date'] = npdate
+
+    # Fixup for "From" in "for" field
+    # ie google, do that...
+    if out.get('for'):
+        if 'from' in out.get('for'):
+            temp = re.split(' from ', out['for'])
+            out['for'] = temp[0]
+            out['from'] = '%s %s' % (out['from'], " ".join(temp[1:]))
+
+        m = email_regex.findall(out['for'])
+        if m:
+            out['for'] = list(set(m))
+
+    return (out)
+
+
 #  Parse an email an return a structure.
 #
 def parse_email(msg, include_raw_body=False, include_attachment_data=False, pconf={}):
@@ -448,7 +570,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
     bodys_struc = {}  # body structure
 
     # If no whitelisting of if is required initiate the empty variable arry
-    if not 'whiteip' in pconf:
+    if 'whiteip' not in pconf:
         pconf['whiteip'] = []
 
     # parse and decode subject
@@ -518,7 +640,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
     try:
         for l in msg.get_all('received'):
             l = re.sub(r'(\r|\n|\s|\t)+', ' ', l.lower())
-            headers_struc['received'].append(l)
+            headers_struc['received'].append(parserouting(l))
 
             # Parse IP in "received headers"
             for ips in ipv6_regex.findall(l):
