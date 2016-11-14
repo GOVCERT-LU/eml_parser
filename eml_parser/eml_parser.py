@@ -647,7 +647,10 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
     try:
         for l in msg.get_all('received'):
             l = re.sub(r'(\r|\n|\s|\t)+', ' ', l.lower())
-            headers_struc['received'].append(parserouting(l))
+
+            # Parse and split routing headers.
+            current_line = parserouting(l)
+            headers_struc['received'].append(current_line)
 
             # Parse IP in "received headers"
             for ips in ipv6_regex.findall(l):
@@ -672,17 +675,15 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
                 if checks:
                     headers_struc['received_domain'].append(m)
 
+            # Extracts emails, but not the ones in the FOR on this received headers line.
             m = email_regex.findall(l)
             if m:
-                headers_struc['received_email'] += m
-
-            # try to parse received lines and normalize them
-            # try:
-            #    f, b = l.split('by')
-            #    b, undef = b.split('for')
-            # except:
-            #    continue
-            # b_d = b_d_regex.search(b)
+                for mail_candidate in m:
+                    if current_line.get('for'):
+                        if mail_candidate not in current_line.get('for'):
+                            headers_struc['received_email'] += [mail_candidate]
+                    else:
+                        headers_struc['received_email'] += [mail_candidate]
 
     except TypeError:  # Ready to parse email without received headers.
         pass
