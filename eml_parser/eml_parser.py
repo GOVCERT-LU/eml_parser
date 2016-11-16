@@ -480,7 +480,7 @@ def robust_string2date(line):
         return(dateutil.parser.parse('1970-01-01 00:00:00 +0000'))
 
 
-def parserouting(line):
+def parserouting(line, pconf):
     #    if re.findall(reg_date, line):
     #        return 'date\n'
     # Preprocess the line to simplify from/by/with/for border detection.
@@ -599,6 +599,9 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
     # If no whitelisting of if is required initiate the empty variable arry
     if 'whiteip' not in pconf:
         pconf['whiteip'] = []
+    # If no whitelisting of if is required initiate the empty variable arry
+    if 'whiteroutingfor' not in pconf:
+        pconf['whiteroutingfor'] = []
 
     # parse and decode subject
     subject = msg.get('subject', '')
@@ -651,7 +654,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
             l = re.sub(r'(\r|\n|\s|\t)+', ' ', l.lower())
 
             # Parse and split routing headers.
-            current_line = parserouting(l)
+            current_line = parserouting(l, pconf)
             headers_struc['received'].append(current_line)
 
             # Parse IP in "received headers"
@@ -931,6 +934,7 @@ def main():
             print ('    -d debug (no hashing)')
             print ('    -r includes raw data of attachments')
             print ('    -w whitelist ipv4 or ipv6 ip from parsing, iplist comma separated, no space !')
+            print ('    -f whitelist an email in routing headers "For"')
             print ('    -h this help')
             return
         if o == '-i':
@@ -941,6 +945,9 @@ def main():
             fulldata = True
         if o == '-w':
             pconf['whiteip'] = k.split(',')
+        if o == '-x':
+            pconf['whiteroutingfor'] = k.split(',')
+
 
     if msgfile:
         m = decode_email(msgfile, full, fulldata, pconf)
