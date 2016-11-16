@@ -574,6 +574,8 @@ def parserouting(line):
         m = email_regex.findall(out['for'])
         if m:
             out['for'] = list(set(m))
+        else:
+            del out['for']
 
     return (out)
 
