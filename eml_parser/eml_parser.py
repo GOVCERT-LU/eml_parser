@@ -600,8 +600,8 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
     if 'whiteip' not in pconf:
         pconf['whiteip'] = []
     # If no whitelisting of if is required initiate the empty variable arry
-    if 'whiteroutingfor' not in pconf:
-        pconf['whiteroutingfor'] = []
+    if 'whitefor' not in pconf:
+        pconf['whitefor'] = []
 
     # parse and decode subject
     subject = msg.get('subject', '')
@@ -946,8 +946,7 @@ def main():
         if o == '-w':
             pconf['whiteip'] = k.split(',')
         if o == '-x':
-            pconf['whiteroutingfor'] = k.split(',')
-
+            pconf['whitefor'] = k.split(',')
 
     if msgfile:
         m = decode_email(msgfile, full, fulldata, pconf)
