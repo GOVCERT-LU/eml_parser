@@ -714,10 +714,11 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
     # Clean up if empty
     if len(headers_struc['received_email']) == 0:
         headers_struc.pop('received_email')
-    if len(headers_struc['received_foremail']) == 0:
-        headers_struc.pop('received_foremail')
-    else:
-        headers_struc['received_foremail'] = list(set(headers_struc['received_foremail']))
+    if 'received_foremail' in headers_struc:
+        if len(headers_struc['received_foremail']) == 0:
+            headers_struc.pop('received_foremail')
+        else:
+            headers_struc['received_foremail'] = list(set(headers_struc['received_foremail']))
     if len(headers_struc['received_domain']) == 0:
         headers_struc.pop('received_domain')
     if len(headers_struc['received_ip']) == 0:
