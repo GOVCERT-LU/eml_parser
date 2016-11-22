@@ -700,19 +700,24 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
         headers_struc['received_foremail'] = []
         for line in headers_struc['received']:
             if line.get('for'):
-                headers_struc['received_foremail'] += line.get('for')
+                if line.get('for') not in pconf['whitefor']:
+                    print pconf['whitefor'] 
+                    print line.get('for')
+
+                    headers_struc['received_foremail'] += line.get('for')
 
     # Uniq data found
     headers_struc['received_email'] = list(set(headers_struc['received_email']))
     headers_struc['received_domain'] = list(set(headers_struc['received_domain']))
     headers_struc['received_ip'] = list(set(headers_struc['received_ip']))
-    headers_struc['received_foremail'] = list(set(headers_struc['received_foremail']))
 
     # Clean up if empty
     if len(headers_struc['received_email']) == 0:
         headers_struc.pop('received_email')
     if len(headers_struc['received_foremail']) == 0:
-        headers_struc.pop('received_email')
+        headers_struc.pop('received_foremail')
+    else:
+        headers_struc['received_foremail'] = list(set(headers_struc['received_foremail']))
     if len(headers_struc['received_domain']) == 0:
         headers_struc.pop('received_domain')
     if len(headers_struc['received_ip']) == 0:
@@ -920,7 +925,7 @@ def json_serial(obj):
 
 
 def main():
-    opts, args = getopt.getopt(sys.argv[1:], 'hi:dw:r')
+    opts, args = getopt.getopt(sys.argv[1:], 'hi:dw:rf')
     msgfile = None
     whiteip = None
     full = False
@@ -945,7 +950,7 @@ def main():
             fulldata = True
         if o == '-w':
             pconf['whiteip'] = k.split(',')
-        if o == '-x':
+        if o == '-f':
             pconf['whitefor'] = k.split(',')
 
     if msgfile:
