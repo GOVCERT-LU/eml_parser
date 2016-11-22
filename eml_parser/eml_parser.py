@@ -701,9 +701,6 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
         for line in headers_struc['received']:
             if line.get('for'):
                 if line.get('for') not in pconf['whitefor']:
-                    print pconf['whitefor'] 
-                    print line.get('for')
-
                     headers_struc['received_foremail'] += line.get('for')
 
     # Uniq data found
