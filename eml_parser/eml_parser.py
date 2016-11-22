@@ -700,8 +700,9 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
         headers_struc['received_foremail'] = []
         for line in headers_struc['received']:
             if line.get('for'):
-                if line.get('for') not in pconf['whitefor']:
-                    headers_struc['received_foremail'] += line.get('for')
+                for itemfor in line.get('for'):
+                    if itemfor not in pconf['whitefor']:
+                        headers_struc['received_foremail'] += line.get('for')
 
     # Uniq data found
     headers_struc['received_email'] = list(set(headers_struc['received_email']))
@@ -923,7 +924,7 @@ def json_serial(obj):
 
 
 def main():
-    opts, args = getopt.getopt(sys.argv[1:], 'hi:dw:rf')
+    opts, args = getopt.getopt(sys.argv[1:], 'hi:dw:rf:')
     msgfile = None
     whiteip = None
     full = False
