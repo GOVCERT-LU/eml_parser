@@ -780,7 +780,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
                     list_observed_dom.append(match.lower())
 
                 # Find IPv4 addresses
-                for match in ipv4_regex.findall(body)[scn_pt-11:scn_pt+3]:
+                for match in ipv4_regex.findall(body[scn_pt-11:scn_pt+3]):
                     if not priv_ip_regex.match(match):
                         if match not in pconf['whiteip']:
                             list_observed_ip.append(match)
