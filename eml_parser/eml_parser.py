@@ -595,6 +595,11 @@ def parserouting(line, pconf):
     if out.get('by'):
         out['by'] = give_dom_ip(out['by'])
 
+    if len(out.get('by')) < 1:
+        del out['by']
+    if len(out.get('from')) < 1:
+        del out['from']
+
     return (out)
 
 
