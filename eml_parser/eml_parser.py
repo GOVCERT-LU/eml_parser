@@ -455,6 +455,17 @@ def regprep(line):
     return (line)
 
 
+def cleanline(line):
+    idem = False
+    while not idem:
+        lline = line
+        line = line.strip(";")
+        line = line.strip(" ")
+        if lline == line:
+            idem = True
+    return line
+
+
 def robust_string2date(line):
     # "." -> ":" replacement is for fixing bad clients (e.g. outlook express)
     msg_date = line.replace('.', ':')
@@ -523,7 +534,7 @@ def parserouting(line, pconf):
                 end = npline.find(endword)
                 if end < loc or end == -1:
                     end = 0xfffffff   # Kindof MAX 31 bits
-                    result.append({'name_in': word, 'pos': loc, 'name_out': endword, 'weight': end+loc})
+                result.append({'name_in': word, 'pos': loc, 'name_out': endword, 'weight': end+loc})
 
     # Create the word list... "from/by/with/for" by sorting the list.
     if len(result) == 0:
@@ -558,7 +569,7 @@ def parserouting(line, pconf):
     # Fill the data
     for item in borders:
         try:
-            out[item] = reparseg.group(item)
+            out[item] = cleanline(reparseg.group(item))
         except:
             pass
     out['date'] = robust_string2date(npdate)
@@ -577,7 +588,19 @@ def parserouting(line, pconf):
         else:
             del out['for']
 
+    # Now.. find IP and Host in from
+    if out.get('from'):
+        out['from'] = give_dom_ip(out['from'])
+    # Now.. find IP and Host in from
+    if out.get('by'):
+        out['by'] = give_dom_ip(out['by'])
+
     return (out)
+
+
+def give_dom_ip(line):
+    m = dom_regex.findall(" "+line) + ipv4_regex.findall(line) + ipv6_regex.findall(line)
+    return(list(set(m)))
 
 
 #  Parse an email an return a structure.
