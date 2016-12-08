@@ -455,6 +455,7 @@ def regprep(line):
     return (line)
 
 
+# Remove space and ; from start/end of line until it is not possible.
 def cleanline(line):
     idem = False
     while not idem:
@@ -468,6 +469,7 @@ def cleanline(line):
 
 def robust_string2date(line):
     # "." -> ":" replacement is for fixing bad clients (e.g. outlook express)
+    default_date = '1970-01-01 00:00:00 +0000'
     msg_date = line.replace('.', ':')
     date_ = email.utils.parsedate_tz(msg_date)
 
@@ -481,14 +483,14 @@ def robust_string2date(line):
             date_ = datetime.datetime.utcfromtimestamp(ts)
         else:
             # Now we are facing an invalid date.
-            date_ = dateutil.parser.parse('1970-01-01 00:00:00 +0000')
+            date_ = dateutil.parser.parse(default_date)
 
     if date_.tzname() is None:
         date_ = date_.replace(tzinfo=dateutil.tz.tzutc())
         return(date_)
     else:
         # If date field is absent...
-        return(dateutil.parser.parse('1970-01-01 00:00:00 +0000'))
+        return(dateutil.parser.parse(default_date))
 
 
 def parserouting(line, pconf):
@@ -678,11 +680,38 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
     headers_struc['received_domain'] = []
     headers_struc['received_ip'] = []
     try:
+        found_smtpin = 0
         for l in msg.get_all('received'):
             l = re.sub(r'(\r|\n|\s|\t)+', ' ', l.lower())
 
             # Parse and split routing headers.
+            # Return dict of array
+            #   date string
+            #   from array
+            #   for array
+            #   by array
+            #   with string
+            #   warning array
             current_line = parserouting(l, pconf)
+
+            # If required collect the IP of the gateway that have injected the mail.
+            # Iterate all parsed item and find IP, add warning also if multiple are possible
+
+            if 'byhostentry' in pconf:
+                if current_line.get('by'):
+                    for by_item in current_line.get('by'):
+                        for byhostentry in pconf['byhostentry']:
+                            # print ("%s %s" % (byhostentry, by_item))
+                            if byhostentry.lower() in by_item:
+                                found_smtpin += 1
+                                headers_struc['received_src'] = current_line.get('from')
+                                if found_smtpin > 1:  # Twice found the header...
+                                    if current_line.get('warning'):
+                                        current_line['warning'].append(['Duplicate SMTP by entrypoint'])
+                                    else:
+                                        current_line['warning'] = ['Duplicate SMTP by entrypoint']
+                                candidate = by_item
+
             headers_struc['received'].append(current_line)
 
             # Parse IP in "received headers"
@@ -883,7 +912,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
             bodie['content'] = body
 
         # Sometimes dirty peoples plays with multiple header.
-        # We "display" the "LAST" .. as do a thunderbird
+        # We "display" the "LAST" one .. as do a thunderbird
         val = ch.get('content-type')
         if val:
             if type(val) == list:
@@ -952,7 +981,7 @@ def json_serial(obj):
 
 
 def main():
-    opts, args = getopt.getopt(sys.argv[1:], 'hi:dw:rf:')
+    opts, args = getopt.getopt(sys.argv[1:], 'hi:dw:rf:b:')
     msgfile = None
     whiteip = None
     full = False
@@ -968,6 +997,7 @@ def main():
             print ('    -w whitelist ipv4 or ipv6 ip from parsing, iplist comma separated, no space !')
             print ('    -f whitelist an email in routing headers "For"')
             print ('    -h this help')
+            print ('    -b collect the smtp injector IP using the "by" "host" in routing headers ')
             return
         if o == '-i':
             msgfile = k
@@ -979,6 +1009,8 @@ def main():
             pconf['whiteip'] = k.split(',')
         if o == '-f':
             pconf['whitefor'] = k.split(',')
+        if o == '-b':
+            pconf['byhostentry'] = k.split(',')
 
     if msgfile:
         m = decode_email(msgfile, full, fulldata, pconf)
