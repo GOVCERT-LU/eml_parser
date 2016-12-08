@@ -47,6 +47,7 @@ import hashlib
 import quopri
 import pprint
 import time
+import collections
 from urlparse import urlparse
 
 try:
@@ -680,7 +681,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
     headers_struc['received_domain'] = []
     headers_struc['received_ip'] = []
     try:
-        found_smtpin = 0
+        found_smtpin = collections.Counter()  # Array for storing potential duplicate "HOP"
         for l in msg.get_all('received'):
             l = re.sub(r'(\r|\n|\s|\t)+', ' ', l.lower())
 
@@ -695,7 +696,11 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
             current_line = parserouting(l, pconf)
 
             # If required collect the IP of the gateway that have injected the mail.
-            # Iterate all parsed item and find IP, add warning also if multiple are possible
+            # Iterate all parsed item and find IP
+            # It is parsed from the MOST recent to the OLDEST (from IN > Out)
+            # We match external IP from the most "OUT" Found.
+            # Warning .. It may be spoofed !!
+            # It add a warning if multiple identical items are found.
 
             if 'byhostentry' in pconf:
                 if current_line.get('by'):
@@ -703,14 +708,16 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
                         for byhostentry in pconf['byhostentry']:
                             # print ("%s %s" % (byhostentry, by_item))
                             if byhostentry.lower() in by_item:
-                                found_smtpin += 1
+                                # Save the last Found.. ( most external )
                                 headers_struc['received_src'] = current_line.get('from')
-                                if found_smtpin > 1:  # Twice found the header...
+
+                                # Increment watched by detection counter, and warn if needed
+                                found_smtpin[byhostentry.lower()] += 1
+                                if found_smtpin[byhostentry.lower()] > 1:  # Twice found the header...
                                     if current_line.get('warning'):
                                         current_line['warning'].append(['Duplicate SMTP by entrypoint'])
                                     else:
                                         current_line['warning'] = ['Duplicate SMTP by entrypoint']
-                                candidate = by_item
 
             headers_struc['received'].append(current_line)
 
