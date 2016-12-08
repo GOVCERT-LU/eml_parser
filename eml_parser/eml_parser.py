@@ -151,7 +151,7 @@ def get_file_extension(filename):
     if dot_idx != -1:
         extension = filename[dot_idx + 1:]
 
-    return extension
+    return extension.lower()
 
 
 def get_file_hash(data):
