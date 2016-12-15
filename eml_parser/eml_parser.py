@@ -67,7 +67,7 @@ email_regex = re.compile(r'''([a-zA-Z0-9.!#$%&'*+-/=?\^_`{|}~-]+@[a-zA-Z0-9-]+(?
 #                 /^[a-zA-Z0-9.!#$%&'*+-/=?\^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$/
 recv_dom_regex = re.compile(r'''(?:(?:from|by)\s+)([a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]{2,})+)''', re.MULTILINE)
 
-dom_regex = re.compile(r'''(?:\s|[\/<>|@'])([a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]{2,})+)(?:$|\?|\s|#|&|[\/<>'])''', re.MULTILINE)
+dom_regex = re.compile(r'''(?:\s|[\(\/<>|@'=])([a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]{2,})+)(?:$|\?|\s|#|&|[\/<>'\)])''', re.MULTILINE)
 ipv4_regex = re.compile(r'''((?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?))''', re.MULTILINE)
 
 
@@ -523,7 +523,7 @@ def parserouting(line, pconf):
     npdate = npdate.lstrip(";")  # Remove Spaces and stating ; from date
     npdate = npdate.strip(" ")
 
-    borders = ['from', 'by', 'with', 'for']
+    borders = ['from ', 'by ', 'with ', 'for ']
     canditate = []
     result = []
 
@@ -538,6 +538,7 @@ def parserouting(line, pconf):
                 if end < loc or end == -1:
                     end = 0xfffffff   # Kindof MAX 31 bits
                 result.append({'name_in': word, 'pos': loc, 'name_out': endword, 'weight': end+loc})
+                # print {'name_in': word, 'pos': loc, 'name_out': endword, 'weight': end+loc}
 
     # Create the word list... "from/by/with/for" by sorting the list.
     if len(result) == 0:
@@ -562,7 +563,7 @@ def parserouting(line, pconf):
     # build rexex.
     reg = ""
     for item in tout:
-        reg = reg + item[1] + " (?P<" + item[1] + ">.*)"
+        reg = reg + item[1] + "(?P<" + item[1].strip() + ">.*)"
     if npdate:
         reg = reg + regprep(npdate)
 
@@ -572,7 +573,7 @@ def parserouting(line, pconf):
     # Fill the data
     for item in borders:
         try:
-            out[item] = cleanline(reparseg.group(item))
+            out[item.strip()] = cleanline(reparseg.group(item.strip()))
         except:
             pass
     out['date'] = robust_string2date(npdate)
@@ -594,14 +595,14 @@ def parserouting(line, pconf):
     # Now.. find IP and Host in from
     if out.get('from'):
         out['from'] = give_dom_ip(out['from'])
+        if len(out.get('from')) < 1:  # if array is empty remove
+            del out['from']
+
     # Now.. find IP and Host in from
     if out.get('by'):
         out['by'] = give_dom_ip(out['by'])
-
-    if len(out.get('by')) < 1:
-        del out['by']
-    if len(out.get('from')) < 1:
-        del out['from']
+        if len(out.get('by')) < 1:  # If array is empty remove
+            del out['by']
 
     return (out)
 
@@ -682,7 +683,9 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
     headers_struc['received_ip'] = []
     try:
         found_smtpin = collections.Counter()  # Array for storing potential duplicate "HOP"
+
         for l in msg.get_all('received'):
+
             l = re.sub(r'(\r|\n|\s|\t)+', ' ', l.lower())
 
             # Parse and split routing headers.
@@ -760,7 +763,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
 
     # Concatenate for emails into one array | uniq
     # for rapid "find"
-    if headers_struc['received']:
+    if headers_struc.get('received'):
         headers_struc['received_foremail'] = []
         for line in headers_struc['received']:
             if line.get('for'):
