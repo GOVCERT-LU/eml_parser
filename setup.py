@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
   name='eml_parser',
-  version = '0.5',
+  version = '0.9',
   description='Python EML parser library',
   author='Georges Toth',
   author_email='georges@trypill.org',

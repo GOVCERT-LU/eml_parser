@@ -1,23 +1,23 @@
 #!/usr/bin/env python
+from __future__ import print_function
 # -*- coding: utf-8 -*-
 
 #
-# Georges Toth (c) 2013 <georges@trypill.org>
-# GOVCERT.LU (c) 2014 <georges.toth@govcert.etat.lu>
-# GOVCERT.LU (c) 2016 <paul.jung@ext.govcert.etat.lu>
+# Georges Toth (c) 2017 <georges@trypill.org>
+# GOVCERT.LU (c) 2017 <georges.toth@govcert.etat.lu>
 #
-# eml_parser is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
 #
-# eml_parser is distributed in the hope that it will be useful,
+# This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
+# GNU Affero General Public License for more details.
 #
-# You should have received a copy of the GNU General Public License
-# along with eml_parser.  If not, see <http://www.gnu.org/licenses/>.
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 #
 # Functionality inspired by:
@@ -48,17 +48,30 @@ import quopri
 import pprint
 import time
 import collections
-from urlparse import urlparse
 
 try:
-    import chardet
+    from urllib.parse import urlparse
+except ImportError:
+    from urlparse import urlparse
+
+try:
+    try:
+      import cchardet
+    except ImportError:
+      import chardet
 except ImportError:
     chardet = None
 
 try:
-    import magic
+    from python_magic import magic
 except ImportError:
     magic = None
+
+
+__author__ = 'Toth Georges, Jung Paul'
+__email__ = 'georges@trypill.org, georges.toth@govcert.etat.lu'
+__copyright__ = 'Copyright 2017 Georges Toth, Copyright 2017 GOVCERT Luxembourg'
+__license__ = 'AGPL v3+'
 
 
 # regex compilation
@@ -118,7 +131,7 @@ no_par = re.compile(r'\([^()]*\)')
 
 def get_raw_body_text(msg):
     raw_body = []
-    # FIXME comprend pas, si pas multipart pas d'attachement...
+    # FIXME comprend pas, si pas multipart pas d'attachement...
     if msg.is_multipart():
         for part in msg.get_payload():
             raw_body.extend(get_raw_body_text(part))
@@ -127,7 +140,7 @@ def get_raw_body_text(msg):
         # Attachments with a file-extension of .htm/.html are implicitely treated
         # as text as well in order not to escape later checks (e.g. URL scan).
         if ('content-disposition' not in msg and msg.get_content_maintype() == 'text') \
-             or (msg.get_filename('').lower().endswith('.html') or
+           or (msg.get_filename('').lower().endswith('.html') or
            msg.get_filename('').lower().endswith('.htm')):
             encoding = msg.get('content-transfer-encoding', '').lower()
 
@@ -271,12 +284,19 @@ def decode_field(field):
     text = field
 
     try:
-        _decoded = email.Header.decode_header(field)
+        Header = email.Header
+    except AttributeError:
+        # Python3 support
+        Header = email.header
+
+    try:
+        _decoded = Header.decode_header(field)
         _text, charset = _decoded[0]
     except (email.errors.HeaderParseError, UnicodeEncodeError):
         _text, charset = None, None
         pass
 
+    if charset:
         try:
             text = decode_string(_text, charset)
         except UnicodeDecodeError:
@@ -293,7 +313,7 @@ def decode_field(field):
 def decode_string(string, encoding):
     try:
         value = string.decode(encoding)
-    except UnicodeDecodeError:
+    except (UnicodeDecodeError, LookupError):
         if chardet:
             enc = chardet.detect(string)
             try:
@@ -311,7 +331,10 @@ def q_value_decode(string):
     m = re_q_value.match(string)
     if m:
         encoding, e_string = m.groups()
-        d_string = quopri.decodestring(e_string).decode(encoding, 'ignore')
+        if encoding.lower() != 'unknown':
+            d_string = quopri.decodestring(e_string).decode(encoding, 'ignore')
+        else:
+            d_string = e_string.decode('utf-8', 'ignore')
     else:
         d_string = e_string.decode('utf-8', 'ignore')
     return d_string
@@ -367,7 +390,9 @@ def decode_value(string):
                     match_s, method = m.groups()
 
                     if '=?' in match_s:
-                        if method.lower() == 'q':
+                        if method is None:
+                            raise Exception('NOTIMPLEMENTED: Unknown method "{0}"'.format(method))
+                        elif method.lower() == 'q':
                             text = q_value_decode(match_s)
                         elif method.lower() == 'b':
                             text = b_value_decode(match_s)
@@ -684,7 +709,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
     try:
         found_smtpin = collections.Counter()  # Array for storing potential duplicate "HOP"
 
-        for l in msg.get_all('received'):
+        for l in msg.get_all('received', []):
 
             l = re.sub(r'(\r|\n|\s|\t)+', ' ', l.lower())
 
