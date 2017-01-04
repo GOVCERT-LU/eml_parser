@@ -156,7 +156,14 @@ def get_raw_body_text(msg):
 
 
 def get_file_extension(filename):
-    ''' Return the file extention of a given filename '''
+    """Return the file extention of a given filename
+
+    Args:
+      filename (str): The file name.
+
+    Returns:
+      str: The lower-case file extension
+    """
     extension = ''
     dot_idx = filename.rfind('.')
 
@@ -167,24 +174,36 @@ def get_file_extension(filename):
 
 
 def get_file_hash(data):
+    """Generate hashes of various types (``MD5``, ``SHA-1``, ``SHA-256``, ``SHA-512``)
+    for the provided data.
+
+    Args:
+      data (str): The data to calculate the hashes on.
+
+    Returns:
+      dict: Returns a dict with as key the hash-type and value the calculated hash.
+    """
     hashalgo = ['md5', 'sha1', 'sha256', 'sha512']
-    hash = {}
+    hash_ = {}
 
     for k in hashalgo:
         ha = getattr(hashlib, k)
         h = ha()
         h.update(data)
-        hash[k] = h.hexdigest()
+        hash_[k] = h.hexdigest()
 
-    return hash
+    return hash_
 
 
-def ad(string):
-    '''
-    Ascii Decode
-    return the decoded string
-    could be usefull in some dirty headers
-    '''
+def ascii_decode(string):
+    """Ascii Decode a given string; useful with dirty headers.
+
+    Args:
+      string (str): The string to be converted.
+
+    Returns:
+      str: Returns the decoded string.
+    """
     try:
         return string.decode('latin-1').encode('utf-8')
     except:
@@ -221,11 +240,11 @@ def traverse_multipart(msg, counter=0, include_attachment_data=False):
 
             file_id = str(uuid.uuid1())
             attachments[file_id] = {}
-            attachments[file_id]['filename'] = ad(filename)
+            attachments[file_id]['filename'] = ascii_decode(filename)
             attachments[file_id]['size'] = file_size
 
             if extension:
-                attachments[file_id]['extension'] = ad(extension)
+                attachments[file_id]['extension'] = ascii_decode(extension)
             attachments[file_id]['hash'] = hash
 
             if magic:
@@ -240,12 +259,12 @@ def traverse_multipart(msg, counter=0, include_attachment_data=False):
 
             ch = {}
             for k, v in msg.items():
-                k = ad(k.lower())
+                k = ascii_decode(k.lower())
                 if k in ch:
                     # print "%s<<<>>>%s" % (k, v)
-                    ch[k].append(ad(v))
+                    ch[k].append(ascii_decode(v))
                 else:
-                    ch[k] = [ad(v)]
+                    ch[k] = [ascii_decode(v)]
 
             attachments[file_id]['content_header'] = ch
 
@@ -658,7 +677,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
 
     # parse and decode subject
     subject = msg.get('subject', '')
-    headers_struc['subject'] = ad(decode_field(subject))
+    headers_struc['subject'] = ascii_decode(decode_field(subject))
 
     # If parsing had problem... report it...
     if msg.defects:
@@ -670,10 +689,10 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
     # @TODO verify if this hack is necessary for other e-mail fields as well
     m = email_regex.search(msg.get('from', '').lower())
     if m:
-        headers_struc['from'] = ad(m.group(1))
+        headers_struc['from'] = ascii_decode(m.group(1))
     else:
         from_ = email.utils.parseaddr(msg.get('from', '').lower())
-        headers_struc['from'] = ad(from_[1])
+        headers_struc['from'] = ascii_decode(from_[1])
 
     # parse and decode to
     headers_struc['to'] = headeremail2list(msg, 'to')
@@ -923,20 +942,20 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
         ch = {}
         for k, v in body_multhead:
             # We are using replace . to : for avoiding issue in mongo
-            k = ad(k.lower()).replace('.', ':')  # Lot of lowers, precompute :) .
+            k = ascii_decode(k.lower()).replace('.', ':')  # Lot of lowers, precompute :) .
             # print v
             if multipart:
                 if k in ch:
-                    ch[k].append(ad(v))
+                    ch[k].append(ascii_decode(v))
                 else:
-                    ch[k] = [ad(v)]
+                    ch[k] = [ascii_decode(v)]
             else:  # if not multipart, store only content-xx related header with part
                 if k.startswith('content'):  # otherwise, we got all header headers
-                    k = ad(k.lower()).replace('.', ':')
+                    k = ascii_decode(k.lower()).replace('.', ':')
                     if k in ch:
-                        ch[k].append(ad(v))
+                        ch[k].append(ascii_decode(v))
                     else:
-                        ch[k] = [ad(v)]
+                        ch[k] = [ascii_decode(v)]
         bodie['content_header'] = ch  # Store content headers dict
 
         if include_raw_body:
@@ -968,11 +987,11 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
     #
     for k, v in msg.items():
         # We are using replace . to : for avoiding issue in mongo
-        k = ad(k.lower()).replace('.', ':')  # Lot of lower, precompute...
+        k = ascii_decode(k.lower()).replace('.', ':')  # Lot of lower, precompute...
         if k in header:
-            header[k].append(ad(v))
+            header[k].append(ascii_decode(v))
         else:
-            header[k] = [ad(v)]
+            header[k] = [ascii_decode(v)]
     headers_struc['header'] = header
 
     # parse attachments
@@ -1044,6 +1063,7 @@ def main():
 
     m = decode_email(msgfile, full, fulldata, pconf)
     print (json.dumps(m, default=json_serial))
+
 
 if __name__ == '__main__':
     main()
