@@ -7,6 +7,7 @@ Contributors
 ------------
 
 The following people contributed directly or indirectly to this project:
+
 - `Sławomir Zborowski <https://github.com/szborows>`_
 - `Gregor Aisch <https://github.com/gka>`_
 - Paul Jung
