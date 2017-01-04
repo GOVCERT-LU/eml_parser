@@ -45,8 +45,6 @@ import dateutil.parser
 import base64
 import hashlib
 import quopri
-import pprint
-import time
 import collections
 
 try:
@@ -56,9 +54,9 @@ except ImportError:
 
 try:
     try:
-      import cchardet
+        import cchardet as chardet
     except ImportError:
-      import chardet
+        import chardet
 except ImportError:
     chardet = None
 
@@ -549,7 +547,7 @@ def parserouting(line, pconf):
     npdate = npdate.strip(" ")
 
     borders = ['from ', 'by ', 'with ', 'for ']
-    canditate = []
+    candidate = []
     result = []
 
     # Scan the line to determine the order, and presence of each "from/by/with/for" words
@@ -641,7 +639,7 @@ def give_dom_ip(line):
 #
 def parse_email(msg, include_raw_body=False, include_attachment_data=False, pconf={}):
     '''
-    IN msg email string
+    IN msg email string
     IN include_raw_body
     IN include_attachement_data
     IN pconfig struct with tunig ( whiteliing Ip etc... )
