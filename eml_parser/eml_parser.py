@@ -1,6 +1,6 @@
 #!/usr/bin/env python
-from __future__ import print_function
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 
 #
 # Georges Toth (c) 2017 <georges@trypill.org>
@@ -35,7 +35,7 @@ from __future__ import print_function
 import sys
 import json
 import email
-import getopt
+import argparse
 import re
 import uuid
 import datetime
@@ -455,7 +455,7 @@ def findall(pat, data):
     i = data.find(pat)
     while i != -1:
         yield i
-        i = data.find(pat, i+1)
+        i = data.find(pat, i + 1)
 
 
 # Remove nested parenthesis, until they're are present
@@ -538,7 +538,7 @@ def parserouting(line, pconf):
         return (out)
 
     if npdate:
-        npdate = npdate[0]  # Remove spaces and starting ; 
+        npdate = npdate[0]  # Remove spaces and starting ;
     else:
         npdate = ""
     npline = npline.replace(npdate, "")  # Remove date from input line
@@ -560,7 +560,7 @@ def parserouting(line, pconf):
                 end = npline.find(endword)
                 if end < loc or end == -1:
                     end = 0xfffffff   # Kindof MAX 31 bits
-                result.append({'name_in': word, 'pos': loc, 'name_out': endword, 'weight': end+loc})
+                result.append({'name_in': word, 'pos': loc, 'name_out': endword, 'weight': end + loc})
                 # print {'name_in': word, 'pos': loc, 'name_out': endword, 'weight': end+loc}
 
     # Create the word list... "from/by/with/for" by sorting the list.
@@ -631,7 +631,7 @@ def parserouting(line, pconf):
 
 
 def give_dom_ip(line):
-    m = dom_regex.findall(" "+line) + ipv4_regex.findall(line) + ipv6_regex.findall(line)
+    m = dom_regex.findall(" " + line) + ipv4_regex.findall(line) + ipv6_regex.findall(line)
     return(list(set(m)))
 
 
@@ -644,11 +644,9 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
     IN include_attachement_data
     IN pconfig struct with tunig ( whiteliing Ip etc... )
     '''
-    maila = {}
     header = {}
     report_struc = {}  # Final structure
     headers_struc = {}  # header_structure
-    attachements_struc = {}  # attachements structure
     bodys_struc = {}  # body structure
 
     # If no whitelisting of if is required initiate the empty variable arry
@@ -856,28 +854,28 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
                         list_observed_ip.append(match.lower())
         else:
             for scn_pt in findall('://', body):
-                list_observed_urls = get_uri_ondata(body[scn_pt-16:scn_pt+4096]) + list_observed_urls
+                list_observed_urls = get_uri_ondata(body[scn_pt - 16:scn_pt + 4096]) + list_observed_urls
 
             for scn_pt in findall('@', body):
                 # RFC 3696, 5322, 5321 for email size limitations
-                for match in email_regex.findall(body[scn_pt-64:scn_pt+255]):
+                for match in email_regex.findall(body[scn_pt - 64:scn_pt + 255]):
                     list_observed_email.append(match.lower())
 
             for scn_pt in findall('.', body):
                 # The maximum length of a fqdn, not a hostname, is 1004 characters RFC1035
                 # The maximum length of a hostname is 253 characters. Imputed from RFC952, RFC1123 and RFC1035.
-                for match in dom_regex.findall(body[scn_pt-253:scn_pt+1004]):
+                for match in dom_regex.findall(body[scn_pt - 253:scn_pt + 1004]):
                     list_observed_dom.append(match.lower())
 
                 # Find IPv4 addresses
-                for match in ipv4_regex.findall(body[scn_pt-11:scn_pt+3]):
+                for match in ipv4_regex.findall(body[scn_pt - 11:scn_pt + 3]):
                     if not priv_ip_regex.match(match):
                         if match not in pconf['whiteip']:
                             list_observed_ip.append(match)
 
             for scn_pt in findall(':', body):
                 # The maximum length of IPv6 is 32 Char + 7 ":"
-                for match in ipv6_regex.findall(body[scn_pt-4:scn_pt+35]):
+                for match in ipv6_regex.findall(body[scn_pt - 4:scn_pt + 35]):
                     if not priv_ip_regex.match(match):
                         if match.lower() not in pconf['whiteip']:
                             list_observed_ip.append(match.lower())
@@ -1014,40 +1012,38 @@ def json_serial(obj):
 
 
 def main():
-    opts, args = getopt.getopt(sys.argv[1:], 'hi:dw:rf:b:')
-    msgfile = None
-    whiteip = None
-    full = False
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('-i', dest='msgfile',
+                        help='input file', required=True)
+    parser.add_argument('-d', dest='debug', action='store_true',
+                        help='debug (no hashing)')
+    parser.add_argument('-r', dest='fulldata', action='store_true',
+                        help='includes raw data of attachments')
+    parser.add_argument('-w', dest='whitelist_ip',
+                        help='whitelist IPv4 or IPv6 ip from parsing; comma-separated list of IPs, no spaces !')
+    parser.add_argument('-f', dest='whitelist_email',
+                        help='whitelist an email in routing headers "For"; comma-separated list of e-mail addresses, no spaces !')
+    parser.add_argument('-b', dest='byhostentry',
+                        help='collect the smtp injector IP using the "by" "host" in routing headers; comma-separated list of IPs, no spaces !')
+
+    options = parser.parse_args()
+
+    msgfile = options.msgfile
+    full = options.debug
+    fulldata = options.fulldata
     pconf = {}
-    fulldata = None
 
-    for o, k in opts:
-        if o == '-h':
-            print ('Eml_parser options')
-            print ('    -i input file')
-            print ('    -d debug (no hashing)')
-            print ('    -r includes raw data of attachments')
-            print ('    -w whitelist ipv4 or ipv6 ip from parsing, iplist comma separated, no space !')
-            print ('    -f whitelist an email in routing headers "For"')
-            print ('    -h this help')
-            print ('    -b collect the smtp injector IP using the "by" "host" in routing headers ')
-            return
-        if o == '-i':
-            msgfile = k
-        if o == '-d':
-            full = True
-        if o == '-r':
-            fulldata = True
-        if o == '-w':
-            pconf['whiteip'] = k.split(',')
-        if o == '-f':
-            pconf['whitefor'] = k.split(',')
-        if o == '-b':
-            pconf['byhostentry'] = k.split(',')
+    if options.whitelist_ip is not None:
+        pconf['whiteip'] = options.whitelist_ip.split(',')
 
-    if msgfile:
-        m = decode_email(msgfile, full, fulldata, pconf)
-        print (json.dumps(m, default=json_serial))
+    if options.whitelist_email is not None:
+        pconf['whitefor'] = options.whitelist_email.split(',')
+
+    if options.byhostentry is not None:
+        pconf['byhostentry'] = options.byhostentry.split(',')
+
+    m = decode_email(msgfile, full, fulldata, pconf)
+    print (json.dumps(m, default=json_serial))
 
 if __name__ == '__main__':
     main()
