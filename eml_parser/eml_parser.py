@@ -4,7 +4,7 @@ from __future__ import print_function
 
 #
 # Georges Toth (c) 2017 <georges@trypill.org>
-# GOVCERT.LU (c) 2017 <georges.toth@govcert.etat.lu>
+# GOVCERT.LU (c) 2017 <info@govcert.etat.lu>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
