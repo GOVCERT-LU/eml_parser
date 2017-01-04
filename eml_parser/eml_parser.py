@@ -294,9 +294,9 @@ def force_string_decode(string):
 
 
 def decode_field(field):
-    '''Try to get the specified field using the Header module.
+    """Try to get the specified field using the Header module.
      If there is also an associated encoding, try to decode the
-     field and return it, else return a specified default value.'''
+     field and return it, else return a specified default value."""
 
     text = field
 
@@ -657,12 +657,23 @@ def give_dom_ip(line):
 #  Parse an email an return a structure.
 #
 def parse_email(msg, include_raw_body=False, include_attachment_data=False, pconf={}):
-    '''
-    IN msg email string
-    IN include_raw_body
-    IN include_attachement_data
-    IN pconfig struct with tunig ( whiteliing Ip etc... )
-    '''
+    """Parse an e-mail and return a dictionary containing the various parts of
+    the e-mail broken down into key-value pairs.
+
+    Args:
+      msg (str): Raw EML e-mail string.
+      include_raw_body (bool, optional): If True, includes the raw body in the resulting
+                               dictionary. Defaults to False.
+      include_attachment_data (bool, optional): If True, includes the full attachment
+                                                data in the resulting dictionary.
+                                                Defaults to False.
+      pconf (dict, optional): A dict with various optinal configuration parameters,
+                              e.g. whitelist IPs, whitelist e-mail addresses, etc.
+
+    Returns:
+      dict: A dictionary with the content of the EML parsed and broken down into
+            key-value pairs.
+    """
     header = {}
     report_struc = {}  # Final structure
     headers_struc = {}  # header_structure
