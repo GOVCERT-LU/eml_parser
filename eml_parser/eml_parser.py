@@ -2,8 +2,8 @@
 # -*- coding: utf-8 -*-
 
 #
-# Georges Toth (c) 2013 <georges@trypill.org>
-# GOVCERT.LU (c) 2014 <georges.toth@govcert.etat.lu>
+# Georges Toth (c) 2017 <georges@trypill.org>
+# GOVCERT.LU (c) 2017 <georges.toth@govcert.etat.lu>
 #
 # eml_parser is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -391,7 +391,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
   maila['received_emails'] = []
   maila['received_domains'] = []
 
-  for l in msg.get_all('received'):
+  for l in msg.get_all('received', []):
     l = re.sub(r'(\r|\n|\s|\t)+', ' ', l.lower())
     header['received'].append(l)
 
