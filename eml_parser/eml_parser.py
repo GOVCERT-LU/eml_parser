@@ -2,8 +2,8 @@
 # -*- coding: utf-8 -*-
 
 #
-# Georges Toth (c) 2013 <georges@trypill.org>
-# GOVCERT.LU (c) 2014 <georges.toth@govcert.etat.lu>
+# Georges Toth (c) 2017 <georges@trypill.org>
+# GOVCERT.LU (c) 2017 <georges.toth@govcert.etat.lu>
 #
 # eml_parser is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -31,6 +31,7 @@
 #    if a mail-server (e.g. exchange) uses an ID which looks like a valid IP
 #
 
+from __future__ import print_function
 import sys
 import email
 import getopt
@@ -44,10 +45,17 @@ import base64
 import hashlib
 import quopri
 import time
-from urlparse import urlparse
 
 try:
-  import chardet
+  from urllib.parse import urlparse
+except ImportError:
+  from urlparse import urlparse
+
+try:
+  try:
+    import cchardet
+  except ImportError:
+    import chardet
 except ImportError:
   chardet = None
 
@@ -213,7 +221,13 @@ def decode_field(field):
   text = field
 
   try:
-    _decoded = email.Header.decode_header(field)
+    Header = email.Header
+  except AttributeError:
+    # Python3 support
+    Header = email.header
+
+  try:
+    _decoded = Header.decode_header(field)
     _text, charset = _decoded[0]
   except email.errors.HeaderParseError:
     _text, charset = None, None
@@ -235,14 +249,14 @@ def decode_field(field):
 def decode_string(string, encoding):
   try:
     value = string.decode(encoding)
-  except UnicodeDecodeError:
+  except (UnicodeDecodeError, LookupError):
     if chardet:
       enc = chardet.detect(string)
       try:
         if not (enc['confidence'] == 1 and enc['encoding'] == 'ascii'):
-          value = value.decode(enc['encoding'])
+          value = string.decode(enc['encoding'])
         else:
-          value = value.decode('ascii', 'ignore')
+          value = string.decode('ascii', 'ignore')
       except UnicodeDecodeError:
         value = force_string_decode(string)
 
@@ -253,7 +267,13 @@ def q_value_decode(string):
   m = re_q_value.match(string)
   if m:
     encoding, e_string = m.groups()
-    d_string = quopri.decodestring(e_string).decode(encoding, 'ignore')
+    if encoding.lower() != 'unknown':
+      d_string = quopri.decodestring(e_string).decode(encoding, 'ignore')
+    else:
+      if isinstance(e_string, str):
+        d_string = e_string
+      else:
+        d_string = e_string.decode('utf-8', 'ignore')
   else:
     d_string = e_string.decode('utf-8', 'ignore')
 
@@ -264,7 +284,10 @@ def b_value_decode(string):
   m = re_b_value.match(string)
   if m:
     encoding, e_string = m.groups()
-    d_string = base64.decodestring(e_string).decode(encoding, 'ignore')
+    if isinstance(e_string, str):
+      d_string = e_string
+    else:
+      d_string = base64.decodestring(e_string).decode(encoding, 'ignore')
   else:
     d_string = e_string.decode('utf-8', 'ignore')
 
@@ -290,6 +313,8 @@ def decode_value(string):
         # Search for occurences of quoted stringings or plain stringings
         for m in re_quoted_string.finditer(text):
           match_s, method = m.groups()
+          if method is None:
+            raise RuntimeError('couldn\'t find method!')
 
           if '=?' in match_s:
             if method.lower() == 'q':
@@ -362,8 +387,12 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
     if not m[1] == '':
       header['cc'].append(m[1].lower())
 
+  date_ = None
   # parse and decode Date
   # "." -> ":" replacement is for fixing bad clients (e.g. outlook express)
+  if msg.get('date') is None:
+    msg['date'] = '1970-01-01 00:00:00 +0000'
+
   msg_date = msg.get('date').replace('.', ':')
   date_ = email.utils.parsedate_tz(msg_date)
 
@@ -393,7 +422,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
   maila['received_emails'] = []
   maila['received_domains'] = []
 
-  for l in msg.get_all('received'):
+  for l in msg.get_all('received', []):
     l = re.sub(r'(\r|\n|\s|\t)+', ' ', l.lower())
     header['received'].append(l)
 
@@ -474,12 +503,15 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False):
 
       for match in url_regex_simple.findall(body):
           found_url = match[0].replace('hxxp', 'http')
-          found_url = urlparse(found_url).geturl()
-          # let's try to be smart by stripping of noisy bogus parts
-          found_url = re.split(r'''[\', ", \,, \), \}, \\]''', found_url)[0]
+          try:
+            found_url = urlparse(found_url).geturl()
+            # let's try to be smart by stripping of noisy bogus parts
+            found_url = re.split(r'''[\', ", \,, \), \}, \\]''', found_url)[0]
 
-          if found_url not in list_observed_urls:
-              list_observed_urls.append(found_url)
+            if found_url not in list_observed_urls:
+                list_observed_urls.append(found_url)
+          except ValueError:
+            pass # One (possible) URL less
 
   maila['urls'] = list_observed_urls
 
@@ -507,9 +539,9 @@ def main():
       msgfile = k
 
   m = decode_email(msgfile)
-  print m
-  print
-  print m['date'].isoformat()
+  print(m)
+  print()
+  print(m['date'].isoformat())
   #print decode_email(msgfile, include_raw_body=True, include_attachment_data=True)
 
 
