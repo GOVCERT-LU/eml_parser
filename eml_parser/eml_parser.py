@@ -88,22 +88,22 @@ ipv6_regex = re.compile('((?:[0-9A-Fa-f]{1,4}:){6}(?:[0-9A-Fa-f]{1,4}:[0-9A-Fa-f
 b_d_regex = re.compile(r'(localhost|[a-z0-9.\-]+(?:[.][a-z]{2,4})?)')
 
 f_d_regex = re.compile(r'from(?:\s+(localhost|[a-z0-9\-]+|[a-z0-9.\-]+' +
-                       '[.][a-z]{2,4}))?\s+(?:\(?(localhost|[a-z0-9.\-]+[.][a-z]{2,4})' +
-                       '?\s*\[(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\]\)?)?')
+                       r'[.][a-z]{2,4}))?\s+(?:\(?(localhost|[a-z0-9.\-]+[.][a-z]{2,4})' +
+                       r'?\s*\[(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\]\)?)?')
 
 for_d_regex = re.compile(r'for\s+<?([a-z0-9.\-]+@[a-z0-9.\-]+[.][a-z]{2,4})>?')
 
 # note: depending on the text this regex blocks in an infinite loop !
 url_regex = re.compile(r'''(?i)\b((?:(hxxps?|https?|ftps?)://|www\d{0,3}[.]|[a-z:0-9.\-]+[.]' +
-                       '[a-z]{2,4}/)(?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))*\))+' +
-                       '(?:\(([^\s()<>]+|(\([^\s()<>]+\)))*\)|[^\s`!()\[\]{};:'".,<>?]))''',
+                       r'[a-z]{2,4}/)(?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))*\))+' +
+                       r'(?:\(([^\s()<>]+|(\([^\s()<>]+\)))*\)|[^\s`!()\[\]{};:'".,<>?]))''',
                        re.VERBOSE | re.MULTILINE)
 
 # simple version for searching for URLs
 # character set based on http://tools.ietf.org/html/rfc3986
 # url_regex_simple = re.compile(r'''(?i)\b((?:(hxxps?|https?|ftps?)://)[^ ]+)''', re.VERBOSE | re.MULTILINE)
 url_regex_simple = re.compile(r'''(([a-z]{3,}s?:\/\/)[a-z0-9\-_:]+(\.[a-z0-9\-_]+)*''' +
-                              '''(\/[a-z0-9_\-\.~!*'();:@&=+$,\/  ?%#\[\]]*)?)''',
+                              r'''(\/[a-z0-9_\-\.~!*'();:@&=+$,\/  ?%#\[\]]*)?)''',
                               re.VERBOSE | re.MULTILINE | re.I)
 
 # encoded string =?<encoding>?[QB]?<string>?=
@@ -138,8 +138,8 @@ def get_raw_body_text(msg):
         # Attachments with a file-extension of .htm/.html are implicitely treated
         # as text as well in order not to escape later checks (e.g. URL scan).
         if ('content-disposition' not in msg and msg.get_content_maintype() == 'text') \
-           or (msg.get_filename('').lower().endswith('.html') or
-           msg.get_filename('').lower().endswith('.htm')):
+            or (msg.get_filename('').lower().endswith('.html') or
+               msg.get_filename('').lower().endswith('.htm')):
             encoding = msg.get('content-transfer-encoding', '').lower()
 
             charset = msg.get_content_charset()
@@ -454,7 +454,7 @@ def get_uri_ondata(body):
         # let's try to be smart by stripping of noisy bogus parts
         found_url = re.split(r'''[\', ", \,, \), \}, \\]''', found_url)[0]
         list_observed_urls.append(found_url)
-    return(list_observed_urls)
+    return list_observed_urls
 
 
 # Convert email to a list from a given header field.
@@ -494,7 +494,7 @@ def getkey(item):
 def regprep(line):
     for ch in '^$[]()+?.':
         line = re.sub("\\" + ch, '\\\\' + ch, line)
-    return (line)
+    return line
 
 
 # Remove space and ; from start/end of line until it is not possible.
@@ -529,10 +529,10 @@ def robust_string2date(line):
 
     if date_.tzname() is None:
         date_ = date_.replace(tzinfo=dateutil.tz.tzutc())
-        return(date_)
+        return date_
     else:
         # If date field is absent...
-        return(dateutil.parser.parse(default_date))
+        return dateutil.parser.parse(default_date)
 
 
 def parserouting(line):
@@ -542,8 +542,8 @@ def parserouting(line):
     out = {}  # Result
     out['src'] = line
     line = line.lower()  # Convert everything to lowercase
-    npline = re.sub('\)', ' ) ', line)  # nORMALISE sPACE # Re-space () ")by " exists often
-    npline = re.sub('\(', ' ( ', npline)  # nORMALISE sPACE # Re-space ()
+    npline = re.sub(r'\)', ' ) ', line)  # nORMALISE sPACE # Re-space () ")by " exists often
+    npline = re.sub(r'\(', ' ( ', npline)  # nORMALISE sPACE # Re-space ()
     npline = re.sub(';', ' ; ', npline)  # nORMALISE sPACE # Re-space ;
     npline = noparenthesis(npline)  # Remove any "()"
     npline = re.sub('  *', ' ', npline)  # nORMALISE sPACE
@@ -553,7 +553,7 @@ def parserouting(line):
     # Detect "sticked lines"
     if " received: " in npline:
         out['warning'] = ['Merged Received headers']
-        return (out)
+        return out
 
     if npdate:
         npdate = npdate[0]  # Remove spaces and starting ;
@@ -584,7 +584,7 @@ def parserouting(line):
     # Create the word list... "from/by/with/for" by sorting the list.
     if len(result) == 0:
         out['warning'] = ['Nothing Parsable']
-        return (out)
+        return out
 
     tout = []
     for word in borders:
@@ -645,12 +645,12 @@ def parserouting(line):
         if len(out.get('by')) < 1:  # If array is empty remove
             del out['by']
 
-    return (out)
+    return out
 
 
 def give_dom_ip(line):
     m = dom_regex.findall(" " + line) + ipv4_regex.findall(line) + ipv6_regex.findall(line)
-    return(list(set(m)))
+    return list(set(m))
 
 
 #  Parse an email an return a structure.
@@ -693,7 +693,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
     if msg.defects:
         headers_struc['defect'] = []
         for exception in msg.defects:
-                headers_struc['defect'].append(str(exception))
+            headers_struc['defect'].append(str(exception))
 
     # parse and decode from
     # @TODO verify if this hack is necessary for other e-mail fields as well
@@ -789,7 +789,6 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
                 checks = True
                 if '.' in m:
                     try:
-                        test = int(re.sub(r'[.-]', '', m))
                         if not ipv4_regex.match(m) or m == '127.0.0.1':
                             checks = False
                     except ValueError:
@@ -1020,7 +1019,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
 
     newbody = []
     for body in bodys_struc:
-            newbody.append(bodys_struc[body])
+        newbody.append(bodys_struc[body])
     report_struc['body'] = newbody
     # End of dirty hack
 
