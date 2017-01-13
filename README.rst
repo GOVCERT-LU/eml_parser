@@ -1,7 +1,13 @@
+.. image:: https://landscape.io/github/sim0nx/eml_parser/master/landscape.svg?style=flat
+   :target: https://landscape.io/github/sim0nx/eml_parser/master
+   :alt: Code Health
+
+
 eml_parser serves as a python module for parsing eml files and returning various
 information found in the e-mail.
 
 Information include but are not limited to:
+
   - attachments
     - hashes
     - names
