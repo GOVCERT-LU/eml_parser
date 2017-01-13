@@ -236,7 +236,7 @@ def traverse_multipart(msg, counter=0, include_attachment_data=False):
                 filename = decode_field(filename)
 
             extension = get_file_extension(filename)
-            hash = get_file_hash(data)
+            hash_ = get_file_hash(data)
 
             file_id = str(uuid.uuid1())
             attachments[file_id] = {}
@@ -245,7 +245,7 @@ def traverse_multipart(msg, counter=0, include_attachment_data=False):
 
             if extension:
                 attachments[file_id]['extension'] = ascii_decode(extension)
-            attachments[file_id]['hash'] = hash
+            attachments[file_id]['hash'] = hash_
 
             if magic:
                 attachments[file_id]['mime_type'] = ms.buffer(data).decode('utf-8')
@@ -311,7 +311,6 @@ def decode_field(field):
         _text, charset = _decoded[0]
     except (email.errors.HeaderParseError, UnicodeEncodeError):
         _text, charset = None, None
-        pass
 
     if charset:
         try:
@@ -536,7 +535,7 @@ def robust_string2date(line):
         return(dateutil.parser.parse(default_date))
 
 
-def parserouting(line, pconf):
+def parserouting(line):
     #    if re.findall(reg_date, line):
     #        return 'date\n'
     # Preprocess the line to simplify from/by/with/for border detection.
@@ -747,7 +746,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
             #   by array
             #   with string
             #   warning array
-            current_line = parserouting(l, pconf)
+            current_line = parserouting(l)
 
             # If required collect the IP of the gateway that have injected the mail.
             # Iterate all parsed item and find IP
