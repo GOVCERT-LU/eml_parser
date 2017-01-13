@@ -693,7 +693,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
     if msg.defects:
         headers_struc['defect'] = []
         for exception in msg.defects:
-                headers_struc['defect'].append(str(exception))
+            headers_struc['defect'].append(str(exception))
 
     # parse and decode from
     # @TODO verify if this hack is necessary for other e-mail fields as well
@@ -1020,7 +1020,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
 
     newbody = []
     for body in bodys_struc:
-            newbody.append(bodys_struc[body])
+        newbody.append(bodys_struc[body])
     report_struc['body'] = newbody
     # End of dirty hack
 

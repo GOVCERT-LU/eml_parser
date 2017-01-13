@@ -16,22 +16,21 @@ outpath = '.'
 
 
 for k in os.listdir('.'):
-  if k.endswith('.eml'):
-    print 'Parsing: ', k
+    if k.endswith('.eml'):
+        print 'Parsing: ', k
 
-    m = eml_parser.decode_email(k, include_attachment_data=True)
+        m = eml_parser.decode_email(k, include_attachment_data=True)
 
-    for a_id, a in m['attachments'].items():
-      if a['filename'] == '':
-        filename = a_id
-      else:
-        filename = a['filename']
+        for a_id, a in m['attachments'].items():
+            if a['filename'] == '':
+                filename = a_id
+            else:
+                filename = a['filename']
 
-      filename = os.path.join(outpath, filename)
+            filename = os.path.join(outpath, filename)
 
-      print '\tWriting attachment:', filename
-      with open(filename, 'wb') as a_out:
-        a_out.write(base64.b64decode(a['raw']))
+            print '\tWriting attachment:', filename
+            with open(filename, 'wb') as a_out:
+                a_out.write(base64.b64decode(a['raw']))
 
-    print
-
+        print
