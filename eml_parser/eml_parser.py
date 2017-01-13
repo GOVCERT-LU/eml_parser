@@ -61,7 +61,7 @@ except ImportError:
     chardet = None
 
 try:
-    from python_magic import magic
+    import magic
 except ImportError:
     magic = None
 
