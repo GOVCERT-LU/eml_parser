@@ -231,7 +231,7 @@ def traverse_multipart(msg, counter=0, include_attachment_data=False):
 
             filename = msg.get_filename('')
             if filename == '':
-                filename = 'part-%03d' % (counter)
+                filename = 'part-{0:03d}'.format(counter)
             else:
                 filename = decode_field(filename)
 
@@ -515,7 +515,7 @@ def robust_string2date(line):
     msg_date = line.replace('.', ':')
     date_ = email.utils.parsedate_tz(msg_date)
 
-    if date_ and not date_[9] is None:
+    if date_ and date_[9] is not None:
         ts = email.utils.mktime_tz(date_)
         date_ = datetime.datetime.utcfromtimestamp(ts)
     else:
@@ -625,7 +625,7 @@ def parserouting(line):
         if 'from' in out.get('for'):
             temp = re.split(' from ', out['for'])
             out['for'] = temp[0]
-            out['from'] = '%s %s' % (out['from'], " ".join(temp[1:]))
+            out['from'] = '{0} {1}'.format(out['from'], " ".join(temp[1:]))
 
         m = email_regex.findall(out['for'])
         if m:
@@ -655,7 +655,7 @@ def give_dom_ip(line):
 
 #  Parse an email an return a structure.
 #
-def parse_email(msg, include_raw_body=False, include_attachment_data=False, pconf={}):
+def parse_email(msg, include_raw_body=False, include_attachment_data=False, pconf=None):
     """Parse an e-mail and return a dictionary containing the various parts of
     the e-mail broken down into key-value pairs.
 
@@ -677,6 +677,9 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
     report_struc = {}  # Final structure
     headers_struc = {}  # header_structure
     bodys_struc = {}  # body structure
+
+    # If no pconf was specified, default to empty dict
+    pconf = pconf or {}
 
     # If no whitelisting of if is required initiate the empty variable arry
     if 'whiteip' not in pconf:
