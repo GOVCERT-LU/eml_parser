@@ -390,9 +390,8 @@ def decode_value(string):
 
     # Detect if space in it, in not do no split on space
     csplit = r'([ \t])'
-    if line.startswith("=?") and line.endswith("?="):
-        if " " in line:
-            csplit = r'('')'
+    if line.startswith("=?") and line.endswith("?=") and " " in line:
+        csplit = r'('')'
 
     # Split on white-space boundaries with capture, so we capture the white-space as well
     string_ = u''
@@ -591,10 +590,9 @@ def parserouting(line):
         result_max = 0xffffffff
         line_max = {}
         for eline in result:
-            if eline['name_in'] == word:
-                if eline['weight'] <= result_max:
-                    result_max = eline['weight']
-                    line_max = eline
+            if eline['name_in'] == word and eline['weight'] <= result_max:
+                result_max = eline['weight']
+                line_max = eline
 
         if len(line_max) is not 0:
             tout.append([line_max.get('pos'), line_max.get('name_in')])
