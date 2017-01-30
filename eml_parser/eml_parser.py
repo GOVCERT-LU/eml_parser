@@ -790,7 +790,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
                 checks = True
                 if '.' in m:
                     try:
-                        if not ipv4_regex.match(m) or m == '127.0.0.1':
+                        if ipv4_regex.match(m) or m == '127.0.0.1':
                             checks = False
                     except ValueError:
                         pass
@@ -831,13 +831,13 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
         headers_struc.pop('received_email')
     if 'received_foremail' in headers_struc:
         if len(headers_struc['received_foremail']) == 0:
-            headers_struc.pop('received_foremail')
+            del(headers_struc['received_foremail'])
         else:
             headers_struc['received_foremail'] = list(set(headers_struc['received_foremail']))
     if len(headers_struc['received_domain']) == 0:
-        headers_struc.pop('received_domain')
+        del(headers_struc['received_domain'])
     if len(headers_struc['received_ip']) == 0:
-        headers_struc.pop('received_ip')
+        del(headers_struc['received_ip'])
 
     # Parse TEXT BODYS
     # get raw header
@@ -1011,7 +1011,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
     # Mandatory to search efficiently in mongodb
     # See Bug 11 of eml_parser
     if len(report_struc['attachment']) == 0:
-        report_struc.pop('attachment')
+        del(report_struc['attachment'])
     else:
         newattach = []
         for attachment in report_struc['attachment']:
