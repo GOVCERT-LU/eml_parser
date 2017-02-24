@@ -22,3 +22,7 @@ Information include but are not limited to:
     body/attachments)
 
 Please feel free to send me your comments / pull requests.
+
+Install the latest version using pip::
+
+  pip install eml-parser

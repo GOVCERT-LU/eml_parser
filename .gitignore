@@ -1,3 +1,5 @@
 *.eml
 *.pyc
 build
+dist
+eml_parser.egg-info
