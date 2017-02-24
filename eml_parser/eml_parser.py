@@ -4,8 +4,8 @@
 from __future__ import print_function
 
 #
-# Georges Toth (c) 2017 <georges@trypill.org>
-# GOVCERT.LU (c) 2017 <info@govcert.etat.lu>
+# Georges Toth (c) 2013-2014 <georges@trypill.org>
+# GOVCERT.LU (c) 2013-2017 <info@govcert.etat.lu>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -69,7 +69,7 @@ except ImportError:
 
 __author__ = 'Toth Georges, Jung Paul'
 __email__ = 'georges@trypill.org, georges.toth@govcert.etat.lu'
-__copyright__ = 'Copyright 2017 Georges Toth, Copyright 2017 GOVCERT Luxembourg'
+__copyright__ = 'Copyright 2013-2014 Georges Toth, Copyright 2013-2017 GOVCERT Luxembourg'
 __license__ = 'AGPL v3+'
 
 
@@ -139,8 +139,8 @@ def get_raw_body_text(msg):
         # Attachments with a file-extension of .htm/.html are implicitely treated
         # as text as well in order not to escape later checks (e.g. URL scan).
         if ('content-disposition' not in msg and msg.get_content_maintype() == 'text') \
-            or (msg.get_filename('').lower().endswith('.html') or
-               msg.get_filename('').lower().endswith('.htm')):
+           or (msg.get_filename('').lower().endswith('.html') or
+           msg.get_filename('').lower().endswith('.htm')):
             encoding = msg.get('content-transfer-encoding', '').lower()
 
             charset = msg.get_content_charset()
