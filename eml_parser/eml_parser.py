@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 # pylint: disable=line-too-long
-from __future__ import print_function
+# from __future__ import print_function
+from __future__ import absolute_import, division, print_function, unicode_literals
 
 #
 # Georges Toth (c) 2013-2014 <georges@trypill.org>
@@ -34,9 +35,7 @@ from __future__ import print_function
 #
 
 import sys
-import json
 import email
-import argparse
 import re
 import uuid
 import datetime
@@ -1029,52 +1028,3 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
     report_struc['header'] = headers_struc
 
     return report_struc
-
-
-def json_serial(obj):
-    """JSON serializer for objects not serializable by default json code"""
-
-    if isinstance(obj, datetime.datetime):
-        serial = obj.isoformat()
-        return serial
-
-    raise TypeError("Type not serializable")
-
-
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('-i', dest='msgfile',
-                        help='input file', required=True)
-    parser.add_argument('-d', dest='debug', action='store_true',
-                        help='debug (no hashing)')
-    parser.add_argument('-r', dest='fulldata', action='store_true',
-                        help='includes raw data of attachments')
-    parser.add_argument('-w', dest='whitelist_ip',
-                        help='whitelist IPv4 or IPv6 ip from parsing; comma-separated list of IPs, no spaces !')
-    parser.add_argument('-f', dest='whitelist_email',
-                        help='whitelist an email in routing headers "For"; comma-separated list of e-mail addresses, no spaces !')
-    parser.add_argument('-b', dest='byhostentry',
-                        help='collect the smtp injector IP using the "by" "host" in routing headers; comma-separated list of IPs, no spaces !')
-
-    options = parser.parse_args()
-
-    msgfile = options.msgfile
-    full = options.debug
-    fulldata = options.fulldata
-    pconf = {}
-
-    if options.whitelist_ip is not None:
-        pconf['whiteip'] = options.whitelist_ip.split(',')
-
-    if options.whitelist_email is not None:
-        pconf['whitefor'] = options.whitelist_email.split(',')
-
-    if options.byhostentry is not None:
-        pconf['byhostentry'] = options.byhostentry.split(',')
-
-    m = decode_email(msgfile, full, fulldata, pconf)
-    print (json.dumps(m, default=json_serial))
-
-
-if __name__ == '__main__':
-    main()
