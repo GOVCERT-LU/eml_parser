@@ -34,4 +34,4 @@ for k in os.listdir('.'):
             with open(filename, 'wb') as a_out:
                 a_out.write(base64.b64decode(a['raw']))
 
-        print
+        print()
