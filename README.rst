@@ -6,10 +6,10 @@
    :target: https://www.quantifiedcode.com/app/project/468b8039f5a94528aaa9d7a25ecc68eb
    :alt: Code issues
 
-.. |docs| image:: https://readthedocs.org/projects/docs/badge/?version=latest
-    :alt: Documentation Status
-    :scale: 100%
-    :target: https://docs.readthedocs.io/en/latest/?badge=latest
+.. image:: https://readthedocs.org/projects/docs/badge/?version=latest
+   :alt: Documentation Status
+   :scale: 100%
+   :target: https://docs.readthedocs.io/en/latest/?badge=latest
 
 
 eml_parser serves as a python module for parsing eml files and returning various
