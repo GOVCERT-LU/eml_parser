@@ -1,0 +1,10 @@
+pep8:
+  disable:
+    - E111
+    - E501
+    - E114
+
+pylint:
+  disable:
+    - line-too-long
+    - too-many-lines
