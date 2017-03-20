@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 # pylint: disable=line-too-long
-# from __future__ import print_function
-from __future__ import absolute_import, division, print_function, unicode_literals
+
+from __future__ import absolute_import, division, print_function
 
 #
 # Georges Toth (c) 2013-2014 <georges@trypill.org>
@@ -470,7 +470,19 @@ def headeremail2list(mail, header):
 
 
 # Iterator that give all position of a given pattern (no regex)
+# FIXME :
+# Error may occurs when using unicode-literals or python 3 on dirty emails
+# Need to check if buffer is a clean one
+# may be tested with this byte code:
+# -> 00000b70  61 6c 20 32 39 b0 20 6c  75 67 6c 69 6f 20 32 30  |al 29. luglio 20|
+# Should crash on "B0".
 def findall(pat, data):
+    """
+    Iterators that find a pattern
+    Args:
+        pat (str): Pattern to seek
+        data (str): buffer
+    """
     if sys.version_info >= (3, 0):
         _pat = pat
     else:
