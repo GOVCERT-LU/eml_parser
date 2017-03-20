@@ -432,8 +432,11 @@ def decode_value(string):
 
 
 def decode_email(eml_file, include_raw_body=False, include_attachment_data=False, pconf=False):
-    with open(eml_file) as fp:
-      msg = email.message_from_file(fp)
+    with open(eml_file, 'rb') as fp:
+        if sys.version_info >= (3, 0):
+            msg = email.message_from_binary_file(fp)
+        else:
+            msg = email.message_from_file(fp)
     return parse_email(msg, include_raw_body, include_attachment_data, pconf)
 
 
@@ -468,10 +471,15 @@ def headeremail2list(mail, header):
 
 # Iterator that give all position of a given pattern (no regex)
 def findall(pat, data):
-    i = data.find(pat)
+    if sys.version_info >= (3, 0):
+        _pat = pat
+    else:
+        _pat = str(pat)
+
+    i = data.find(_pat)
     while i != -1:
         yield i
-        i = data.find(pat, i + 1)
+        i = data.find(_pat, i + 1)
 
 
 # Remove nested parenthesis, until they're are present
