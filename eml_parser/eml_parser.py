@@ -432,9 +432,8 @@ def decode_value(string):
 
 
 def decode_email(eml_file, include_raw_body=False, include_attachment_data=False, pconf=False):
-    fp = open(eml_file)
-    msg = email.message_from_file(fp)
-    fp.close()
+    with open(eml_file) as fp:
+      msg = email.message_from_file(fp)
     return parse_email(msg, include_raw_body, include_attachment_data, pconf)
 
 
