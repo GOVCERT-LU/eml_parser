@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 # pylint: disable=line-too-long
 
-from __future__ import absolute_import, division, print_function
+from __future__ import absolute_import, division, print_function, unicode_literals
 
 #
 # Georges Toth (c) 2013-2014 <georges@trypill.org>
@@ -195,6 +195,15 @@ def get_file_hash(data):
     return hash_
 
 
+def wrap_hash_sha256(string):
+    if sys.version_info >= (3, 0):
+        _string = string.encode()
+    else:
+        _string = string
+
+    return hashlib.sha256(_string).hexdigest()
+
+
 def ascii_decode(string):
     """Ascii Decode a given string; useful with dirty headers.
 
@@ -204,10 +213,17 @@ def ascii_decode(string):
     Returns:
       str: Returns the decoded string.
     """
+
     try:
-        return string.decode('latin-1').encode('utf-8')
+        if sys.version_info >= (3, 0):
+            return string.decode('latin-1')
+        else:
+            return string.decode('latin-1').encode('utf-8')
     except:
-        return string.encode('utf-8', 'replace')
+        if sys.version_info >= (3, 0):
+            return string
+        else:
+            return string.encode('utf-8', 'replace')
 
 
 def traverse_multipart(msg, counter=0, include_attachment_data=False):
@@ -248,11 +264,17 @@ def traverse_multipart(msg, counter=0, include_attachment_data=False):
             attachments[file_id]['hash'] = hash_
 
             if magic:
-                attachments[file_id]['mime_type'] = ms.buffer(data).decode('utf-8')
+                if sys.version_info >= (3, 0):
+                    attachments[file_id]['mime_type'] = ms.buffer(data)
+                else:
+                    attachments[file_id]['mime_type'] = ms.buffer(data).decode('utf-8')
                 # attachments[file_id]['mime_type_short'] = attachments[file_id]['mime_type'].split(",")[0]
                 ms = magic.open(magic.MAGIC_MIME_TYPE)
                 ms.load()
-                attachments[file_id]['mime_type_short'] = ms.buffer(data).decode('utf-8')
+                if sys.version_info >= (3, 0):
+                    attachments[file_id]['mime_type_short'] = ms.buffer(data)
+                else:
+                    attachments[file_id]['mime_type_short'] = ms.buffer(data).decode('utf-8')
 
             if include_attachment_data:
                 attachments[file_id]['raw'] = base64.b64encode(data)
@@ -946,21 +968,21 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
             if list_observed_urls:
                 bodie['uri_hash'] = []
                 for uri in list(set(list_observed_urls)):
-                    bodie['uri_hash'].append(hashlib.sha256(uri.lower()).hexdigest())
+                    bodie['uri_hash'].append(wrap_hash_sha256(uri.lower()))
             if list_observed_email:
                 bodie['email_hash'] = []
                 for emel in list(set(list_observed_email)):
                     # Email already lowered
-                    bodie['email_hash'].append(hashlib.sha256(emel).hexdigest())
+                    bodie['email_hash'].append(wrap_hash_sha256(emel))
             if list_observed_dom:
                 bodie['domain_hash'] = []
                 for uri in list(set(list_observed_dom)):
-                    bodie['domain_hash'].append(hashlib.sha256(uri.lower()).hexdigest())
+                    bodie['domain_hash'].append(wrap_hash_sha256(uri.lower()))
             if list_observed_ip:
                 bodie['ip_hash'] = []
                 for fip in list(set(list_observed_ip)):
                     # IP (v6) already lowered
-                    bodie['ip_hash'].append(hashlib.sha256(fip).hexdigest())
+                    bodie['ip_hash'].append(wrap_hash_sha256(fip))
 
         # For mail without multipart we will only get the "content....something" headers
         # all other headers are in "header"
