@@ -8,26 +8,41 @@
 
 .. image:: https://readthedocs.org/projects/eml-parser/badge/
    :alt: Documentation Status
-   :scale: 100%
    :target: http://eml-parser.readthedocs.io
 
+Welcome to eml-parser's documentation!
+======================================
+  eml_parser serves as a python module for parsing eml files and returning various
+  information found in the e-mail.
 
-eml_parser serves as a python module for parsing eml files and returning various
-information found in the e-mail.
-
-Information include but are not limited to:
-
-  - attachments
-    - hashes
-    - names
-  - from, to, cc
-  - received servers path
-  - subject
-  - list of URLs parsed from the text content of the mail (including HTML
-    body/attachments)
+  Information include but are not limited to:
+    - attachments
+      - hashes
+      - names
+    - from, to, cc
+    - received servers path
+    - subject
+    - list of URLs parsed from the text content of the mail (including HTML
+      body/attachments)
 
 Please feel free to send me your comments / pull requests.
 
 Install the latest version using pip::
 
   pip install eml-parser
+
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Contents:
+
+   api
+
+
+
+Indices and tables
+==================
+
+* :ref:`genindex`
+* :ref:`modindex`
+* :ref:`search`
