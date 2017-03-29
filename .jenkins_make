@@ -18,9 +18,9 @@ clone:
   clonedigger --cpd-output $(SRC_DIR) || :
 
 clean:
-  rm -f pyflakes.log
-  rm -f pylint.log
-  rm -f sloccount.sc
-  rm -f output.xml
-  rm -f coverage.xml
-  rm -f xunit.xml
+    rm -f pyflakes.log
+    rm -f pylint.log
+    rm -f sloccount.sc
+    rm -f output.xml
+    rm -f coverage.xml
+    rm -f xunit.xml
