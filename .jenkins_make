@@ -6,7 +6,7 @@ sloc:
 	sloccount --duplicates --wide --details $(SRC_DIR) | fgrep -v .git > sloccount.sc || :
 
 test:
-	cd $(SRC_DIR) && nosetests --verbose --with-xunit --xunit-file=../xunit.xml --with-coverage --cover-xml-file=../coverage.xml || :
+	cd $(SRC_DIR) && nosetests --verbose --with-xunit --xunit-file=../xunit.xml --with-coverage --cover-xml --cover-xml-file=../coverage.xml || :
 
 
 flakes:
