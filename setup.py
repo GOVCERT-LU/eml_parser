@@ -11,7 +11,8 @@ f = open(os.path.join(os.path.dirname(__file__), 'README.rst'))
 long_description = f.read().strip()
 f.close()
 
-install_requires = []
+install_requires = ['python-dateutil'
+                    ]
 
 setup(name='eml_parser',
       description='Python EML parser library',
