@@ -195,6 +195,14 @@ def get_file_hash(data):
 
 
 def wrap_hash_sha256(string):
+    """Generate a SHA256 hash for a given string.
+
+    Args:
+        string (str): String to calculate the hash on.
+
+    Returns:
+        str: Returns the calculated hash as a string.
+    """
     if sys.version_info >= (3, 0):
         _string = string.encode()
     else:
