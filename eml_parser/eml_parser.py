@@ -785,7 +785,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
 
         for l in msg.get_all('received', []):
 
-            l = re.sub(r'(\r|\n|\s|\t)+', ' ', l.lower())
+            l = re.sub(r'(\r|\n|\s|\t)+', ' ', l.lower(), flags=re.UNICODE)
 
             # Parse and split routing headers.
             # Return dict of array
