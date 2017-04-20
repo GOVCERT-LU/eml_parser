@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 # pylint: disable=line-too-long
 
@@ -40,12 +39,12 @@ import re
 import uuid
 import datetime
 import calendar
-import dateutil.tz
-import dateutil.parser
 import base64
 import hashlib
 import quopri
 import collections
+import dateutil.tz
+import dateutil.parser
 
 try:
     from urllib.parse import urlparse
@@ -213,6 +212,9 @@ def ascii_decode(string):
     Returns:
       str: Returns the decoded string.
     """
+
+    if sys.version_info >= (3, 0) and isinstance(string, email.header.Header):
+        return str(string)
 
     try:
         if sys.version_info >= (3, 0):
@@ -382,7 +384,7 @@ def b_value_decode(string):
     m = re_b_value.match(string)
     if m:
         encoding, e_string = m.groups()
-        d_string = base64.decodestring(e_string).decode(encoding, 'ignore')
+        d_string = base64.b64decode(e_string).decode(encoding, 'ignore')
     else:
         d_string = e_string.decode('utf-8', 'ignore')
 
@@ -622,7 +624,7 @@ def parserouting(line):
                 # print {'name_in': word, 'pos': loc, 'name_out': endword, 'weight': end+loc}
 
     # Create the word list... "from/by/with/for" by sorting the list.
-    if len(result) == 0:
+    if not result:
         out['warning'] = ['Nothing Parsable']
         return out
 
@@ -739,7 +741,12 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
 
     # parse and decode from
     # @TODO verify if this hack is necessary for other e-mail fields as well
-    m = email_regex.search(msg.get('from', '').lower())
+    if sys.version_info >= (3, 0):
+        msg_header_field = str(msg.get('from', '')).lower()
+    else:
+        msg_header_field = msg.get('from', '').lower()
+
+    m = email_regex.search(msg_header_field)
     if m:
         headers_struc['from'] = ascii_decode(m.group(1))
     else:
@@ -750,12 +757,12 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
     headers_struc['to'] = headeremail2list(msg, 'to')
     # parse and decode Cc
     headers_struc['cc'] = headeremail2list(msg, 'cc')
-    if len(headers_struc['cc']) == 0:
+    if not headers_struc['cc']:
         headers_struc.pop('cc')
 
     # parse and decode delivered-to
     headers_struc['delivered_to'] = headeremail2list(msg, 'delivered-to')
-    if len(headers_struc['delivered_to']) == 0:
+    if not headers_struc['delivered_to']:
         headers_struc.pop('delivered_to')
 
     # parse and decode Date
@@ -868,16 +875,16 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
     headers_struc['received_ip'] = list(set(headers_struc['received_ip']))
 
     # Clean up if empty
-    if len(headers_struc['received_email']) == 0:
+    if not headers_struc['received_email']:
         headers_struc.pop('received_email')
     if 'received_foremail' in headers_struc:
-        if len(headers_struc['received_foremail']) == 0:
+        if not headers_struc['received_foremail']:
             del(headers_struc['received_foremail'])
         else:
             headers_struc['received_foremail'] = list(set(headers_struc['received_foremail']))
-    if len(headers_struc['received_domain']) == 0:
+    if not headers_struc['received_domain']:
         del(headers_struc['received_domain'])
-    if len(headers_struc['received_ip']) == 0:
+    if not headers_struc['received_ip']:
         del(headers_struc['received_ip'])
 
     # Parse TEXT BODYS
@@ -902,7 +909,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
         list_observed_dom = []
         list_observed_ip = []
 
-        if sys.version_info >= (3, 0) and (isinstance(body, bytes) or isinstance(body, bytearray)):
+        if sys.version_info >= (3, 0) and isinstance(body, (bytearray, bytes)):
             body = body.decode('utf-8', 'ignore')
 
         # If we start directly a findall on 500K+ body we got time and memory issues...
@@ -1016,8 +1023,12 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
         # We "display" the "LAST" one .. as do a thunderbird
         val = ch.get('content-type')
         if val:
-            if type(val) == list:
+            if isinstance(val, list):
                 val = val[-1]
+
+            if sys.version_info >= (3, 0):
+                val = str(val)
+
             bodie['content_type'] = val.split(';')[0].strip()
 
         # Try hashing.. with failback for incorrect encoding (non ascii)
@@ -1051,7 +1062,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
     # Dirty hack... transphorm hash in list.. need to be done in the function.
     # Mandatory to search efficiently in mongodb
     # See Bug 11 of eml_parser
-    if len(report_struc['attachment']) == 0:
+    if not report_struc['attachment']:
         del(report_struc['attachment'])
     else:
         newattach = []
