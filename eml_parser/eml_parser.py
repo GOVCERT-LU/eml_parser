@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # pylint: disable=line-too-long
 
-from __future__ import absolute_import, division, print_function, unicode_literals
+from __future__ import absolute_import, division, print_function # // , unicode_literals
 
 #
 # Georges Toth (c) 2013-2014 <georges@trypill.org>
@@ -792,9 +792,10 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
         found_smtpin = collections.Counter()  # Array for storing potential duplicate "HOP"
 
         for l in msg.get_all('received', []):
-
-            l = re.sub(r'(\r|\n|\s|\t)+', ' ', l.lower(), flags=re.UNICODE)
-
+            try:
+                l = re.sub(r'(\r|\n|\s|\t)+', ' ', l.lower(), flags=re.UNICODE)
+            except UnicodeDecodeError:
+                l = re.sub(r'(\r|\n|\s|\t)+', ' ', ascii_decode(l.lower()), flags=re.UNICODE)
             # Parse and split routing headers.
             # Return dict of array
             #   date string
