@@ -425,68 +425,71 @@ def b_value_decode(string):
     return d_string
 
 
-def decode_value(string):
-    '''
-    Decodes a given string as Base64 or Quoted Printable, depending on what
-    type it is.
+def splitonqp(string):
+    """Split a line on "=?" and "?=" and return an list for quoted style strings
 
-    String has to be of the format =?<encoding>?[QB]?<string>?=
-    '''
+    Args:
+        string(str): String to split
+    Returns
+        list: list of strings splitted by quoted space
+    """
+    start = 0
+    outstr = []
+    delims = ["=?", "?="]
+    toggle= 0
+    delim = delims[toggle]
+    for pointer in range(len(string) - 1):
+        if string[pointer:pointer + 2] == delim:
+            toggle = (toggle + 1) % 2  # Switch betwen separators
+            delim = delims[toggle]
+            pointer += 2
+            if (string[start - 2:start] == "=?") and (string[pointer - 2:pointer] == "?="):
+                # Borne par quoted print headers
+                outstr.append(string[start -2:pointer])
+            else:
+                outstr.append(string[start:pointer - 2])
+            start = pointer
+
+    if start != pointer:
+        outstr.append(string[start:len(string)])
+    return (outstr)
+
+
+def decode_value(string):
+    """Decodes a given string as Base64 or Quoted Printable, depending on what
+    type it is.     String has to be of the format =?<encoding>?[QB]?<string>?=
+
+    Args:
+        string(str): Line to decode , mais contains multiple quoted printable
+    Returns
+        str: Decode string
+    """
     # Optimization: If there's no encoded-words in the stringing, just return it
-    if not re_encoded_string.search(string):
+    if "=?" not in string:
         return string
 
     # First, convert CRLF to CR
-    strings = []
-    for line in string.replace('\r', '').split('\n'):
-        strings.append(line)
-
-    # Detect Invalide encoding !! and return as-is (as do thunderbird)
-    for line in strings:
-        if line.startswith("=?") and not line.endswith("?="):
-            return "".join(strings)
-
-    # Detect if space in it, in not do no split on space
-    csplit = r'([ \t])'
-    if line.startswith("=?") and line.endswith("?=") and " " in line:
-        csplit = r'('')'
-
-    # Split on white-space boundaries with capture, so we capture the white-space as well
-    string_ = u''
-    for line in string.replace('\r', '').split('\n'):
-        line_ = u''
-
-        for text in re.split(csplit, line):
-            if '=?' in text:
-                # Search for occurences of quoted stringings or plain stringings
-                for m in re_quoted_string.finditer(text):
-                    match_s, method = m.groups()
-
-                    if '=?' in match_s:
-                        if method is None:
-                            raise Exception('NOTIMPLEMENTED: Unknown method "{0}"'.format(method))
-                        elif method.lower() == 'q':
-                            text = q_value_decode(match_s)
-                        elif method.lower() == 'b':
-                            text = b_value_decode(match_s)
-                        else:
-                            raise Exception('NOTIMPLEMENTED: Unknown method "{0}"'.format(method))
-
-                        text = text.replace('_', ' ')
-
-                        if text[0] == ' ':
-                            text = text[1:]
-                    else:
-                        line_ += match_s
-
-                line_ += text
-
-            if len(string_) > 0 and not (string_[-1] == ' ' or line_[0] == ' '):
-                string_ += ' '
-
-            string_ += line_
-
-        return string_
+    string = "".join(string.replace('\r', '').split('\n'))
+    string_ = ""
+    for subset in splitonqp(string):
+        if '=?' in subset:
+            _line = ""
+            # Search for occurences of quoted stringings or plain stringings
+            for m in re_quoted_string.finditer(subset):
+                match_s, method = m.groups()
+                if '=?' in match_s:
+                    if not method:
+                        # if the encoding is not q or b we just drop the line as is
+                        # Bad encoding not q or b... just drop the line as is
+                        pass
+                    elif method.lower() == 'q':
+                        subset = q_value_decode(match_s)
+                        subset = subset.replace('_', ' ')
+                    elif method.lower() == 'b':
+                        subset = b_value_decode(match_s)
+                        subset = subset.replace('_', ' ')
+        string_ += subset
+    return string_
 
 
 def decode_email(eml_file, include_raw_body=False, include_attachment_data=False, pconf=False):
