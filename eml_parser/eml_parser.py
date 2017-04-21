@@ -137,7 +137,10 @@ def get_raw_body_text(msg):
         # Attachments with a file-extension of .htm/.html are implicitely treated
         # as text as well in order not to escape later checks (e.g. URL scan).
 
-        filename = force_string_decode(msg.get_filename('').lower())
+        try:
+            filename = force_string_decode(msg.get_filename('').lower())
+        except UnicodeEncodeError:
+            filename = force_string_decode(msg.get_filename('').encode('utf-8').lower())
 
         if ('content-disposition' not in msg and msg.get_content_maintype() == 'text') \
            or (filename.endswith('.html') or
