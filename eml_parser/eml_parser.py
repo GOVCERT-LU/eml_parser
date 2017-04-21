@@ -138,6 +138,7 @@ def get_raw_body_text(msg):
         # as text as well in order not to escape later checks (e.g. URL scan).
 
         try:
+            # See #39
             filename = force_string_decode(msg.get_filename('').lower())
         except UnicodeEncodeError:
             filename = force_string_decode(msg.get_filename('').encode('utf-8').lower())
