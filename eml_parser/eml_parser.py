@@ -136,9 +136,12 @@ def get_raw_body_text(msg):
         # Treat text document attachments as belonging to the body of the mail.
         # Attachments with a file-extension of .htm/.html are implicitely treated
         # as text as well in order not to escape later checks (e.g. URL scan).
+
+        filename = force_string_decode(msg.get_filename('').lower())
+
         if ('content-disposition' not in msg and msg.get_content_maintype() == 'text') \
-           or (msg.get_filename('').lower().endswith('.html') or
-           msg.get_filename('').lower().endswith('.htm')):
+           or (filename.endswith('.html') or
+           filename.endswith('.htm')):
             encoding = msg.get('content-transfer-encoding', '').lower()
 
             charset = msg.get_content_charset()
@@ -164,7 +167,11 @@ def get_file_extension(filename):
       str: The lower-case file extension
     """
     extension = ''
-    dot_idx = filename.rfind('.')
+    try:
+        dot_idx = filename.rfind('.')
+    except UnicodeDecodeError:
+        # Keep as exception since it match less than 1% of mails.
+        dot_idx = force_string_decode(filename).rfind('.')
 
     if dot_idx != -1:
         extension = filename[dot_idx + 1:]
@@ -305,6 +312,18 @@ def traverse_multipart(msg, counter=0, include_attachment_data=False):
 
 
 def force_string_decode(string):
+    """Force the decoding of a string.
+    It tries latin1 then utf-8, it stop of first win
+    It also convert None to empty string
+
+    #TODO this function should be merged with decode_field in order to simpilfy
+
+    Args:
+        string(str): Encoded string
+    Returns
+        str: Decoded string
+    """
+
     if string is None:
         return ''
 
@@ -328,7 +347,14 @@ def force_string_decode(string):
 def decode_field(field):
     """Try to get the specified field using the Header module.
      If there is also an associated encoding, try to decode the
-     field and return it, else return a specified default value."""
+     field and return it, else return a specified default value.
+
+     Args:
+        field (str): String to decode
+
+     Returns
+        str: Clean encoded strings
+     """
 
     text = field
 
@@ -826,9 +852,9 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
                                 found_smtpin[byhostentry.lower()] += 1
                                 if found_smtpin[byhostentry.lower()] > 1:  # Twice found the header...
                                     if current_line.get('warning'):
-                                        current_line['warning'].append(['Duplicate SMTP by entrypoint'])
+                                        current_line['warning'].append(['Duplicate SMTP by entrypoint'])
                                     else:
-                                        current_line['warning'] = ['Duplicate SMTP by entrypoint']
+                                        current_line['warning'] = ['Duplicate SMTP by entrypoint']
 
             headers_struc['received'].append(current_line)
 
@@ -943,7 +969,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
                 list_observed_urls = get_uri_ondata(body[scn_pt - 16:scn_pt + 4096]) + list_observed_urls
 
             for scn_pt in findall('@', body):
-                # RFC 3696, 5322, 5321 for email size limitations
+                # RFC 3696, 5322, 5321 for email size limitations
                 for match in email_regex.findall(body[scn_pt - 64:scn_pt + 255]):
                     list_observed_email.append(match.lower())
 
@@ -953,7 +979,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
                 for match in dom_regex.findall(body[scn_pt - 253:scn_pt + 1004]):
                     list_observed_dom.append(match.lower())
 
-                # Find IPv4 addresses
+                # Find IPv4 addresses
                 for match in ipv4_regex.findall(body[scn_pt - 11:scn_pt + 3]):
                     if not priv_ip_regex.match(match):
                         if match not in pconf['whiteip']:
@@ -1037,8 +1063,11 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
 
             if sys.version_info >= (3, 0):
                 val = str(val)
-
-            bodie['content_type'] = val.split(';')[0].strip()
+            try:
+                bodie['content_type'] = val.split(';')[0].strip()
+            except UnicodeDecodeError:
+                # Keep as exception since it match less than 1% of mails.
+                bodie['content_type'] = force_string_decode(val).split(';')[0].strip()
 
         # Try hashing.. with failback for incorrect encoding (non ascii)
         try:
