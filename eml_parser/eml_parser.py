@@ -41,23 +41,15 @@ import datetime
 import calendar
 import base64
 import hashlib
-import quopri
 import collections
 import dateutil.tz
 import dateutil.parser
+import eml_parser.decode
 
 try:
     from urllib.parse import urlparse
 except ImportError:
     from urlparse import urlparse
-
-try:
-    try:
-        import cchardet as chardet
-    except ImportError:
-        import chardet
-except ImportError:
-    chardet = None
 
 try:
     import magic
@@ -84,38 +76,12 @@ ipv4_regex = re.compile(r'''((?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?
 # From https://gist.github.com/mnordhoff/2213179 : IPv6 with zone ID (RFC 6874)
 ipv6_regex = re.compile('((?:[0-9A-Fa-f]{1,4}:){6}(?:[0-9A-Fa-f]{1,4}:[0-9A-Fa-f]{1,4}|(?:(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))|::(?:[0-9A-Fa-f]{1,4}:){5}(?:[0-9A-Fa-f]{1,4}:[0-9A-Fa-f]{1,4}|(?:(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))|(?:[0-9A-Fa-f]{1,4})?::(?:[0-9A-Fa-f]{1,4}:){4}(?:[0-9A-Fa-f]{1,4}:[0-9A-Fa-f]{1,4}|(?:(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))|(?:[0-9A-Fa-f]{1,4}:[0-9A-Fa-f]{1,4})?::(?:[0-9A-Fa-f]{1,4}:){3}(?:[0-9A-Fa-f]{1,4}:[0-9A-Fa-f]{1,4}|(?:(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))|(?:(?:[0-9A-Fa-f]{1,4}:){,2}[0-9A-Fa-f]{1,4})?::(?:[0-9A-Fa-f]{1,4}:){2}(?:[0-9A-Fa-f]{1,4}:[0-9A-Fa-f]{1,4}|(?:(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))|(?:(?:[0-9A-Fa-f]{1,4}:){,3}[0-9A-Fa-f]{1,4})?::[0-9A-Fa-f]{1,4}:(?:[0-9A-Fa-f]{1,4}:[0-9A-Fa-f]{1,4}|(?:(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))|(?:(?:[0-9A-Fa-f]{1,4}:){,4}[0-9A-Fa-f]{1,4})?::(?:[0-9A-Fa-f]{1,4}:[0-9A-Fa-f]{1,4}|(?:(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))|(?:(?:[0-9A-Fa-f]{1,4}:){,5}[0-9A-Fa-f]{1,4})?::[0-9A-Fa-f]{1,4}|(?:(?:[0-9A-Fa-f]{1,4}:){,6}[0-9A-Fa-f]{1,4})?::)')
 
-b_d_regex = re.compile(r'(localhost|[a-z0-9.\-]+(?:[.][a-z]{2,4})?)')
-
-f_d_regex = re.compile(r'from(?:\s+(localhost|[a-z0-9\-]+|[a-z0-9.\-]+' +
-                       r'[.][a-z]{2,4}))?\s+(?:\(?(localhost|[a-z0-9.\-]+[.][a-z]{2,4})' +
-                       r'?\s*\[(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\]\)?)?')
-
-for_d_regex = re.compile(r'for\s+<?([a-z0-9.\-]+@[a-z0-9.\-]+[.][a-z]{2,4})>?')
-
-# note: depending on the text this regex blocks in an infinite loop !
-url_regex = re.compile(r'''(?i)\b((?:(hxxps?|https?|ftps?)://|www\d{0,3}[.]|[a-z:0-9.\-]+[.]' +
-                       r'[a-z]{2,4}/)(?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))*\))+' +
-                       r'(?:\(([^\s()<>]+|(\([^\s()<>]+\)))*\)|[^\s`!()\[\]{};:'".,<>?]))''',
-                       re.VERBOSE | re.MULTILINE)
-
 # simple version for searching for URLs
 # character set based on http://tools.ietf.org/html/rfc3986
 # url_regex_simple = re.compile(r'''(?i)\b((?:(hxxps?|https?|ftps?)://)[^ ]+)''', re.VERBOSE | re.MULTILINE)
 url_regex_simple = re.compile(r'''(([a-z]{3,}s?:\/\/)[a-z0-9\-_:]+(\.[a-z0-9\-_]+)*''' +
                               r'''(\/[a-z0-9_\-\.~!*'();:@&=+$,\/  ?%#\[\]]*)?)''',
                               re.VERBOSE | re.MULTILINE | re.I)
-
-# encoded string =?<encoding>?[QB]?<string>?=
-re_encoded_string = re.compile(r'\=\?[^?]+\?[QB]\?[^?]+?\?\=', (re.X | re.M | re.I))
-
-re_quoted_string = re.compile(r'''(                               # Group around entire regex to include it in matches
-                                   \=\?[^?]+\?([QB])\?[^?]+?\?\=  # Quoted String with subgroup for encoding method
-                                   |                              # or
-                                   .+?(?=\=\?|$)                  # Plain String
-                                  )''', (re.X | re.M | re.I))
-
-re_q_value = re.compile(r'\=\?(.+)?\?[Qq]\?(.+)?\?\=')
-re_b_value = re.compile(r'\=\?(.+)?\?[Bb]\?(.+)?\?\=')
 
 priv_ip_regex = re.compile(r"^(((10(\.\d{1,3}){3})|(192\.168(\.\d{1,3}){2})|(172\.(([1][6-9])|([2]\d)|([3][0-1]))(\.\d{1,3}){2}))|(127(\.\d{1,3}){3})|(::1))")
 
@@ -139,13 +105,13 @@ def get_raw_body_text(msg):
 
         try:
             # See #39
-            filename = force_string_decode(msg.get_filename('').lower())
+            filename = eml_parser.decode.force_string_decode(msg.get_filename('').lower())
         except UnicodeEncodeError:
-            filename = force_string_decode(msg.get_filename('').encode('utf-8').lower())
+            filename = eml_parser.decode.force_string_decode(msg.get_filename('').encode('utf-8').lower())
 
         if ('content-disposition' not in msg and msg.get_content_maintype() == 'text') \
-           or (filename.endswith('.html') or
-           filename.endswith('.htm')):
+            or (filename.endswith('.html') or \
+            filename.endswith('.htm')):
             encoding = msg.get('content-transfer-encoding', '').lower()
 
             charset = msg.get_content_charset()
@@ -154,7 +120,7 @@ def get_raw_body_text(msg):
             else:
                 try:
                     raw_body_str = msg.get_payload(decode=True).decode(charset, 'ignore')
-                except:
+                except Exception:
                     raw_body_str = msg.get_payload(decode=True).decode('ascii', 'ignore')
 
             raw_body.append((encoding, raw_body_str, msg.items()))
@@ -175,7 +141,7 @@ def get_file_extension(filename):
         dot_idx = filename.rfind('.')
     except UnicodeDecodeError:
         # Keep as exception since it match less than 1% of mails.
-        dot_idx = force_string_decode(filename).rfind('.')
+        dot_idx = eml_parser.decode.force_string_decode(filename).rfind('.')
 
     if dot_idx != -1:
         extension = filename[dot_idx + 1:]
@@ -222,31 +188,6 @@ def wrap_hash_sha256(string):
     return hashlib.sha256(_string).hexdigest()
 
 
-def ascii_decode(string):
-    """Ascii Decode a given string; useful with dirty headers.
-
-    Args:
-      string (str): The string to be converted.
-
-    Returns:
-      str: Returns the decoded string.
-    """
-
-    if sys.version_info >= (3, 0) and isinstance(string, email.header.Header):
-        return str(string)
-
-    try:
-        if sys.version_info >= (3, 0):
-            return string.decode('latin-1')
-        else:
-            return string.decode('latin-1').encode('utf-8')
-    except:
-        if sys.version_info >= (3, 0):
-            return string
-        else:
-            return string.encode('utf-8', 'replace')
-
-
 def traverse_multipart(msg, counter=0, include_attachment_data=False):
     attachments = {}
 
@@ -270,18 +211,18 @@ def traverse_multipart(msg, counter=0, include_attachment_data=False):
             if filename == '':
                 filename = 'part-{0:03d}'.format(counter)
             else:
-                filename = decode_field(filename)
+                filename = eml_parser.decode.decode_field(filename)
 
             extension = get_file_extension(filename)
             hash_ = get_file_hash(data)
 
             file_id = str(uuid.uuid1())
             attachments[file_id] = {}
-            attachments[file_id]['filename'] = ascii_decode(filename)
+            attachments[file_id]['filename'] = eml_parser.decode.ascii_decode(filename)
             attachments[file_id]['size'] = file_size
 
             if extension:
-                attachments[file_id]['extension'] = ascii_decode(extension)
+                attachments[file_id]['extension'] = eml_parser.decode.ascii_decode(extension)
             attachments[file_id]['hash'] = hash_
 
             if magic:
@@ -302,204 +243,17 @@ def traverse_multipart(msg, counter=0, include_attachment_data=False):
 
             ch = {}
             for k, v in msg.items():
-                k = ascii_decode(k.lower())
+                k = eml_parser.decode.ascii_decode(k.lower())
                 if k in ch:
                     # print "%s<<<>>>%s" % (k, v)
-                    ch[k].append(ascii_decode(v))
+                    ch[k].append(eml_parser.decode.ascii_decode(v))
                 else:
-                    ch[k] = [ascii_decode(v)]
+                    ch[k] = [eml_parser.decode.ascii_decode(v)]
 
             attachments[file_id]['content_header'] = ch
 
             counter += 1
     return attachments
-
-
-def force_string_decode(string):
-    """Force the decoding of a string.
-    It tries latin1 then utf-8, it stop of first win
-    It also convert None to empty string
-
-    #TODO this function should be merged with decode_field in order to simpilfy
-
-    Args:
-        string(str): Encoded string
-    Returns
-        str: Decoded string
-    """
-    if sys.version_info >= (3, 0) and isinstance(string, str):
-        return string
-
-    if string is None:
-        return ''
-
-    encodings = ('latin1', 'utf-8')
-    text = ''
-
-    for e in encodings:
-        try:
-            test = string.decode(e)
-            text = test
-            break
-        except UnicodeDecodeError:
-            pass
-
-    if text == '':
-        text = string.decode('ascii', 'ignore')
-
-    return text
-
-
-def decode_field(field):
-    """Try to get the specified field using the Header module.
-     If there is also an associated encoding, try to decode the
-     field and return it, else return a specified default value.
-
-     Args:
-        field (str): String to decode
-
-     Returns
-        str: Clean encoded strings
-     """
-
-    text = field
-
-    try:
-        Header = email.Header
-    except AttributeError:
-        # Python3 support
-        Header = email.header
-
-    try:
-        _decoded = Header.decode_header(field)
-        _text, charset = _decoded[0]
-    except (email.errors.HeaderParseError, UnicodeEncodeError):
-        _text, charset = None, None
-
-    if charset:
-        try:
-            text = decode_string(_text, charset)
-        except UnicodeDecodeError:
-            pass
-
-    try:
-        text = decode_value(text)
-    except UnicodeDecodeError:
-        text = decode_string(text, 'latin-1')
-
-    return text
-
-
-def decode_string(string, encoding):
-    try:
-        value = string.decode(encoding)
-    except (UnicodeDecodeError, LookupError):
-        if chardet:
-            enc = chardet.detect(string)
-            try:
-                if not (enc['confidence'] == 1 and enc['encoding'] == 'ascii'):
-                    value = string.decode(enc['encoding'])
-                else:
-                    value = string.decode('ascii', 'ignore')
-            except UnicodeDecodeError:
-                value = force_string_decode(string)
-
-    return value
-
-
-def q_value_decode(string):
-    m = re_q_value.match(string)
-    if m:
-        encoding, e_string = m.groups()
-        if encoding.lower() != 'unknown':
-            d_string = quopri.decodestring(e_string).decode(encoding, 'ignore')
-        else:
-            d_string = e_string.decode('utf-8', 'ignore')
-    else:
-        d_string = e_string.decode('utf-8', 'ignore')
-    return d_string
-
-
-def b_value_decode(string):
-    m = re_b_value.match(string)
-    if m:
-        encoding, e_string = m.groups()
-        d_string = base64.b64decode(e_string).decode(encoding, 'ignore')
-    else:
-        d_string = e_string.decode('utf-8', 'ignore')
-
-    return d_string
-
-
-def splitonqp(string):
-    """Split a line on "=?" and "?=" and return an list for quoted style strings
-
-    Args:
-        string(str): String to split
-    Returns
-        list: list of strings splitted by quoted space
-    """
-    start = 0
-    outstr = []
-    delims = ["=?", "?="]
-    toggle = 0
-    delim = delims[toggle]
-    for pointer in range(len(string) - 1):
-        if (pointer + 2) > (len(string) - 1):
-            # bounds check
-            break
-
-        if string[pointer:pointer + 2] == delim:
-            toggle = (toggle + 1) % 2  # Switch betwen separators
-            delim = delims[toggle]
-            pointer += 2
-            if (string[start - 2:start] == "=?") and (string[pointer - 2:pointer] == "?="):
-                # Borne par quoted print headers
-                outstr.append(string[start - 2:pointer])
-            else:
-                outstr.append(string[start:pointer - 2])
-            start = pointer
-
-    if start != pointer:
-        outstr.append(string[start:len(string)])
-    return (outstr)
-
-
-def decode_value(string):
-    """Decodes a given string as Base64 or Quoted Printable, depending on what
-    type it is.     String has to be of the format =?<encoding>?[QB]?<string>?=
-
-    Args:
-        string(str): Line to decode , mais contains multiple quoted printable
-    Returns
-        str: Decode string
-    """
-    # Optimization: If there's no encoded-words in the string, just return it
-    if "=?" not in string:
-        return string
-
-    # First, remove any CRLF, CR
-    input_str = string.replace('\r', '').replace('\n', '')
-    string_ = ""
-    for subset in splitonqp(input_str):
-        if '=?' in subset:
-            _line = ""
-            # Search for occurences of quoted strings or plain strings
-            for m in re_quoted_string.finditer(subset):
-                match_s, method = m.groups()
-                if '=?' in match_s:
-                    if not method:
-                        # if the encoding is not q or b we just drop the line as is
-                        # Bad encoding not q or b... just drop the line as is
-                        continue
-                    elif method.lower() == 'q':
-                        subset = q_value_decode(match_s)
-                        subset = subset.replace('_', ' ')
-                    elif method.lower() == 'b':
-                        subset = b_value_decode(match_s)
-                        subset = subset.replace('_', ' ')
-        string_ += subset
-    return string_
 
 
 def decode_email(eml_file, include_raw_body=False, include_attachment_data=False, pconf=False):
@@ -618,10 +372,11 @@ def robust_string2date(line):
 
     if date_.tzname() is None:
         date_ = date_.replace(tzinfo=dateutil.tz.tzutc())
-        return date_
     else:
         # If date field is absent...
-        return dateutil.parser.parse(default_date)
+        date_ = dateutil.parser.parse(default_date)
+
+    return date_
 
 
 def parserouting(line):
@@ -703,7 +458,7 @@ def parserouting(line):
     for item in borders:
         try:
             out[item.strip()] = cleanline(reparseg.group(item.strip()))
-        except:
+        except Exception:
             pass
     out['date'] = robust_string2date(npdate)
 
@@ -778,7 +533,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
 
     # parse and decode subject
     subject = msg.get('subject', '')
-    headers_struc['subject'] = ascii_decode(decode_field(subject))
+    headers_struc['subject'] = eml_parser.decode.ascii_decode(eml_parser.decode.decode_field(subject))
 
     # If parsing had problem... report it...
     if msg.defects:
@@ -795,10 +550,10 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
 
     m = email_regex.search(msg_header_field)
     if m:
-        headers_struc['from'] = ascii_decode(m.group(1))
+        headers_struc['from'] = eml_parser.decode.ascii_decode(m.group(1))
     else:
         from_ = email.utils.parseaddr(msg.get('from', '').lower())
-        headers_struc['from'] = ascii_decode(from_[1])
+        headers_struc['from'] = eml_parser.decode.ascii_decode(from_[1])
 
     # parse and decode to
     headers_struc['to'] = headeremail2list(msg, 'to')
@@ -834,7 +589,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
             try:
                 l = re.sub(r'(\r|\n|\s|\t)+', ' ', l.lower(), flags=re.UNICODE)
             except UnicodeDecodeError:
-                l = re.sub(r'(\r|\n|\s|\t)+', ' ', decode_string(l.lower()), flags=re.UNICODE)
+                l = re.sub(r'(\r|\n|\s|\t)+', ' ', eml_parser.decode.decode_string(l.lower(), None), flags=re.UNICODE)
             # Parse and split routing headers.
             # Return dict of array
             #   date string
@@ -927,13 +682,13 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
         headers_struc.pop('received_email')
     if 'received_foremail' in headers_struc:
         if not headers_struc['received_foremail']:
-            del(headers_struc['received_foremail'])
+            del headers_struc['received_foremail']
         else:
             headers_struc['received_foremail'] = list(set(headers_struc['received_foremail']))
     if not headers_struc['received_domain']:
-        del(headers_struc['received_domain'])
+        del headers_struc['received_domain']
     if not headers_struc['received_ip']:
-        del(headers_struc['received_ip'])
+        del headers_struc['received_ip']
 
     # Parse TEXT BODYS
     # get raw header
@@ -1048,20 +803,20 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
         ch = {}
         for k, v in body_multhead:
             # We are using replace . to : for avoiding issue in mongo
-            k = ascii_decode(k.lower()).replace('.', ':')  # Lot of lowers, precompute :) .
+            k = eml_parser.decode.ascii_decode(k.lower()).replace('.', ':')  # Lot of lowers, precompute :) .
             # print v
             if multipart:
                 if k in ch:
-                    ch[k].append(ascii_decode(v))
+                    ch[k].append(eml_parser.decode.ascii_decode(v))
                 else:
-                    ch[k] = [ascii_decode(v)]
+                    ch[k] = [eml_parser.decode.ascii_decode(v)]
             else:  # if not multipart, store only content-xx related header with part
                 if k.startswith('content'):  # otherwise, we got all header headers
-                    k = ascii_decode(k.lower()).replace('.', ':')
+                    k = eml_parser.decode.ascii_decode(k.lower()).replace('.', ':')
                     if k in ch:
-                        ch[k].append(ascii_decode(v))
+                        ch[k].append(eml_parser.decode.ascii_decode(v))
                     else:
-                        ch[k] = [ascii_decode(v)]
+                        ch[k] = [eml_parser.decode.ascii_decode(v)]
         bodie['content_header'] = ch  # Store content headers dict
 
         if include_raw_body:
@@ -1080,12 +835,12 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
                 bodie['content_type'] = val.split(';')[0].strip()
             except UnicodeDecodeError:
                 # Keep as exception since it match less than 1% of mails.
-                bodie['content_type'] = force_string_decode(val).split(';')[0].strip()
+                bodie['content_type'] = eml_parser.decode.force_string_decode(val).split(';')[0].strip()
 
         # Try hashing.. with failback for incorrect encoding (non ascii)
         try:
             bodie['hash'] = hashlib.sha256(body).hexdigest()
-        except:
+        except Exception:
             bodie['hash'] = hashlib.sha256(body.encode('UTF-8')).hexdigest()
 
         uid = str(uuid.uuid1())
@@ -1100,11 +855,11 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
     #
     for k, v in msg.items():
         # We are using replace . to : for avoiding issue in mongo
-        k = ascii_decode(k.lower()).replace('.', ':')  # Lot of lower, precompute...
+        k = eml_parser.decode.ascii_decode(k.lower()).replace('.', ':')  # Lot of lower, precompute...
         if k in header:
-            header[k].append(ascii_decode(v))
+            header[k].append(eml_parser.decode.ascii_decode(v))
         else:
-            header[k] = [ascii_decode(v)]
+            header[k] = [eml_parser.decode.ascii_decode(v)]
     headers_struc['header'] = header
 
     # parse attachments
@@ -1114,7 +869,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
     # Mandatory to search efficiently in mongodb
     # See Bug 11 of eml_parser
     if not report_struc['attachment']:
-        del(report_struc['attachment'])
+        del report_struc['attachment']
     else:
         newattach = []
         for attachment in report_struc['attachment']:
