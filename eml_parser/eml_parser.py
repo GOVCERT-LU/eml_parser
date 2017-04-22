@@ -257,6 +257,27 @@ def traverse_multipart(msg, counter=0, include_attachment_data=False):
 
 
 def decode_email(eml_file, include_raw_body=False, include_attachment_data=False, pconf=False):
+    """Function for decoding an EML file into an easily parsable structure.
+    Some intelligence is applied while parsing the file in order to work around
+    broken files.
+    Besides just parsing, this function also computes hashes and extracts meta
+    information from the source file.
+
+    Args:
+      eml_file (str): Full absolute path to the file to be parsed.
+      include_raw_body (bool, optional): Boolean paramter which indicates whether
+                                         to include the original file contents in
+                                         the returned structure. Default is False.
+      include_attachment_data (bool, optional): Boolean paramter which indicates whether
+                                                to include raw attachment data in the
+                                                returned structure. Default is False.
+      pconf (dict, optional): A dict with various optinal configuration parameters,
+                              e.g. whitelist IPs, whitelist e-mail addresses, etc.
+
+    Returns:
+      dict: A dictionary with the content of the EML parsed and broken down into
+            key-value pairs.
+    """
     with open(eml_file, 'rb') as fp:
         if sys.version_info >= (3, 0):
             # pylint-python2 should not complain here
@@ -268,12 +289,40 @@ def decode_email(eml_file, include_raw_body=False, include_attachment_data=False
 
 
 def decode_email_s(eml_file, include_raw_body=False, include_attachment_data=False, pconf=False):
+    """Function for decoding an EML file into an easily parsable structure.
+    Some intelligence is applied while parsing the file in order to work around
+    broken files.
+    Besides just parsing, this function also computes hashes and extracts meta
+    information from the source file.
+
+    Args:
+        eml_file (str): Contents of the raw EML file passed to this function as string.
+        include_raw_body (bool, optional): Boolean paramter which indicates whether
+                                           to include the original file contents in
+                                           the returned structure. Default is False.
+        include_attachment_data (bool, optional): Boolean paramter which indicates whether
+                                                  to include raw attachment data in the
+                                                  returned structure. Default is False.
+        pconf (dict, optional): A dict with various optinal configuration parameters,
+                                e.g. whitelist IPs, whitelist e-mail addresses, etc.
+
+    Returns:
+        dict: A dictionary with the content of the EML parsed and broken down into
+              key-value pairs.
+    """
     msg = email.message_from_string(eml_file)
     return parse_email(msg, include_raw_body, include_attachment_data, pconf)
 
 
-# Regex extract uri from data, return list
 def get_uri_ondata(body):
+    """Function for extracting URLs from the input string.
+
+    Args:
+        body (str): Text input which should be searched for URLs.
+
+    Returns:
+        list: Returns a list of URLs found in the input string.
+    """
     list_observed_urls = []
     found_url = []
     for match in url_regex_simple.findall(body):
@@ -304,11 +353,14 @@ def headeremail2list(mail, header):
 # -> 00000b70  61 6c 20 32 39 b0 20 6c  75 67 6c 69 6f 20 32 30  |al 29. luglio 20|
 # Should crash on "B0".
 def findall(pat, data):
-    """
-    Iterators that find a pattern
+    """Iterator that give all position of a given pattern (no regex).
+
     Args:
         pat (str): Pattern to seek
         data (str): buffer
+
+    Yields:
+        int: Yields the next position
     """
     if sys.version_info >= (3, 0):
         _pat = pat
@@ -321,15 +373,26 @@ def findall(pat, data):
         i = data.find(_pat, i + 1)
 
 
-# Remove nested parenthesis, until they're are present
 def noparenthesis(line):
+    """Remove nested parenthesis, until none are present.
+
+    Args:
+        line (str): Input text to search in for parenthesis.
+
+
+    Returns:
+        str: Return a string with all paranthesis removed.
+    """
     idem = False
+    line_ = line
+
     while not idem:
-        lline = line
-        line = re.sub(no_par, '', line)
-        if lline == line:
+        lline = line_
+        line_ = re.sub(no_par, '', line_)
+        if lline == line_:
             idem = True
-    return line
+
+    return line_
 
 
 def getkey(item):
