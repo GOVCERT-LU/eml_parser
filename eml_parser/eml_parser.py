@@ -443,6 +443,10 @@ def splitonqp(string):
     toggle= 0
     delim = delims[toggle]
     for pointer in range(len(string) - 1):
+        if (pointer + 2) > (len(string) - 1):
+            # bounds check
+            break
+
         if string[pointer:pointer + 2] == delim:
             toggle = (toggle + 1) % 2  # Switch betwen separators
             delim = delims[toggle]
