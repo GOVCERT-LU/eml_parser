@@ -485,7 +485,7 @@ def decode_value(string):
                     if not method:
                         # if the encoding is not q or b we just drop the line as is
                         # Bad encoding not q or b... just drop the line as is
-                        pass
+                        continue
                     elif method.lower() == 'q':
                         subset = q_value_decode(match_s)
                         subset = subset.replace('_', ' ')
