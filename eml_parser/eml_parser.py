@@ -468,7 +468,7 @@ def decode_value(string):
     Returns
         str: Decode string
     """
-    # Optimization: If there's no encoded-words in the stringing, just return it
+    # Optimization: If there's no encoded-words in the string, just return it
     if "=?" not in string:
         return string
 
@@ -478,7 +478,7 @@ def decode_value(string):
     for subset in splitonqp(input_str):
         if '=?' in subset:
             _line = ""
-            # Search for occurences of quoted stringings or plain stringings
+            # Search for occurences of quoted strings or plain strings
             for m in re_quoted_string.finditer(subset):
                 match_s, method = m.groups()
                 if '=?' in match_s:
