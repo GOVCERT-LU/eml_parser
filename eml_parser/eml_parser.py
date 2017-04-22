@@ -472,10 +472,10 @@ def decode_value(string):
     if "=?" not in string:
         return string
 
-    # First, convert CRLF to CR
-    string = "".join(string.replace('\r', '').split('\n'))
+    # First, remove any CRLF, CR
+    input_str = string.replace('\r', '').replace('\n', '')
     string_ = ""
-    for subset in splitonqp(string):
+    for subset in splitonqp(input_str):
         if '=?' in subset:
             _line = ""
             # Search for occurences of quoted stringings or plain stringings
