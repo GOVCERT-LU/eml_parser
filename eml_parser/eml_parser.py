@@ -453,7 +453,7 @@ def splitonqp(string):
             pointer += 2
             if (string[start - 2:start] == "=?") and (string[pointer - 2:pointer] == "?="):
                 # Borne par quoted print headers
-                outstr.append(string[start -2:pointer])
+                outstr.append(string[start - 2:pointer])
             else:
                 outstr.append(string[start:pointer - 2])
             start = pointer
