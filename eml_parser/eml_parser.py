@@ -327,6 +327,8 @@ def force_string_decode(string):
     Returns
         str: Decoded string
     """
+    if sys.version_info >= (3, 0) and isinstance(string, str):
+        return string
 
     if string is None:
         return ''
