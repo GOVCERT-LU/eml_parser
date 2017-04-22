@@ -259,6 +259,8 @@ def traverse_multipart(msg, counter=0, include_attachment_data=False):
 def decode_email(eml_file, include_raw_body=False, include_attachment_data=False, pconf=False):
     with open(eml_file, 'rb') as fp:
         if sys.version_info >= (3, 0):
+            # pylint-python2 should not complain here
+            # pylint: disable=no-member
             msg = email.message_from_binary_file(fp)
         else:
             msg = email.message_from_file(fp)
