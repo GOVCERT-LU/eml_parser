@@ -59,7 +59,6 @@ re_q_value = re.compile(r'\=\?(.+)?\?[Qq]\?(.+)?\?\=')
 re_b_value = re.compile(r'\=\?(.+)?\?[Bb]\?(.+)?\?\=')
 
 
-
 def ascii_decode(string):
     """Ascii Decode a given string; useful with dirty headers.
 
@@ -255,7 +254,6 @@ def decode_value(string):
     string_ = ""
     for subset in splitonqp(input_str):
         if '=?' in subset:
-            _line = ""
             # Search for occurences of quoted strings or plain strings
             for m in re_quoted_string.finditer(subset):
                 match_s, method = m.groups()
