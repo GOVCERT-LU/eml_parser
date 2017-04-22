@@ -442,7 +442,7 @@ def splitonqp(string):
     start = 0
     outstr = []
     delims = ["=?", "?="]
-    toggle= 0
+    toggle = 0
     delim = delims[toggle]
     for pointer in range(len(string) - 1):
         if (pointer + 2) > (len(string) - 1):
