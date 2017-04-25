@@ -314,6 +314,35 @@ def decode_email_s(eml_file, include_raw_body=False, include_attachment_data=Fal
     return parse_email(msg, include_raw_body, include_attachment_data, pconf)
 
 
+def decode_email_b(eml_file, include_raw_body=False, include_attachment_data=False, pconf=False):
+    """Function for decoding an EML file into an easily parsable structure.
+    Some intelligence is applied while parsing the file in order to work around
+    broken files.
+    Besides just parsing, this function also computes hashes and extracts meta
+    information from the source file.
+
+    Args:
+        eml_file (bytes): Contents of the raw EML file passed to this function as string.
+        include_raw_body (bool, optional): Boolean paramter which indicates whether
+                                           to include the original file contents in
+                                           the returned structure. Default is False.
+        include_attachment_data (bool, optional): Boolean paramter which indicates whether
+                                                  to include raw attachment data in the
+                                                  returned structure. Default is False.
+        pconf (dict, optional): A dict with various optinal configuration parameters,
+                                e.g. whitelist IPs, whitelist e-mail addresses, etc.
+
+    Returns:
+        dict: A dictionary with the content of the EML parsed and broken down into
+              key-value pairs.
+    """
+    if sys.version_info < (3, 0):
+        raise NotImplementedError('This function only works with Python3!')
+
+    msg = email.message_from_bytes(eml_file)
+    return parse_email(msg, include_raw_body, include_attachment_data, pconf)
+
+
 def get_uri_ondata(body):
     """Function for extracting URLs from the input string.
 
