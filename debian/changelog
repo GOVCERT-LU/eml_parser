@@ -1,5 +1,0 @@
-eml-parser (0.5-1) unstable; urgency=low
-
-  * initial debian package
-
- -- Georges Toth <georges@trypill.org>  Sun, 23 Jun 2013 23:28:10 +0200
