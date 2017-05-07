@@ -680,6 +680,9 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
         found_smtpin = collections.Counter()  # Array for storing potential duplicate "HOP"
 
         for l in msg.get_all('received', []):
+            if sys.version_info >= (3, 0):
+                l = str(l)
+
             try:
                 l = re.sub(r'(\r|\n|\s|\t)+', ' ', l.lower(), flags=re.UNICODE)
             except UnicodeDecodeError:
