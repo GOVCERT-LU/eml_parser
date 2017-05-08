@@ -667,8 +667,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
         headers_struc['date'] = robust_string2date(msg.get('date'))
     else:
         # If date field is absent...
-        headers_struc['date'] = dateutil.parser.parse('1970-01-01 00:00:00 +0000')
-    headers_struc['parse_date'] = datetime.datetime.utcnow()
+        headers_struc['date'] = dateutil.parser.parse('1970-01-01T00:00:00+0000')
 
     # mail receiver path / parse any domain, e-mail
     # @TODO parse case where domain is specified but in parantheses only an IP
