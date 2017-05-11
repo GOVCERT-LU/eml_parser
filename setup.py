@@ -2,9 +2,7 @@
 import os.path
 from setuptools import setup
 
-VERSION = (1, 2)
-__version__ = VERSION
-__versionstr__ = '.'.join(map(str, VERSION))
+__version__ = '1.2'
 
 
 f = open(os.path.join(os.path.dirname(__file__), 'README.rst'))
@@ -18,11 +16,13 @@ install_requires = ['python-dateutil',
 
 setup(name='eml_parser',
       description='Python EML parser library',
-      license = 'AGPLv3+',
+      license='AGPLv3+',
       long_description=long_description,
-      version=__versionstr__,
+      version=__version__,
       author='Georges Toth',
       author_email='georges.toth@govcert.etat.lu',
+      url='https://github.com/GOVCERT-LU/eml_parser',
+      keywords='email',
       packages=['eml_parser'],
       classifiers=['Development Status :: 5 - Production/Stable',
                    'License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)',
@@ -31,6 +31,7 @@ setup(name='eml_parser',
                    'Programming Language :: Python :: 2.7',
                    'Programming Language :: Python :: 3',
                    'Programming Language :: Python :: Implementation :: CPython',
+                   'Topic :: Communications :: Email'
                    ],
       install_requires=install_requires,
       )
