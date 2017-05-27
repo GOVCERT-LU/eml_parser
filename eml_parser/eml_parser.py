@@ -94,7 +94,7 @@ no_par = re.compile(r'\([^()]*\)')
 
 def get_raw_body_text(msg):
     raw_body = []
-    # FIXME comprend pas, si pas multipart pas d'attachement...
+
     if msg.is_multipart():
         for part in msg.get_payload():
             raw_body.extend(get_raw_body_text(part))
@@ -124,6 +124,7 @@ def get_raw_body_text(msg):
                     raw_body_str = msg.get_payload(decode=True).decode('ascii', 'ignore')
 
             raw_body.append((encoding, raw_body_str, msg.items()))
+
     return raw_body
 
 
@@ -786,12 +787,9 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
     if not headers_struc['received_ip']:
         del headers_struc['received_ip']
 
-    # Parse TEXT BODYS
-    # get raw header
-    # FIXME. could not get body from non multipart mail.
-    # needed for mailm0n project.
+    # Parse text body
     raw_body = get_raw_body_text(msg)
-    # include_raw_body = True
+
     if include_raw_body:
         bodys_struc['raw_body'] = raw_body
 
