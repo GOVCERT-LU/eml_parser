@@ -38,6 +38,7 @@ import email
 import re
 import base64
 import quopri
+import typing
 
 try:
     try:
@@ -59,33 +60,7 @@ re_q_value = re.compile(r'\=\?(.+)?\?[Qq]\?(.+)?\?\=')
 re_b_value = re.compile(r'\=\?(.+)?\?[Bb]\?(.+)?\?\=')
 
 
-def ascii_decode(string):
-    """Ascii Decode a given string; useful with dirty headers.
-
-    Args:
-      string (str): The string to be converted.
-
-    Returns:
-      str: Returns the decoded string.
-    """
-    # pylint: disable=no-else-return
-
-    if sys.version_info >= (3, 0) and isinstance(string, email.header.Header):
-        return str(string)
-
-    try:
-        if sys.version_info >= (3, 0):
-            return string.decode('latin-1')
-        else:
-            return string.decode('latin-1').encode('utf-8')
-    except Exception:
-        if sys.version_info >= (3, 0):
-            return string
-        else:
-            return string.encode('utf-8', 'replace')
-
-
-def force_string_decode(string):
+def force_string_decode(string: str) -> str:
     """Force the decoding of a string.
     It tries latin1 then utf-8, it stop of first win
     It also convert None to empty string
@@ -99,6 +74,8 @@ def force_string_decode(string):
     """
     if sys.version_info >= (3, 0) and isinstance(string, str):
         return string
+
+    raise Exception('force_string_decode no string!?!')
 
     if string is None:
         return ''
@@ -120,7 +97,7 @@ def force_string_decode(string):
     return text
 
 
-def decode_field(field):
+def decode_field(field: str) -> str:
     """Try to get the specified field using the Header module.
      If there is also an associated encoding, try to decode the
      field and return it, else return a specified default value.
@@ -131,142 +108,59 @@ def decode_field(field):
      Returns
         str: Clean encoded strings
      """
-
     text = field
 
     try:
-        Header = email.Header
-    except AttributeError:
-        # Python3 support
-        Header = email.header
+        _decoded = email.header.decode_header(field)
+    except email.errors.HeaderParseError:
+        raise Exception('email.errors.HeaderParseError')
+        return field
 
-    try:
-        _decoded = Header.decode_header(field)
-        _text, charset = _decoded[0]
-    except (email.errors.HeaderParseError, UnicodeEncodeError):
-        _text, charset = None, None
+    string = ''
 
-    if charset:
+    for _text, charset in _decoded:
+        if charset:
+            string += decode_string(_text, charset)
+        else:
+            # @TODO might be an idea to check with chardet here
+            if isinstance(_text, bytes):
+                string += _text.decode('utf-8', 'ignore')
+            else:
+                string += _text
+
+    return string
+
+
+def decode_string(string: bytes, encoding: typing.Optional[str]) -> str:
+    if string == b'':
+        return ''
+
+    if encoding is not None:
         try:
-            text = decode_string(_text, charset)
-        except UnicodeDecodeError:
+            return string.decode(encoding)
+        except (UnicodeDecodeError, LookupError):
             pass
 
-    try:
-        text = decode_value(text)
-    except UnicodeDecodeError:
-        text = decode_string(text, 'latin-1')
+    if chardet:
+        enc = chardet.detect(string)
+        if not (enc['confidence'] == 1 and enc['encoding'] == 'ascii'):
+            value = string.decode(enc['encoding'], 'replace')
+        else:
+            value = string.decode('ascii', 'replace')
+    else:
+        text = ''
 
-    return text
-
-
-def decode_string(string, encoding):
-    try:
-        value = string.decode(encoding)
-    except (UnicodeDecodeError, LookupError):
-        if chardet:
-            enc = chardet.detect(string)
+        for e in ('latin1', 'utf-8'):
             try:
-                if not (enc['confidence'] == 1 and enc['encoding'] == 'ascii'):
-                    value = string.decode(enc['encoding'])
-                else:
-                    value = string.decode('ascii', 'ignore')
+                text = string.decode(e)
             except UnicodeDecodeError:
-                value = force_string_decode(string)
+                pass
+            else:
+                break
+
+        if text == '':
+            value = string.decode('ascii', 'ignore')
+        else:
+            value = text
 
     return value
-
-
-def q_value_decode(string):
-    m = re_q_value.match(string)
-    if m:
-        encoding, e_string = m.groups()
-        if encoding.lower() != 'unknown':
-            d_string = quopri.decodestring(e_string).decode(encoding, 'ignore')
-        else:
-            d_string = e_string.decode('utf-8', 'ignore')
-    else:
-        d_string = e_string.decode('utf-8', 'ignore')
-    return d_string
-
-
-def b_value_decode(string):
-    m = re_b_value.match(string)
-    if m:
-        encoding, e_string = m.groups()
-        d_string = base64.b64decode(e_string).decode(encoding, 'ignore')
-    else:
-        d_string = e_string.decode('utf-8', 'ignore')
-
-    return d_string
-
-
-def splitonqp(string):
-    """Split a line on "=?" and "?=" and return an list for quoted style strings
-
-    Args:
-        string(str): String to split
-    Returns
-        list: list of strings splitted by quoted space
-    """
-    start = 0
-    pointer = 0
-    outstr = []
-    delims = ["=?", "?="]
-    toggle = 0
-    delim = delims[toggle]
-    for pointer in range(len(string) - 1):
-        if (pointer + 2) > (len(string) - 1):
-            # bounds check
-            break
-
-        if string[pointer:pointer + 2] == delim:
-            toggle = (toggle + 1) % 2  # Switch betwen separators
-            delim = delims[toggle]
-            pointer += 2
-            if (string[start - 2:start] == "=?") and (string[pointer - 2:pointer] == "?="):
-                # Borne par quoted print headers
-                outstr.append(string[start - 2:pointer])
-            else:
-                outstr.append(string[start:pointer - 2])
-            start = pointer
-
-    if start != pointer:
-        outstr.append(string[start:len(string)])
-    return outstr
-
-
-def decode_value(string):
-    """Decodes a given string as Base64 or Quoted Printable, depending on what
-    type it is.     String has to be of the format =?<encoding>?[QB]?<string>?=
-
-    Args:
-        string(str): Line to decode , mais contains multiple quoted printable
-    Returns
-        str: Decode string
-    """
-    # Optimization: If there's no encoded-words in the string, just return it
-    if "=?" not in string:
-        return string
-
-    # First, remove any CRLF, CR
-    input_str = string.replace('\r', '').replace('\n', '')
-    string_ = ""
-    for subset in splitonqp(input_str):
-        if '=?' in subset:
-            # Search for occurences of quoted strings or plain strings
-            for m in re_quoted_string.finditer(subset):
-                match_s, method = m.groups()
-                if '=?' in match_s:
-                    if not method:
-                        # if the encoding is not q or b we just drop the line as is
-                        # Bad encoding not q or b... just drop the line as is
-                        continue
-                    elif method.lower() == 'q':
-                        subset = q_value_decode(match_s)
-                        subset = subset.replace('_', ' ')
-                    elif method.lower() == 'b':
-                        subset = b_value_decode(match_s)
-                        subset = subset.replace('_', ' ')
-        string_ += subset
-    return string_

@@ -34,7 +34,10 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 #
 
 import sys
+import typing
 import email
+import email.message
+import email.utils
 import re
 import uuid
 import datetime
@@ -46,10 +49,7 @@ import dateutil.tz
 import dateutil.parser
 import eml_parser.decode
 
-try:
-    from urllib.parse import urlparse
-except ImportError:
-    from urlparse import urlparse
+import urllib.parse
 
 try:
     import magic
@@ -92,22 +92,18 @@ no_par = re.compile(r'\([^()]*\)')
 ################################################
 
 
-def get_raw_body_text(msg):
-    raw_body = []
+def get_raw_body_text(msg: email.message.Message) -> typing.List[typing.Tuple[typing.Any, typing.Any, typing.Any]]:
+    raw_body = []  # type: typing.List[typing.Tuple[typing.Any, typing.Any,typing.Any]]
 
     if msg.is_multipart():
-        for part in msg.get_payload():
-            raw_body.extend(get_raw_body_text(part))
+        for part in msg.get_payload():  # type: ignore
+            raw_body.extend(get_raw_body_text(part))  # type: ignore
     else:
         # Treat text document attachments as belonging to the body of the mail.
         # Attachments with a file-extension of .htm/.html are implicitely treated
         # as text as well in order not to escape later checks (e.g. URL scan).
 
-        try:
-            # See #39
-            filename = eml_parser.decode.force_string_decode(msg.get_filename('').lower())
-        except UnicodeEncodeError:
-            filename = eml_parser.decode.force_string_decode(msg.get_filename('').encode('utf-8').lower())
+        filename = eml_parser.decode.force_string_decode(msg.get_filename('').lower())
 
         if ('content-disposition' not in msg and msg.get_content_maintype() == 'text') \
             or (filename.endswith('.html') or \
@@ -128,7 +124,7 @@ def get_raw_body_text(msg):
     return raw_body
 
 
-def get_file_extension(filename):
+def get_file_extension(filename: str) -> str:
     """Return the file extention of a given filename
 
     Args:
@@ -150,7 +146,7 @@ def get_file_extension(filename):
     return extension.lower()
 
 
-def get_file_hash(data):
+def get_file_hash(data: bytes) -> typing.Dict[str, str]:
     """Generate hashes of various types (``MD5``, ``SHA-1``, ``SHA-256``, ``SHA-512``)
     for the provided data.
 
@@ -172,7 +168,7 @@ def get_file_hash(data):
     return hash_
 
 
-def wrap_hash_sha256(string):
+def wrap_hash_sha256(string: str) -> str:
     """Generate a SHA256 hash for a given string.
 
     Args:
@@ -189,7 +185,7 @@ def wrap_hash_sha256(string):
     return hashlib.sha256(_string).hexdigest()
 
 
-def traverse_multipart(msg, counter=0, include_attachment_data=False):
+def traverse_multipart(msg: email.message.Message, counter: int=0, include_attachment_data: bool=False) -> typing.Dict[str, typing.Any]:
     attachments = {}
 
     if magic:
@@ -197,15 +193,15 @@ def traverse_multipart(msg, counter=0, include_attachment_data=False):
         ms.load()
 
     if msg.is_multipart():
-        for part in msg.get_payload():
-            attachments.update(traverse_multipart(part, counter, include_attachment_data))
+        for part in msg.get_payload():  # type: ignore
+            attachments.update(traverse_multipart(part, counter, include_attachment_data))  # type: ignore
     else:
         lower_keys = dict((k.lower(), v) for k, v in msg.items())
 
         if 'content-disposition' in lower_keys or not msg.get_content_maintype() == 'text':
             # if it's an attachment-type, pull out the filename
             # and calculate the size in bytes
-            data = msg.get_payload(decode=True)
+            data = msg.get_payload(decode=True)  # type: bytes  # type is always bytes here
             file_size = len(data)
 
             filename = msg.get_filename('')
@@ -219,11 +215,11 @@ def traverse_multipart(msg, counter=0, include_attachment_data=False):
 
             file_id = str(uuid.uuid1())
             attachments[file_id] = {}
-            attachments[file_id]['filename'] = eml_parser.decode.ascii_decode(filename)
+            attachments[file_id]['filename'] = filename
             attachments[file_id]['size'] = file_size
 
             if extension:
-                attachments[file_id]['extension'] = eml_parser.decode.ascii_decode(extension)
+                attachments[file_id]['extension'] = extension
             attachments[file_id]['hash'] = hash_
 
             if magic:
@@ -242,14 +238,14 @@ def traverse_multipart(msg, counter=0, include_attachment_data=False):
             if include_attachment_data:
                 attachments[file_id]['raw'] = base64.b64encode(data)
 
-            ch = {}
+            ch = {}  # type: typing.Dict[str, typing.List[str]]
             for k, v in msg.items():
-                k = eml_parser.decode.ascii_decode(k.lower())
+                k = k.lower()
                 if k in ch:
                     # print "%s<<<>>>%s" % (k, v)
-                    ch[k].append(eml_parser.decode.ascii_decode(v))
+                    ch[k].append(v)
                 else:
-                    ch[k] = [eml_parser.decode.ascii_decode(v)]
+                    ch[k] = [v]
 
             attachments[file_id]['content_header'] = ch
 
@@ -257,7 +253,7 @@ def traverse_multipart(msg, counter=0, include_attachment_data=False):
     return attachments
 
 
-def decode_email(eml_file, include_raw_body=False, include_attachment_data=False, pconf=False):
+def decode_email(eml_file: str, include_raw_body: bool=False, include_attachment_data: bool=False, pconf: typing.Optional[dict]=None) -> dict:
     """Function for decoding an EML file into an easily parsable structure.
     Some intelligence is applied while parsing the file in order to work around
     broken files.
@@ -289,7 +285,7 @@ def decode_email(eml_file, include_raw_body=False, include_attachment_data=False
     return parse_email(msg, include_raw_body, include_attachment_data, pconf)
 
 
-def decode_email_s(eml_file, include_raw_body=False, include_attachment_data=False, pconf=False):
+def decode_email_s(eml_file: str, include_raw_body: bool=False, include_attachment_data: bool=False, pconf: typing.Optional[dict]=None) -> dict:
     """Function for decoding an EML file into an easily parsable structure.
     Some intelligence is applied while parsing the file in order to work around
     broken files.
@@ -315,7 +311,7 @@ def decode_email_s(eml_file, include_raw_body=False, include_attachment_data=Fal
     return parse_email(msg, include_raw_body, include_attachment_data, pconf)
 
 
-def decode_email_b(eml_file, include_raw_body=False, include_attachment_data=False, pconf=False):
+def decode_email_b(eml_file: bytes, include_raw_body: bool=False, include_attachment_data: bool=False, pconf: typing.Optional[dict]=None) -> dict:
     """Function for decoding an EML file into an easily parsable structure.
     Some intelligence is applied while parsing the file in order to work around
     broken files.
@@ -344,7 +340,7 @@ def decode_email_b(eml_file, include_raw_body=False, include_attachment_data=Fal
     return parse_email(msg, include_raw_body, include_attachment_data, pconf)
 
 
-def get_uri_ondata(body):
+def get_uri_ondata(body: str) -> typing.List[str]:
     """Function for extracting URLs from the input string.
 
     Args:
@@ -353,19 +349,20 @@ def get_uri_ondata(body):
     Returns:
         list: Returns a list of URLs found in the input string.
     """
-    list_observed_urls = []
-    found_url = []
+    list_observed_urls = []  # type: typing.List[str]
+
     for match in url_regex_simple.findall(body):
         found_url = match[0].replace('hxxp', 'http')
-        found_url = urlparse(found_url).geturl()
+        found_url = urllib.parse.urlparse(found_url).geturl()
         # let's try to be smart by stripping of noisy bogus parts
         found_url = re.split(r'''[\', ", \,, \), \}, \\]''', found_url)[0]
         list_observed_urls.append(found_url)
+
     return list_observed_urls
 
 
 # Convert email to a list from a given header field.
-def headeremail2list(mail, header):
+def headeremail2list(mail: email.message.Message, header: str) -> typing.List[str]:
     # parse and decode to
     field = email.utils.getaddresses(mail.get_all(header, []))
     return_field = []
@@ -382,7 +379,7 @@ def headeremail2list(mail, header):
 # may be tested with this byte code:
 # -> 00000b70  61 6c 20 32 39 b0 20 6c  75 67 6c 69 6f 20 32 30  |al 29. luglio 20|
 # Should crash on "B0".
-def findall(pat, data):
+def findall(pat: str, data: str) -> typing.Iterator[int]:
     """Iterator that give all position of a given pattern (no regex).
 
     Args:
@@ -403,7 +400,7 @@ def findall(pat, data):
         i = data.find(_pat, i + 1)
 
 
-def noparenthesis(line):
+def noparenthesis(line: str) -> str:
     """Remove nested parenthesis, until none are present.
 
     Args:
@@ -425,18 +422,18 @@ def noparenthesis(line):
     return line_
 
 
-def getkey(item):
+def getkey(item: typing.List[typing.Any]) -> typing.Any:
     return item[0]
 
 
-def regprep(line):
+def regprep(line: str) -> str:
     for ch in '^$[]()+?.':
         line = re.sub("\\" + ch, '\\\\' + ch, line)
     return line
 
 
 # Remove space and ; from start/end of line until it is not possible.
-def cleanline(line):
+def cleanline(line: str) -> str:
     idem = False
     while not idem:
         lline = line
@@ -447,38 +444,26 @@ def cleanline(line):
     return line
 
 
-def robust_string2date(line):
+def robust_string2date(line: str) -> datetime.datetime:
     # "." -> ":" replacement is for fixing bad clients (e.g. outlook express)
     default_date = '1970-01-01 00:00:00 +0000'
     msg_date = line.replace('.', ':')
-    date_ = email.utils.parsedate_tz(msg_date)
+    date_ = email.utils.parsedate_to_datetime(msg_date)
 
-    if date_ and date_[9] is not None:
-        ts = email.utils.mktime_tz(date_)
-        date_ = datetime.datetime.utcfromtimestamp(ts)
+    if date_ is None:
+        # Now we are facing an invalid date.
+        return dateutil.parser.parse(default_date)
+    elif date_.tzname() is None:
+        return date_.replace(tzinfo=datetime.timezone.utc)
     else:
-        date_ = email.utils.parsedate(msg_date)
-        if date_:
-            ts = calendar.timegm(date_)
-            date_ = datetime.datetime.utcfromtimestamp(ts)
-        else:
-            # Now we are facing an invalid date.
-            date_ = dateutil.parser.parse(default_date)
-
-    if date_.tzname() is None:
-        date_ = date_.replace(tzinfo=dateutil.tz.tzutc())
-    else:
-        # If date field is absent...
-        date_ = dateutil.parser.parse(default_date)
-
-    return date_
+        return date_
 
 
-def parserouting(line):
+def parserouting(line: str) -> typing.Dict[str, typing.Any]:
     #    if re.findall(reg_date, line):
     #        return 'date\n'
     # Preprocess the line to simplify from/by/with/for border detection.
-    out = {}  # Result
+    out = {}  # type: typing.Dict[str, typing.Any]  # Result
     out['src'] = line
     line = line.lower()  # Convert everything to lowercase
     npline = re.sub(r'\)', ' ) ', line)  # nORMALISE sPACE # Re-space () ")by " exists often
@@ -487,25 +472,26 @@ def parserouting(line):
     npline = noparenthesis(npline)  # Remove any "()"
     npline = re.sub('  *', ' ', npline)  # nORMALISE sPACE
     npline = npline.strip('\n')  # Remove any NL
-    npdate = re.findall(reg_date, npline)  # eXTRACT date on end line.
+    raw_find_data = re.findall(reg_date, npline)  # extract date on end line.
 
     # Detect "sticked lines"
     if " received: " in npline:
         out['warning'] = ['Merged Received headers']
         return out
 
-    if npdate:
-        npdate = npdate[0]  # Remove spaces and starting ;
+    if raw_find_data:
+        npdate = raw_find_data[0]  # Remove spaces and starting ;
+        npdate = npdate.lstrip(";")  # Remove Spaces and stating ; from date
+        npdate = npdate.strip()
     else:
         npdate = ""
+
     npline = npline.replace(npdate, "")  # Remove date from input line
     npline = npline.strip(' ')  # Remove any border WhiteSpace
-    npdate = npdate.lstrip(";")  # Remove Spaces and stating ; from date
-    npdate = npdate.strip(" ")
 
     borders = ['from ', 'by ', 'with ', 'for ']
-    candidate = []
-    result = []
+    candidate = []  # type: typing.List[str]
+    result = []  # type: typing.List[typing.Dict[str, typing.Any]]
 
     # Scan the line to determine the order, and presence of each "from/by/with/for" words
     for word in borders:
@@ -528,13 +514,13 @@ def parserouting(line):
     tout = []
     for word in borders:
         result_max = 0xffffffff
-        line_max = {}
+        line_max = {}  # type: typing.Dict[str, typing.Any]
         for eline in result:
             if eline['name_in'] == word and eline['weight'] <= result_max:
                 result_max = eline['weight']
                 line_max = eline
 
-        if len(line_max) is not 0:
+        if len(line_max) > 0:
             tout.append([line_max.get('pos'), line_max.get('name_in')])
 
     tout = sorted(tout, key=getkey)
@@ -542,7 +528,7 @@ def parserouting(line):
     # build rexex.
     reg = ""
     for item in tout:
-        reg = reg + item[1] + "(?P<" + item[1].strip() + ">.*)"
+        reg = reg + item[1] + "(?P<" + item[1].strip() + ">.*)"  # type: ignore
     if npdate:
         reg = reg + regprep(npdate)
 
@@ -550,9 +536,9 @@ def parserouting(line):
     reparseg = reparse.search(line)
 
     # Fill the data
-    for item in borders:
+    for item in borders:  # type: ignore
         try:
-            out[item.strip()] = cleanline(reparseg.group(item.strip()))
+            out[item.strip()] = cleanline(reparseg.group(item.strip()))  # type: ignore
         except Exception:
             pass
     out['date'] = robust_string2date(npdate)
@@ -560,7 +546,7 @@ def parserouting(line):
     # Fixup for "From" in "for" field
     # ie google, do that...
     if out.get('for'):
-        if 'from' in out.get('for'):
+        if 'from' in out.get('for', ''):
             temp = re.split(' from ', out['for'])
             out['for'] = temp[0]
             out['from'] = '{0} {1}'.format(out['from'], " ".join(temp[1:]))
@@ -574,26 +560,26 @@ def parserouting(line):
     # Now.. find IP and Host in from
     if out.get('from'):
         out['from'] = give_dom_ip(out['from'])
-        if len(out.get('from')) < 1:  # if array is empty remove
+        if not out.get('from', []):  # if array is empty remove
             del out['from']
 
     # Now.. find IP and Host in from
     if out.get('by'):
         out['by'] = give_dom_ip(out['by'])
-        if len(out.get('by')) < 1:  # If array is empty remove
+        if not out.get('by', []):  # If array is empty remove
             del out['by']
 
     return out
 
 
-def give_dom_ip(line):
+def give_dom_ip(line: str) -> typing.List[str]:
     m = dom_regex.findall(" " + line) + ipv4_regex.findall(line) + ipv6_regex.findall(line)
     return list(set(m))
 
 
 #  Parse an email an return a structure.
 #
-def parse_email(msg, include_raw_body=False, include_attachment_data=False, pconf=None):
+def parse_email(msg: email.message.Message, include_raw_body: bool=False, include_attachment_data: bool=False, pconf: typing.Optional[dict]=None) -> dict:
     """Parse an e-mail and return a dictionary containing the various parts of
     the e-mail broken down into key-value pairs.
 
@@ -611,10 +597,10 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
       dict: A dictionary with the content of the EML parsed and broken down into
             key-value pairs.
     """
-    header = {}
-    report_struc = {}  # Final structure
-    headers_struc = {}  # header_structure
-    bodys_struc = {}  # body structure
+    header = {}  # type: typing.Dict[str, typing.Any]
+    report_struc = {}  # type: typing.Dict[str, typing.Any]  # Final structure
+    headers_struc = {}  # type: typing.Dict[str, typing.Any]  # header_structure
+    bodys_struc = {}  # type: typing.Dict[str, typing.Any]  # body structure
 
     # If no pconf was specified, default to empty dict
     pconf = pconf or {}
@@ -628,7 +614,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
 
     # parse and decode subject
     subject = msg.get('subject', '')
-    headers_struc['subject'] = eml_parser.decode.ascii_decode(eml_parser.decode.decode_field(subject))
+    headers_struc['subject'] = eml_parser.decode.decode_field(subject)
 
     # If parsing had problem... report it...
     if msg.defects:
@@ -645,10 +631,10 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
 
     m = email_regex.search(msg_header_field)
     if m:
-        headers_struc['from'] = eml_parser.decode.ascii_decode(m.group(1))
+        headers_struc['from'] = m.group(1)
     else:
         from_ = email.utils.parseaddr(msg.get('from', '').lower())
-        headers_struc['from'] = eml_parser.decode.ascii_decode(from_[1])
+        headers_struc['from'] = from_[1]
 
     # parse and decode to
     headers_struc['to'] = headeremail2list(msg, 'to')
@@ -677,16 +663,14 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
     headers_struc['received_domain'] = []
     headers_struc['received_ip'] = []
     try:
-        found_smtpin = collections.Counter()  # Array for storing potential duplicate "HOP"
+        found_smtpin = collections.Counter()  # type: collections.Counter  # Array for storing potential duplicate "HOP"
 
         for l in msg.get_all('received', []):
             if sys.version_info >= (3, 0):
                 l = str(l)
 
-            try:
-                l = re.sub(r'(\r|\n|\s|\t)+', ' ', l.lower(), flags=re.UNICODE)
-            except UnicodeDecodeError:
-                l = re.sub(r'(\r|\n|\s|\t)+', ' ', eml_parser.decode.decode_string(l.lower(), None), flags=re.UNICODE)
+            l = re.sub(r'(\r|\n|\s|\t)+', ' ', l.lower(), flags=re.UNICODE)
+
             # Parse and split routing headers.
             # Return dict of array
             #   date string
@@ -706,7 +690,7 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
 
             if 'byhostentry' in pconf:
                 if current_line.get('by'):
-                    for by_item in current_line.get('by'):
+                    for by_item in current_line.get('by'):  # type: ignore
                         for byhostentry in pconf['byhostentry']:
                             # print ("%s %s" % (byhostentry, by_item))
                             if byhostentry.lower() in by_item:
@@ -736,9 +720,9 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
             # search for domain / e-mail addresses
             for m in recv_dom_regex.findall(l):
                 checks = True
-                if '.' in m:
+                if '.' in m:  # type: ignore  # type of findall is list[str], so this is correct
                     try:
-                        if ipv4_regex.match(m) or m == '127.0.0.1':
+                        if ipv4_regex.match(m) or m == '127.0.0.1':  # type: ignore  # type of findall is list[str], so this is correct
                             checks = False
                     except ValueError:
                         pass
@@ -747,11 +731,11 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
 
             # Extracts emails, but not the ones in the FOR on this received headers line.
             # Process Here line per line not finally to not miss a email not in from
-            m = email_regex.findall(l)
+            m = email_regex.findall(l)  # type: ignore
             if m:
-                for mail_candidate in m:
+                for mail_candidate in m:  # type: ignore  # type of findall is list[str], so this is correct
                     if current_line.get('for'):
-                        if mail_candidate not in current_line.get('for'):
+                        if mail_candidate not in current_line.get('for'):  # type: ignore
                             headers_struc['received_email'] += [mail_candidate]
                     else:
                         headers_struc['received_email'] += [mail_candidate]
@@ -798,13 +782,13 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
     if len(raw_body) == 1:
         multipart = False  # No only "one" Part
     for body_tup in raw_body:
-        bodie = {}
+        bodie = {}  # type: typing.Dict[str, typing.Any]
         encoding, body, body_multhead = body_tup
         # Parse any URLs and mail found in the body
-        list_observed_urls = []
-        list_observed_email = []
-        list_observed_dom = []
-        list_observed_ip = []
+        list_observed_urls = []  # type: typing.List[str]
+        list_observed_email = []  # type: typing.List[str]
+        list_observed_dom = []  # type: typing.List[str]
+        list_observed_ip = []  # type: typing.List[str]
 
         if sys.version_info >= (3, 0) and isinstance(body, (bytearray, bytes)):
             body = body.decode('utf-8', 'ignore')
@@ -894,23 +878,23 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
         # "a","toto"           a: [toto,titi]
         # "a","titi"   --->    c: [truc]
         # "c","truc"
-        ch = {}
+        ch = {}  # type: typing.Dict[str, typing.List]
         for k, v in body_multhead:
             # We are using replace . to : for avoiding issue in mongo
-            k = eml_parser.decode.ascii_decode(k.lower()).replace('.', ':')  # Lot of lowers, precompute :) .
+            k = k.lower().replace('.', ':')  # Lot of lowers, precompute :) .
             # print v
             if multipart:
                 if k in ch:
-                    ch[k].append(eml_parser.decode.ascii_decode(v))
+                    ch[k].append(v)
                 else:
-                    ch[k] = [eml_parser.decode.ascii_decode(v)]
+                    ch[k] = [v]
             else:  # if not multipart, store only content-xx related header with part
                 if k.startswith('content'):  # otherwise, we got all header headers
-                    k = eml_parser.decode.ascii_decode(k.lower()).replace('.', ':')
+                    k = k.lower().replace('.', ':')
                     if k in ch:
-                        ch[k].append(eml_parser.decode.ascii_decode(v))
+                        ch[k].append(v)
                     else:
-                        ch[k] = [eml_parser.decode.ascii_decode(v)]
+                        ch[k] = [v]
         bodie['content_header'] = ch  # Store content headers dict
 
         if include_raw_body:
@@ -920,16 +904,13 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
         # We "display" the "LAST" one .. as do a thunderbird
         val = ch.get('content-type')
         if val:
-            if isinstance(val, list):
-                val = val[-1]
+            header_val = str(val[-1])
 
-            if sys.version_info >= (3, 0):
-                val = str(val)
             try:
-                bodie['content_type'] = val.split(';')[0].strip()
+                bodie['content_type'] = header_val.split(';', 1)[0].strip()
             except UnicodeDecodeError:
                 # Keep as exception since it match less than 1% of mails.
-                bodie['content_type'] = eml_parser.decode.force_string_decode(val).split(';')[0].strip()
+                bodie['content_type'] = eml_parser.decode.force_string_decode(header_val).split(';', 1)[0].strip()
 
         # Try hashing.. with failback for incorrect encoding (non ascii)
         try:
@@ -949,11 +930,18 @@ def parse_email(msg, include_raw_body=False, include_attachment_data=False, pcon
     #
     for k, v in msg.items():
         # We are using replace . to : for avoiding issue in mongo
-        k = eml_parser.decode.ascii_decode(k.lower()).replace('.', ':')  # Lot of lower, precompute...
-        if k in header:
-            header[k].append(eml_parser.decode.ascii_decode(v))
+        k = k.lower().replace('.', ':')  # Lot of lower, precompute...
+
+        if isinstance(v, email.header.Header):
+            value = str(v)
         else:
-            header[k] = [eml_parser.decode.ascii_decode(v)]
+            value = v
+
+        if k in header:
+            header[k].append(value)
+        else:
+            header[k] = [value]
+
     headers_struc['header'] = header
 
     # parse attachments
