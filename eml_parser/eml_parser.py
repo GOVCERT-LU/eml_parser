@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 # pylint: disable=line-too-long
 
-from __future__ import absolute_import, division, print_function, unicode_literals
-
 #
 # Georges Toth (c) 2013-2014 <georges@trypill.org>
 # GOVCERT.LU (c) 2013-2017 <info@govcert.etat.lu>
@@ -34,19 +32,18 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 #
 
 import sys
-import typing
 import email
 import email.message
 import email.utils
 import re
 import uuid
 import datetime
-import calendar
 import base64
 import hashlib
 import collections
 import dateutil.tz
 import dateutil.parser
+import typing
 import eml_parser.decode
 
 import urllib.parse
