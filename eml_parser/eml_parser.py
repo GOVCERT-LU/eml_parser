@@ -41,12 +41,11 @@ import datetime
 import base64
 import hashlib
 import collections
+import urllib.parse
+import typing
 import dateutil.tz
 import dateutil.parser
-import typing
 import eml_parser.decode
-
-import urllib.parse
 
 try:
     import magic
@@ -100,7 +99,7 @@ def get_raw_body_text(msg: email.message.Message) -> typing.List[typing.Tuple[ty
         # Attachments with a file-extension of .htm/.html are implicitely treated
         # as text as well in order not to escape later checks (e.g. URL scan).
 
-        filename = eml_parser.decode.force_string_decode(msg.get_filename('').lower())
+        filename = msg.get_filename('').lower()
 
         if ('content-disposition' not in msg and msg.get_content_maintype() == 'text') \
             or (filename.endswith('.html') or \
@@ -131,11 +130,7 @@ def get_file_extension(filename: str) -> str:
       str: The lower-case file extension
     """
     extension = ''
-    try:
-        dot_idx = filename.rfind('.')
-    except UnicodeDecodeError:
-        # Keep as exception since it match less than 1% of mails.
-        dot_idx = eml_parser.decode.force_string_decode(filename).rfind('.')
+    dot_idx = filename.rfind('.')
 
     if dot_idx != -1:
         extension = filename[dot_idx + 1:]
@@ -182,7 +177,7 @@ def wrap_hash_sha256(string: str) -> str:
     return hashlib.sha256(_string).hexdigest()
 
 
-def traverse_multipart(msg: email.message.Message, counter: int=0, include_attachment_data: bool=False) -> typing.Dict[str, typing.Any]:
+def traverse_multipart(msg: email.message.Message, counter: int = 0, include_attachment_data: bool = False) -> typing.Dict[str, typing.Any]:
     attachments = {}
 
     if magic:
@@ -250,7 +245,7 @@ def traverse_multipart(msg: email.message.Message, counter: int=0, include_attac
     return attachments
 
 
-def decode_email(eml_file: str, include_raw_body: bool=False, include_attachment_data: bool=False, pconf: typing.Optional[dict]=None) -> dict:
+def decode_email(eml_file: str, include_raw_body: bool = False, include_attachment_data: bool = False, pconf: typing.Optional[dict]=None) -> dict:
     """Function for decoding an EML file into an easily parsable structure.
     Some intelligence is applied while parsing the file in order to work around
     broken files.
@@ -282,7 +277,7 @@ def decode_email(eml_file: str, include_raw_body: bool=False, include_attachment
     return parse_email(msg, include_raw_body, include_attachment_data, pconf)
 
 
-def decode_email_s(eml_file: str, include_raw_body: bool=False, include_attachment_data: bool=False, pconf: typing.Optional[dict]=None) -> dict:
+def decode_email_s(eml_file: str, include_raw_body: bool = False, include_attachment_data: bool = False, pconf: typing.Optional[dict]=None) -> dict:
     """Function for decoding an EML file into an easily parsable structure.
     Some intelligence is applied while parsing the file in order to work around
     broken files.
@@ -308,7 +303,7 @@ def decode_email_s(eml_file: str, include_raw_body: bool=False, include_attachme
     return parse_email(msg, include_raw_body, include_attachment_data, pconf)
 
 
-def decode_email_b(eml_file: bytes, include_raw_body: bool=False, include_attachment_data: bool=False, pconf: typing.Optional[dict]=None) -> dict:
+def decode_email_b(eml_file: bytes, include_raw_body: bool = False, include_attachment_data: bool = False, pconf: typing.Optional[dict]=None) -> dict:
     """Function for decoding an EML file into an easily parsable structure.
     Some intelligence is applied while parsing the file in order to work around
     broken files.
@@ -576,7 +571,7 @@ def give_dom_ip(line: str) -> typing.List[str]:
 
 #  Parse an email an return a structure.
 #
-def parse_email(msg: email.message.Message, include_raw_body: bool=False, include_attachment_data: bool=False, pconf: typing.Optional[dict]=None) -> dict:
+def parse_email(msg: email.message.Message, include_raw_body: bool = False, include_attachment_data: bool = False, pconf: typing.Optional[dict]=None) -> dict:
     """Parse an e-mail and return a dictionary containing the various parts of
     the e-mail broken down into key-value pairs.
 
@@ -902,12 +897,7 @@ def parse_email(msg: email.message.Message, include_raw_body: bool=False, includ
         val = ch.get('content-type')
         if val:
             header_val = str(val[-1])
-
-            try:
-                bodie['content_type'] = header_val.split(';', 1)[0].strip()
-            except UnicodeDecodeError:
-                # Keep as exception since it match less than 1% of mails.
-                bodie['content_type'] = eml_parser.decode.force_string_decode(header_val).split(';', 1)[0].strip()
+            bodie['content_type'] = header_val.split(';', 1)[0].strip()
 
         # Try hashing.. with failback for incorrect encoding (non ascii)
         try:

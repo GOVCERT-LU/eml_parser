@@ -33,11 +33,8 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 #    if a mail-server (e.g. exchange) uses an ID which looks like a valid IP
 #
 
-import sys
 import email
 import re
-import base64
-import quopri
 import typing
 
 try:
@@ -60,43 +57,6 @@ re_q_value = re.compile(r'\=\?(.+)?\?[Qq]\?(.+)?\?\=')
 re_b_value = re.compile(r'\=\?(.+)?\?[Bb]\?(.+)?\?\=')
 
 
-def force_string_decode(string: str) -> str:
-    """Force the decoding of a string.
-    It tries latin1 then utf-8, it stop of first win
-    It also convert None to empty string
-
-    #TODO this function should be merged with decode_field in order to simpilfy
-
-    Args:
-        string(str): Encoded string
-    Returns
-        str: Decoded string
-    """
-    if sys.version_info >= (3, 0) and isinstance(string, str):
-        return string
-
-    raise Exception('force_string_decode no string!?!')
-
-    if string is None:
-        return ''
-
-    encodings = ('latin1', 'utf-8')
-    text = ''
-
-    for e in encodings:
-        try:
-            test = string.decode(e)
-            text = test
-            break
-        except UnicodeDecodeError:
-            pass
-
-    if text == '':
-        text = string.decode('ascii', 'ignore')
-
-    return text
-
-
 def decode_field(field: str) -> str:
     """Try to get the specified field using the Header module.
      If there is also an associated encoding, try to decode the
@@ -108,12 +68,9 @@ def decode_field(field: str) -> str:
      Returns
         str: Clean encoded strings
      """
-    text = field
-
     try:
         _decoded = email.header.decode_header(field)
     except email.errors.HeaderParseError:
-        raise Exception('email.errors.HeaderParseError')
         return field
 
     string = ''
