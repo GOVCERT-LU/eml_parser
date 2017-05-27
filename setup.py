@@ -11,7 +11,8 @@ f.close()
 
 install_requires = ['python-dateutil',
                     'file-magic',
-                    'cchardet'
+                    'cchardet',
+                    'typing',
                     ]
 
 setup(name='eml_parser',
