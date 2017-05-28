@@ -6,11 +6,6 @@ pipeline {
     timeout(time: 1, unit: 'HOURS')
   }
 
-  environment {
-    http_proxy = "http://proxy.int.govcert.etat.lu:8080"
-    https_proxy = "http://proxy.int.govcert.etat.lu:8080"
-  }
-
   stages {
     stage('Lint - py34') {
       steps {
