@@ -34,6 +34,7 @@
 import sys
 import email
 import email.message
+import email.policy
 import email.utils
 import re
 import uuid
@@ -169,10 +170,7 @@ def wrap_hash_sha256(string: str) -> str:
     Returns:
         str: Returns the calculated hash as a string.
     """
-    if sys.version_info >= (3, 0):
-        _string = string.encode()
-    else:
-        _string = string
+    _string = string.encode('utf-8')
 
     return hashlib.sha256(_string).hexdigest()
 
@@ -215,17 +213,11 @@ def traverse_multipart(msg: email.message.Message, counter: int = 0, include_att
             attachments[file_id]['hash'] = hash_
 
             if magic:
-                if sys.version_info >= (3, 0):
-                    attachments[file_id]['mime_type'] = ms.buffer(data)
-                else:
-                    attachments[file_id]['mime_type'] = ms.buffer(data).decode('utf-8')
+                attachments[file_id]['mime_type'] = ms.buffer(data)
                 # attachments[file_id]['mime_type_short'] = attachments[file_id]['mime_type'].split(",")[0]
                 ms = magic.open(magic.MAGIC_MIME_TYPE)
                 ms.load()
-                if sys.version_info >= (3, 0):
-                    attachments[file_id]['mime_type_short'] = ms.buffer(data)
-                else:
-                    attachments[file_id]['mime_type_short'] = ms.buffer(data).decode('utf-8')
+                attachments[file_id]['mime_type_short'] = ms.buffer(data)
 
             if include_attachment_data:
                 attachments[file_id]['raw'] = base64.b64encode(data)
@@ -268,12 +260,8 @@ def decode_email(eml_file: str, include_raw_body: bool = False, include_attachme
             key-value pairs.
     """
     with open(eml_file, 'rb') as fp:
-        if sys.version_info >= (3, 0):
-            # pylint-python2 should not complain here
-            # pylint: disable=no-member
-            msg = email.message_from_binary_file(fp)
-        else:
-            msg = email.message_from_file(fp)
+        msg = email.message_from_binary_file(fp, policy=email.policy.default)
+
     return parse_email(msg, include_raw_body, include_attachment_data, pconf)
 
 
@@ -299,7 +287,7 @@ def decode_email_s(eml_file: str, include_raw_body: bool = False, include_attach
         dict: A dictionary with the content of the EML parsed and broken down into
               key-value pairs.
     """
-    msg = email.message_from_string(eml_file)
+    msg = email.message_from_string(eml_file, policy=email.policy.default)
     return parse_email(msg, include_raw_body, include_attachment_data, pconf)
 
 
@@ -325,10 +313,7 @@ def decode_email_b(eml_file: bytes, include_raw_body: bool = False, include_atta
         dict: A dictionary with the content of the EML parsed and broken down into
               key-value pairs.
     """
-    if sys.version_info < (3, 0):
-        raise NotImplementedError('This function only works with Python3!')
-
-    msg = email.message_from_bytes(eml_file)
+    msg = email.message_from_bytes(eml_file, policy=email.policy.default)
     return parse_email(msg, include_raw_body, include_attachment_data, pconf)
 
 
@@ -381,15 +366,10 @@ def findall(pat: str, data: str) -> typing.Iterator[int]:
     Yields:
         int: Yields the next position
     """
-    if sys.version_info >= (3, 0):
-        _pat = pat
-    else:
-        _pat = str(pat)
-
-    i = data.find(_pat)
+    i = data.find(pat)
     while i != -1:
         yield i
-        i = data.find(_pat, i + 1)
+        i = data.find(pat, i + 1)
 
 
 def noparenthesis(line: str) -> str:
@@ -616,10 +596,7 @@ def parse_email(msg: email.message.Message, include_raw_body: bool = False, incl
 
     # parse and decode from
     # @TODO verify if this hack is necessary for other e-mail fields as well
-    if sys.version_info >= (3, 0):
-        msg_header_field = str(msg.get('from', '')).lower()
-    else:
-        msg_header_field = msg.get('from', '').lower()
+    msg_header_field = str(msg.get('from', '')).lower()
 
     m = email_regex.search(msg_header_field)
     if m:
@@ -658,8 +635,7 @@ def parse_email(msg: email.message.Message, include_raw_body: bool = False, incl
         found_smtpin = collections.Counter()  # type: collections.Counter  # Array for storing potential duplicate "HOP"
 
         for l in msg.get_all('received', []):
-            if sys.version_info >= (3, 0):
-                l = str(l)
+            l = str(l)
 
             l = re.sub(r'(\r|\n|\s|\t)+', ' ', l.lower(), flags=re.UNICODE)
 
@@ -918,11 +894,7 @@ def parse_email(msg: email.message.Message, include_raw_body: bool = False, incl
     for k, v in msg.items():
         # We are using replace . to : for avoiding issue in mongo
         k = k.lower().replace('.', ':')  # Lot of lower, precompute...
-
-        if isinstance(v, email.header.Header):
-            value = str(v)
-        else:
-            value = v
+        value = str(v)
 
         if k in header:
             header[k].append(value)
