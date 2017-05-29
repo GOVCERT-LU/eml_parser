@@ -7,9 +7,9 @@ pipeline {
   }
 
   stages {
-    stage('Lint - py34') {
+    stage('Lint') {
       steps {
-        sh "tox -e py34"
+        sh "tox"
       }
     }
 
