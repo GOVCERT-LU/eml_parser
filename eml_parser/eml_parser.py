@@ -476,7 +476,7 @@ def robust_string2date(line: str) -> datetime.datetime:
         line (str): A string which should be parsed.
 
     Returns:
-        datetime.datetime: Returns a datetime.datetime object.  
+        datetime.datetime: Returns a datetime.datetime object.
     """
     # "." -> ":" replacement is for fixing bad clients (e.g. outlook express)
     default_date = '1970-01-01 00:00:00 +0000'
