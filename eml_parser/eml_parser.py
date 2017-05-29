@@ -1,6 +1,10 @@
 # -*- coding: utf-8 -*-
 # pylint: disable=line-too-long
 
+"""eml_parser serves as a python module for parsing eml files and returning various
+information found in the e-mail as well as computed information.
+"""
+
 #
 # Georges Toth (c) 2013-2014 <georges@trypill.org>
 # GOVCERT.LU (c) 2013-2017 <info@govcert.etat.lu>
@@ -89,6 +93,14 @@ no_par = re.compile(r'\([^()]*\)')
 
 
 def get_raw_body_text(msg: email.message.Message) -> typing.List[typing.Tuple[typing.Any, typing.Any, typing.Any]]:
+    """This method recursively retrieves all e-mail body parts and returns them as a list.
+
+    Args:
+        msg (email.message.Message): The actual e-mail message or sub-message.
+
+    Returns:
+        list: Returns a list of sets which are in the form of "set(encoding, raw_body_string, message field headers)"
+    """
     raw_body = []  # type: typing.List[typing.Tuple[typing.Any, typing.Any,typing.Any]]
 
     if msg.is_multipart():
@@ -143,7 +155,7 @@ def get_file_hash(data: bytes) -> typing.Dict[str, str]:
     for the provided data.
 
     Args:
-      data (str): The data to calculate the hashes on.
+      data (bytes): The data to calculate the hashes on.
 
     Returns:
       dict: Returns a dict with as key the hash-type and value the calculated hash.
@@ -175,6 +187,19 @@ def wrap_hash_sha256(string: str) -> str:
 
 
 def traverse_multipart(msg: email.message.Message, counter: int = 0, include_attachment_data: bool = False) -> typing.Dict[str, typing.Any]:
+    """Recursively traverses all e-mail message multi-part elements and returns in a parsed form as a dict.
+
+    Args:
+        msg (email.message.Message): An e-mail message object.
+        counter (int, optional): A counter which is used for generating attachments
+            file-names in case there are none found in the header. Default = 0.
+        include_attachment_data (bool, optional): If true, method includes the raw attachment data when
+            returning. Default = False.
+
+    Returns:
+        dict: Returns a dict with all original multi-part headers as well as generated hash check-sums,
+            date size, file extension, real mime-type.
+    """
     attachments = {}
 
     if magic:
@@ -339,7 +364,15 @@ def get_uri_ondata(body: str) -> typing.List[str]:
 
 # Convert email to a list from a given header field.
 def headeremail2list(mail: email.message.Message, header: str) -> typing.List[str]:
-    # parse and decode to
+    """Parses a given header field with e-mail addresses to a list of e-mail addresses.
+
+    Args:
+        mail (email.message.Message): An e-mail message object.
+        header (str): The header field to decode.
+
+    Returns:
+        list: Returns a list of strings which represent e-mail addresses.
+    """
     field = email.utils.getaddresses(mail.get_all(header, []))
     return_field = []
     for m in field:
@@ -394,6 +427,14 @@ def noparenthesis(line: str) -> str:
 
 
 def getkey(item: typing.List[typing.Any]) -> typing.Any:
+    """Returns the first element of a list.
+
+    Args:
+        item (list): List.
+
+    Returns:
+        object: Returns the first item of any kind of list object.
+    """
     return item[0]
 
 
@@ -403,8 +444,15 @@ def regprep(line: str) -> str:
     return line
 
 
-# Remove space and ; from start/end of line until it is not possible.
 def cleanline(line: str) -> str:
+    """Remove space and ; from start/end of line until it is not possible.
+
+    Args:
+        line (str): Line to clean.
+
+    Returns:
+        str: Cleaned string.
+    """
     idem = False
     while not idem:
         lline = line
@@ -416,6 +464,20 @@ def cleanline(line: str) -> str:
 
 
 def robust_string2date(line: str) -> datetime.datetime:
+    """Parses a date string to a datetime.datetime object using different methods.
+    It is guaranteed to always return a valid datetime.datetime object.
+    If first tries the built-in email module method for parsing the date according
+    to related RFC's.
+    If this fails it returns a datetime.datetime object representing
+    "1970-01-01 00:00:00 +0000".
+    In case there is no timezone information in the parsed date, we set it to UTC.
+
+    Args:
+        line (str): A string which should be parsed.
+
+    Returns:
+        datetime.datetime: Returns a datetime.datetime object.  
+    """
     # "." -> ":" replacement is for fixing bad clients (e.g. outlook express)
     default_date = '1970-01-01 00:00:00 +0000'
     msg_date = line.replace('.', ':')
@@ -431,6 +493,18 @@ def robust_string2date(line: str) -> datetime.datetime:
 
 
 def parserouting(line: str) -> typing.Dict[str, typing.Any]:
+    """This method tries to parsed a e-mail header received line
+    and extract machine readable information.
+    Note that there are a large number of formats for these lines
+    and a lot of weird ones which are not commonly used.
+    We try our best to match a large number of formats.
+
+    Args:
+        line (str): Received line to be parsed.
+
+    Returns:
+        dict: Returns a dict with the extracted information.
+    """
     #    if re.findall(reg_date, line):
     #        return 'date\n'
     # Preprocess the line to simplify from/by/with/for border detection.
@@ -496,12 +570,12 @@ def parserouting(line: str) -> typing.Dict[str, typing.Any]:
 
     tout = sorted(tout, key=getkey)
 
-    # build rexex.
+    # build regex.
     reg = ""
     for item in tout:
-        reg = reg + item[1] + "(?P<" + item[1].strip() + ">.*)"  # type: ignore
+        reg += item[1] + "(?P<" + item[1].strip() + ">.*)"  # type: ignore
     if npdate:
-        reg = reg + regprep(npdate)
+        reg += regprep(npdate)
 
     reparse = re.compile(reg)
     reparseg = reparse.search(line)
@@ -544,12 +618,19 @@ def parserouting(line: str) -> typing.Dict[str, typing.Any]:
 
 
 def give_dom_ip(line: str) -> typing.List[str]:
+    """Method returns all domains, IPv4 and IPv6 addresses found in a given string.
+
+    Args:
+        line (str): String to search in.
+
+    Returns:
+        list: Unique list of strings with matches
+    """
     m = dom_regex.findall(" " + line) + ipv4_regex.findall(line) + ipv6_regex.findall(line)
+
     return list(set(m))
 
 
-#  Parse an email an return a structure.
-#
 def parse_email(msg: email.message.Message, include_raw_body: bool = False, include_attachment_data: bool = False, pconf: typing.Optional[dict]=None) -> dict:
     """Parse an e-mail and return a dictionary containing the various parts of
     the e-mail broken down into key-value pairs.

@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 # pylint: disable=line-too-long
 
-from __future__ import absolute_import, division, print_function, unicode_literals
+"""This module contains various string import, check and parse
+methods.
+"""
 
 #
 # Georges Toth (c) 2013-2014 <georges@trypill.org>
@@ -89,6 +91,19 @@ def decode_field(field: str) -> str:
 
 
 def decode_string(string: bytes, encoding: typing.Optional[str]) -> str:
+    """Try anyhting possible to parse an encoded bytes string and return the result.
+    We do this using the encoding hint, if this fails, we try to detect the correct
+    encoding using the chardet module, if that failed we try latin-1, utf-8 and
+    as a last resort ascii.
+    In any case we always return something.
+
+    Args:
+        string (bytes): The bytes string to be decoded.
+        encoding (str, optional): An optional encoding hint.
+
+    Returns:
+        str: A decoded form of the string.
+    """
     if string == b'':
         return ''
 
