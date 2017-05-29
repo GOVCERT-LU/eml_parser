@@ -44,7 +44,6 @@ import hashlib
 import collections
 import urllib.parse
 import typing
-import dateutil.tz
 import dateutil.parser
 import eml_parser.decode
 
