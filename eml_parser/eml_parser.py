@@ -676,14 +676,21 @@ def parse_email(msg: email.message.Message, include_raw_body: bool = False, incl
 
     # parse and decode from
     # @TODO verify if this hack is necessary for other e-mail fields as well
-    msg_header_field = str(msg.get('from', '')).lower()
-
-    m = email_regex.search(msg_header_field)
-    if m:
-        headers_struc['from'] = m.group(1)
+    try:
+        msg_header_field = str(msg.get('from', '')).lower()
+    except IndexError:
+        # We have hit current open issue #27257
+        # https://bugs.python.org/issue27257
+        # The field will be set to emtpy as a workaround.
+        headers_struc['from'] = ''
+        msg.__delitem__('from')
     else:
-        from_ = email.utils.parseaddr(msg.get('from', '').lower())
-        headers_struc['from'] = from_[1]
+        m = email_regex.search(msg_header_field)
+        if m:
+            headers_struc['from'] = m.group(1)
+        else:
+            from_ = email.utils.parseaddr(msg.get('from', '').lower())
+            headers_struc['from'] = from_[1]
 
     # parse and decode to
     headers_struc['to'] = headeremail2list(msg, 'to')
