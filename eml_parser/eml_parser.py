@@ -338,6 +338,7 @@ def decode_email_b(eml_file: bytes, include_raw_body: bool = False, include_atta
               key-value pairs.
     """
     msg = email.message_from_bytes(eml_file, policy=email.policy.default)
+#    msg = email.message_from_bytes(eml_file, policy=email.policy.compat32)
     return parse_email(msg, include_raw_body, include_attachment_data, pconf)
 
 
@@ -678,13 +679,29 @@ def parse_email(msg: email.message.Message, include_raw_body: bool = False, incl
     # @TODO verify if this hack is necessary for other e-mail fields as well
     try:
         msg_header_field = str(msg.get('from', '')).lower()
-    except IndexError:
+    except (IndexError, AttributeError):
         # We have hit current open issue #27257
         # https://bugs.python.org/issue27257
         # The field will be set to emtpy as a workaround.
-        headers_struc['from'] = ''
+        #
+        # Log warning if this exception occurs
+        msg.policy = email.policy.compat32
+
+        _from = msg.get('from', '')
         msg.__delitem__('from')
-    else:
+
+        if _from != '':
+            m = email_regex.findall(_from)
+            if m:
+                 msg.add_header('from', list(set(m))[0])
+        else:
+            msg.add_header('from', '')
+
+        msg_header_field = msg.get('from').lower()
+
+        msg.policy = email.policy.default
+
+    if msg_header_field != '':
         m = email_regex.search(msg_header_field)
         if m:
             headers_struc['from'] = m.group(1)
