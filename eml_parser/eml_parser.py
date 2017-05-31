@@ -694,10 +694,12 @@ def parse_email(msg: email.message.Message, include_raw_body: bool = False, incl
             m = email_regex.findall(_from)
             if m:
                  msg.add_header('from', list(set(m))[0])
+            else:
+                msg.add_header('from', '')
         else:
             msg.add_header('from', '')
 
-        msg_header_field = msg.get('from').lower()
+        msg_header_field = msg.get('from', '').lower()
 
         msg.policy = email.policy.default
 
