@@ -55,6 +55,12 @@ try:
     import magic
 except ImportError:
     magic = None
+    magic_ms = None
+else:
+    magic_ms = magic.open(magic.MAGIC_MIME_TYPE)
+    magic_ms.load()
+
+#magic = None
 
 
 __author__ = 'Toth Georges, Jung Paul'
@@ -202,10 +208,6 @@ def traverse_multipart(msg: email.message.Message, counter: int = 0, include_att
     """
     attachments = {}
 
-    if magic:
-        ms = magic.open(magic.NONE)
-        ms.load()
-
     if msg.is_multipart():
         for part in msg.get_payload():  # type: ignore
             attachments.update(traverse_multipart(part, counter, include_attachment_data))  # type: ignore
@@ -236,12 +238,10 @@ def traverse_multipart(msg: email.message.Message, counter: int = 0, include_att
                 attachments[file_id]['extension'] = extension
             attachments[file_id]['hash'] = hash_
 
-            if magic:
-                attachments[file_id]['mime_type'] = ms.buffer(data)
+            if magic_ms is not None:
+                attachments[file_id]['mime_type'] = magic_ms.buffer(data)
                 # attachments[file_id]['mime_type_short'] = attachments[file_id]['mime_type'].split(",")[0]
-                ms = magic.open(magic.MAGIC_MIME_TYPE)
-                ms.load()
-                attachments[file_id]['mime_type_short'] = ms.buffer(data)
+                attachments[file_id]['mime_type_short'] = magic_ms.buffer(data)
 
             if include_attachment_data:
                 attachments[file_id]['raw'] = base64.b64encode(data)
@@ -315,7 +315,7 @@ def decode_email_s(eml_file: str, include_raw_body: bool = False, include_attach
     return parse_email(msg, include_raw_body, include_attachment_data, pconf)
 
 
-def decode_email_b(eml_file: bytes, include_raw_body: bool = False, include_attachment_data: bool = False, pconf: typing.Optional[dict]=None) -> dict:
+def decode_email_b(eml_file: bytes, include_raw_body: bool = False, include_attachment_data: bool = False, pconf: typing.Optional[dict]=None, policy: email.policy.Policy=email.policy.default) -> dict:
     """Function for decoding an EML file into an easily parsable structure.
     Some intelligence is applied while parsing the file in order to work around
     broken files.
@@ -333,11 +333,14 @@ def decode_email_b(eml_file: bytes, include_raw_body: bool = False, include_atta
         pconf (dict, optional): A dict with various optinal configuration parameters,
                                 e.g. whitelist IPs, whitelist e-mail addresses, etc.
 
+        policy (email.policy.Policy, optional): Policy to use when parsing e-mails.
+              Default = email.policy.default.
+
     Returns:
         dict: A dictionary with the content of the EML parsed and broken down into
               key-value pairs.
     """
-    msg = email.message_from_bytes(eml_file, policy=email.policy.default)
+    msg = email.message_from_bytes(eml_file, policy=policy)
 #    msg = email.message_from_bytes(eml_file, policy=email.policy.compat32)
     return parse_email(msg, include_raw_body, include_attachment_data, pconf)
 
@@ -374,12 +377,66 @@ def headeremail2list(mail: email.message.Message, header: str) -> typing.List[st
     Returns:
         list: Returns a list of strings which represent e-mail addresses.
     """
-    field = email.utils.getaddresses(mail.get_all(header, []))
+    field = email.utils.getaddresses(workaround_bug_27257(mail, header))
     return_field = []
+
     for m in field:
         if not m[1] == '':
             return_field.append(m[1].lower())
+
     return return_field
+
+
+def workaround_bug_27257(msg: email.message.Message, header: str) -> typing.List[str]:
+    """Function to work around bug 27257 and just tries its best using
+    the compat32 policy to extract any meaningful information, i.e.
+    e-mail addresses.
+
+    Args:
+        mail (email.message.Message): An e-mail message object.
+        header (str): The header field to decode.
+
+    Returns:
+        list: Returns a list of strings which represent e-mail addresses.
+    """
+    return_value = []
+
+    for value in workaround_bug_27257_field_value(msg, header):
+        if value != '':
+            m = email_regex.findall(value)
+            if m:
+                return_value += list(set(m))
+
+    return return_value
+
+
+def workaround_bug_27257_field_value(msg: email.message.Message, header: str) -> typing.List[str]:
+    """Function to work around bug 27257 and just tries its best using
+    the compat32 policy to extract any meaningful information.
+
+    Args:
+        mail (email.message.Message): An e-mail message object.
+        header (str): The header field to decode.
+
+    Returns:
+        list: Return an extracted list of strings.
+    """
+    if msg.policy == email.policy.compat32:
+        new_policy = None
+    else:
+        new_policy = msg.policy
+
+    msg.policy = email.policy.compat32
+    return_value = []
+
+    for value in msg.get_all(header, []):
+        if value != '':
+            return_value.append(value)
+
+    if new_policy is not None:
+        msg.policy = new_policy
+
+    return return_value
 
 
 # Iterator that give all position of a given pattern (no regex)
@@ -684,24 +741,18 @@ def parse_email(msg: email.message.Message, include_raw_body: bool = False, incl
         # https://bugs.python.org/issue27257
         # The field will be set to emtpy as a workaround.
         #
-        # Log warning if this exception occurs
-        msg.policy = email.policy.compat32
-
-        _from = msg.get('from', '')
+        # @TODO Log warning if this exception occurs
+        _from = workaround_bug_27257(msg, 'from')
         msg.__delitem__('from')
 
-        if _from != '':
-            m = email_regex.findall(_from)
-            if m:
-                 msg.add_header('from', list(set(m))[0])
-            else:
-                msg.add_header('from', '')
+        if _from:
+            msg.add_header('from', _from[0])
+            _from = _from[0].lower()
         else:
             msg.add_header('from', '')
+            _from = ''
 
-        msg_header_field = msg.get('from', '').lower()
-
-        msg.policy = email.policy.default
+        msg_header_field = _from
 
     if msg_header_field != '':
         m = email_regex.search(msg_header_field)
@@ -997,15 +1048,29 @@ def parse_email(msg: email.message.Message, include_raw_body: bool = False, incl
     # "a","titi"   --->    c: [truc]
     # "c","truc"
     #
-    for k, v in msg.items():
+    for k in set(msg.keys()):
         # We are using replace . to : for avoiding issue in mongo
         k = k.lower().replace('.', ':')  # Lot of lower, precompute...
-        value = str(v)
 
-        if k in header:
-            header[k].append(value)
+        try:
+            value = str(msg[k])
+        except (IndexError, AttributeError):
+            # We have hit current open issue #27257
+            # https://bugs.python.org/issue27257
+            # The field will be set to emtpy as a workaround.
+            #
+            # @TODO Log warning if this exception occurs
+            value = workaround_bug_27257_field_value(msg, k)
+
+            if k in header:
+                header[k] += value
+            else:
+                header[k] = value
         else:
-            header[k] = [value]
+            if k in header:
+                header[k].append(value)
+            else:
+                header[k] = [value]
 
     headers_struc['header'] = header
 
