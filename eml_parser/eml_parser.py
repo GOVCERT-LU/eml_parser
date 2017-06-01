@@ -60,8 +60,6 @@ else:
     magic_ms = magic.open(magic.MAGIC_MIME_TYPE)
     magic_ms.load()
 
-#magic = None
-
 
 __author__ = 'Toth Georges, Jung Paul'
 __email__ = 'georges@trypill.org, georges.toth@govcert.etat.lu'
