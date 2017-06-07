@@ -36,8 +36,10 @@ methods.
 #
 
 import email
-import re
+import datetime
 import typing
+import dateutil.parser
+import eml_parser.regex
 
 try:
     try:
@@ -46,17 +48,6 @@ try:
         import chardet
 except ImportError:
     chardet = None
-
-
-# encoded string =?<encoding>?[QB]?<string>?=
-re_quoted_string = re.compile(r'''(                               # Group around entire regex to include it in matches
-                                   \=\?[^?]+\?([QB])\?[^?]+?\?\=  # Quoted String with subgroup for encoding method
-                                   |                              # or
-                                   .+?(?=\=\?|$)                  # Plain String
-                                  )''', (re.X | re.M | re.I))
-
-re_q_value = re.compile(r'\=\?(.+)?\?[Qq]\?(.+)?\?\=')
-re_b_value = re.compile(r'\=\?(.+)?\?[Bb]\?(.+)?\?\=')
 
 
 def decode_field(field: str) -> str:
@@ -136,3 +127,84 @@ def decode_string(string: bytes, encoding: typing.Optional[str]) -> str:
             value = text
 
     return value
+
+
+def workaround_bug_27257(msg: email.message.Message, header: str) -> typing.List[str]:
+    """Function to work around bug 27257 and just tries its best using
+    the compat32 policy to extract any meaningful information, i.e.
+    e-mail addresses.
+
+    Args:
+        mail (email.message.Message): An e-mail message object.
+        header (str): The header field to decode.
+
+    Returns:
+        list: Returns a list of strings which represent e-mail addresses.
+    """
+    return_value = []
+
+    for value in workaround_bug_27257_field_value(msg, header):
+        if value != '':
+            m = eml_parser.regex.email_regex.findall(value)
+            if m:
+                return_value += list(set(m))
+
+    return return_value
+
+
+def workaround_bug_27257_field_value(msg: email.message.Message, header: str) -> typing.List[str]:
+    """Function to work around bug 27257 and just tries its best using
+    the compat32 policy to extract any meaningful information.
+
+    Args:
+        mail (email.message.Message): An e-mail message object.
+        header (str): The header field to decode.
+
+    Returns:
+        list: Return an extracted list of strings.
+    """
+    if msg.policy == email.policy.compat32:
+        new_policy = None
+    else:
+        new_policy = msg.policy
+
+    msg.policy = email.policy.compat32
+    return_value = []
+
+    for value in msg.get_all(header, []):
+        if value != '':
+            return_value.append(value)
+
+    if new_policy is not None:
+        msg.policy = new_policy
+
+    return return_value
+
+
+def robust_string2date(line: str) -> datetime.datetime:
+    """Parses a date string to a datetime.datetime object using different methods.
+    It is guaranteed to always return a valid datetime.datetime object.
+    If first tries the built-in email module method for parsing the date according
+    to related RFC's.
+    If this fails it returns a datetime.datetime object representing
+    "1970-01-01 00:00:00 +0000".
+    In case there is no timezone information in the parsed date, we set it to UTC.
+
+    Args:
+        line (str): A string which should be parsed.
+
+    Returns:
+        datetime.datetime: Returns a datetime.datetime object.
+    """
+    # "." -> ":" replacement is for fixing bad clients (e.g. outlook express)
+    default_date = '1970-01-01 00:00:00 +0000'
+    msg_date = line.replace('.', ':')
+    date_ = email.utils.parsedate_to_datetime(msg_date)
+
+    if date_ is None:
+        # Now we are facing an invalid date.
+        return dateutil.parser.parse(default_date)
+    elif date_.tzname() is None:
+        return date_.replace(tzinfo=datetime.timezone.utc)
+    else:
+        return date_

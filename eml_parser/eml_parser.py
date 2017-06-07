@@ -36,13 +36,13 @@ information found in the e-mail as well as computed information.
 #
 
 import sys
+import logging
 import email
 import email.message
 import email.policy
 import email.utils
 import re
 import uuid
-import datetime
 import base64
 import hashlib
 import collections
@@ -50,6 +50,8 @@ import urllib.parse
 import typing
 import dateutil.parser
 import eml_parser.decode
+import eml_parser.regex
+import eml_parser.routing
 
 try:
     import magic
@@ -67,33 +69,7 @@ __copyright__ = 'Copyright 2013-2014 Georges Toth, Copyright 2013-2017 GOVCERT L
 __license__ = 'AGPL v3+'
 
 
-# regex compilation
-# W3C HTML5 standard recommended regex for e-mail validation
-email_regex = re.compile(r'''([a-zA-Z0-9.!#$%&'*+-/=?\^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*)''', re.MULTILINE)
-#                 /^[a-zA-Z0-9.!#$%&'*+-/=?\^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$/
-recv_dom_regex = re.compile(r'''(?:(?:from|by)\s+)([a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]{2,})+)''', re.MULTILINE)
-
-dom_regex = re.compile(r'''(?:\s|[\(\/<>|@'=])([a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]{2,})+)(?:$|\?|\s|#|&|[\/<>'\)])''', re.MULTILINE)
-ipv4_regex = re.compile(r'''((?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?))''', re.MULTILINE)
-
-
-# From https://gist.github.com/mnordhoff/2213179 : IPv6 with zone ID (RFC 6874)
-ipv6_regex = re.compile('((?:[0-9A-Fa-f]{1,4}:){6}(?:[0-9A-Fa-f]{1,4}:[0-9A-Fa-f]{1,4}|(?:(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))|::(?:[0-9A-Fa-f]{1,4}:){5}(?:[0-9A-Fa-f]{1,4}:[0-9A-Fa-f]{1,4}|(?:(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))|(?:[0-9A-Fa-f]{1,4})?::(?:[0-9A-Fa-f]{1,4}:){4}(?:[0-9A-Fa-f]{1,4}:[0-9A-Fa-f]{1,4}|(?:(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))|(?:[0-9A-Fa-f]{1,4}:[0-9A-Fa-f]{1,4})?::(?:[0-9A-Fa-f]{1,4}:){3}(?:[0-9A-Fa-f]{1,4}:[0-9A-Fa-f]{1,4}|(?:(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))|(?:(?:[0-9A-Fa-f]{1,4}:){,2}[0-9A-Fa-f]{1,4})?::(?:[0-9A-Fa-f]{1,4}:){2}(?:[0-9A-Fa-f]{1,4}:[0-9A-Fa-f]{1,4}|(?:(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))|(?:(?:[0-9A-Fa-f]{1,4}:){,3}[0-9A-Fa-f]{1,4})?::[0-9A-Fa-f]{1,4}:(?:[0-9A-Fa-f]{1,4}:[0-9A-Fa-f]{1,4}|(?:(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))|(?:(?:[0-9A-Fa-f]{1,4}:){,4}[0-9A-Fa-f]{1,4})?::(?:[0-9A-Fa-f]{1,4}:[0-9A-Fa-f]{1,4}|(?:(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))|(?:(?:[0-9A-Fa-f]{1,4}:){,5}[0-9A-Fa-f]{1,4})?::[0-9A-Fa-f]{1,4}|(?:(?:[0-9A-Fa-f]{1,4}:){,6}[0-9A-Fa-f]{1,4})?::)')
-
-# simple version for searching for URLs
-# character set based on http://tools.ietf.org/html/rfc3986
-# url_regex_simple = re.compile(r'''(?i)\b((?:(hxxps?|https?|ftps?)://)[^ ]+)''', re.VERBOSE | re.MULTILINE)
-url_regex_simple = re.compile(r'''(([a-z]{3,}s?:\/\/)[a-z0-9\-_:]+(\.[a-z0-9\-_]+)*''' +
-                              r'''(\/[a-z0-9_\-\.~!*'();:@&=+$,\/  ?%#\[\]]*)?)''',
-                              re.VERBOSE | re.MULTILINE | re.I)
-
-priv_ip_regex = re.compile(r"^(((10(\.\d{1,3}){3})|(192\.168(\.\d{1,3}){2})|(172\.(([1][6-9])|([2]\d)|([3][0-1]))(\.\d{1,3}){2}))|(127(\.\d{1,3}){3})|(::1))")
-
-reg_date = re.compile(r';[ \w\s:,+\-\(\)]+$')
-no_par = re.compile(r'\([^()]*\)')
-
-
-################################################
+logger = logging.getLogger(__name__)
 
 
 def get_raw_body_text(msg: email.message.Message) -> typing.List[typing.Tuple[typing.Any, typing.Any, typing.Any]]:
@@ -118,7 +94,7 @@ def get_raw_body_text(msg: email.message.Message) -> typing.List[typing.Tuple[ty
         filename = msg.get_filename('').lower()
 
         if ('content-disposition' not in msg and msg.get_content_maintype() == 'text') \
-            or (filename.endswith('.html') or \
+            or (filename.endswith('.html') or
             filename.endswith('.htm')):
             encoding = msg.get('content-transfer-encoding', '').lower()
 
@@ -129,6 +105,7 @@ def get_raw_body_text(msg: email.message.Message) -> typing.List[typing.Tuple[ty
                 try:
                     raw_body_str = msg.get_payload(decode=True).decode(charset, 'ignore')
                 except Exception:
+                    logger.debug('An exception occured while decoding the payload!', exc_info=True)
                     raw_body_str = msg.get_payload(decode=True).decode('ascii', 'ignore')
 
             raw_body.append((encoding, raw_body_str, msg.items()))
@@ -259,7 +236,7 @@ def traverse_multipart(msg: email.message.Message, counter: int = 0, include_att
     return attachments
 
 
-def decode_email(eml_file: str, include_raw_body: bool = False, include_attachment_data: bool = False, pconf: typing.Optional[dict]=None) -> dict:
+def decode_email(eml_file: str, include_raw_body: bool = False, include_attachment_data: bool = False, pconf: typing.Optional[dict]=None, policy: email.policy.Policy=email.policy.default) -> dict:
     """Function for decoding an EML file into an easily parsable structure.
     Some intelligence is applied while parsing the file in order to work around
     broken files.
@@ -277,39 +254,16 @@ def decode_email(eml_file: str, include_raw_body: bool = False, include_attachme
       pconf (dict, optional): A dict with various optinal configuration parameters,
                               e.g. whitelist IPs, whitelist e-mail addresses, etc.
 
+      policy (email.policy.Policy, optional): Policy to use when parsing e-mails.
+            Default = email.policy.default.
+
     Returns:
       dict: A dictionary with the content of the EML parsed and broken down into
             key-value pairs.
     """
     with open(eml_file, 'rb') as fp:
-        msg = email.message_from_binary_file(fp, policy=email.policy.default)
+        msg = email.message_from_binary_file(fp, policy=policy)
 
-    return parse_email(msg, include_raw_body, include_attachment_data, pconf)
-
-
-def decode_email_s(eml_file: str, include_raw_body: bool = False, include_attachment_data: bool = False, pconf: typing.Optional[dict]=None) -> dict:
-    """Function for decoding an EML file into an easily parsable structure.
-    Some intelligence is applied while parsing the file in order to work around
-    broken files.
-    Besides just parsing, this function also computes hashes and extracts meta
-    information from the source file.
-
-    Args:
-        eml_file (str): Contents of the raw EML file passed to this function as string.
-        include_raw_body (bool, optional): Boolean paramter which indicates whether
-                                           to include the original file contents in
-                                           the returned structure. Default is False.
-        include_attachment_data (bool, optional): Boolean paramter which indicates whether
-                                                  to include raw attachment data in the
-                                                  returned structure. Default is False.
-        pconf (dict, optional): A dict with various optinal configuration parameters,
-                                e.g. whitelist IPs, whitelist e-mail addresses, etc.
-
-    Returns:
-        dict: A dictionary with the content of the EML parsed and broken down into
-              key-value pairs.
-    """
-    msg = email.message_from_string(eml_file, policy=email.policy.default)
     return parse_email(msg, include_raw_body, include_attachment_data, pconf)
 
 
@@ -339,7 +293,7 @@ def decode_email_b(eml_file: bytes, include_raw_body: bool = False, include_atta
               key-value pairs.
     """
     msg = email.message_from_bytes(eml_file, policy=policy)
-#    msg = email.message_from_bytes(eml_file, policy=email.policy.compat32)
+
     return parse_email(msg, include_raw_body, include_attachment_data, pconf)
 
 
@@ -354,7 +308,7 @@ def get_uri_ondata(body: str) -> typing.List[str]:
     """
     list_observed_urls = []  # type: typing.List[str]
 
-    for match in url_regex_simple.findall(body):
+    for match in eml_parser.regex.url_regex_simple.findall(body):
         found_url = match[0].replace('hxxp', 'http')
         found_url = urllib.parse.urlparse(found_url).geturl()
         # let's try to be smart by stripping of noisy bogus parts
@@ -375,7 +329,7 @@ def headeremail2list(mail: email.message.Message, header: str) -> typing.List[st
     Returns:
         list: Returns a list of strings which represent e-mail addresses.
     """
-    field = email.utils.getaddresses(workaround_bug_27257(mail, header))
+    field = email.utils.getaddresses(eml_parser.decode.workaround_bug_27257(mail, header))
     return_field = []
 
     for m in field:
@@ -383,58 +337,6 @@ def headeremail2list(mail: email.message.Message, header: str) -> typing.List[st
             return_field.append(m[1].lower())
 
     return return_field
-
-
-def workaround_bug_27257(msg: email.message.Message, header: str) -> typing.List[str]:
-    """Function to work around bug 27257 and just tries its best using
-    the compat32 policy to extract any meaningful information, i.e.
-    e-mail addresses.
-
-    Args:
-        mail (email.message.Message): An e-mail message object.
-        header (str): The header field to decode.
-
-    Returns:
-        list: Returns a list of strings which represent e-mail addresses.
-    """
-    return_value = []
-
-    for value in workaround_bug_27257_field_value(msg, header):
-        if value != '':
-            m = email_regex.findall(value)
-            if m:
-                return_value += list(set(m))
-
-    return return_value
-
-
-def workaround_bug_27257_field_value(msg: email.message.Message, header: str) -> typing.List[str]:
-    """Function to work around bug 27257 and just tries its best using
-    the compat32 policy to extract any meaningful information.
-
-    Args:
-        mail (email.message.Message): An e-mail message object.
-        header (str): The header field to decode.
-
-    Returns:
-        list: Return an extracted list of strings.
-    """
-    if msg.policy == email.policy.compat32:
-        new_policy = None
-    else:
-        new_policy = msg.policy
-
-    msg.policy = email.policy.compat32
-    return_value = []
-
-    for value in msg.get_all(header, []):
-        if value != '':
-            return_value.append(value)
-
-    if new_policy is not None:
-        msg.policy = new_policy
-
-    return return_value
 
 
 # Iterator that give all position of a given pattern (no regex)
@@ -458,233 +360,6 @@ def findall(pat: str, data: str) -> typing.Iterator[int]:
     while i != -1:
         yield i
         i = data.find(pat, i + 1)
-
-
-def noparenthesis(line: str) -> str:
-    """Remove nested parenthesis, until none are present.
-
-    Args:
-        line (str): Input text to search in for parenthesis.
-
-
-    Returns:
-        str: Return a string with all paranthesis removed.
-    """
-    idem = False
-    line_ = line
-
-    while not idem:
-        lline = line_
-        line_ = re.sub(no_par, '', line_)
-        if lline == line_:
-            idem = True
-
-    return line_
-
-
-def getkey(item: typing.List[typing.Any]) -> typing.Any:
-    """Returns the first element of a list.
-
-    Args:
-        item (list): List.
-
-    Returns:
-        object: Returns the first item of any kind of list object.
-    """
-    return item[0]
-
-
-def regprep(line: str) -> str:
-    for ch in '^$[]()+?.':
-        line = re.sub("\\" + ch, '\\\\' + ch, line)
-    return line
-
-
-def cleanline(line: str) -> str:
-    """Remove space and ; from start/end of line until it is not possible.
-
-    Args:
-        line (str): Line to clean.
-
-    Returns:
-        str: Cleaned string.
-    """
-    idem = False
-    while not idem:
-        lline = line
-        line = line.strip(";")
-        line = line.strip(" ")
-        if lline == line:
-            idem = True
-    return line
-
-
-def robust_string2date(line: str) -> datetime.datetime:
-    """Parses a date string to a datetime.datetime object using different methods.
-    It is guaranteed to always return a valid datetime.datetime object.
-    If first tries the built-in email module method for parsing the date according
-    to related RFC's.
-    If this fails it returns a datetime.datetime object representing
-    "1970-01-01 00:00:00 +0000".
-    In case there is no timezone information in the parsed date, we set it to UTC.
-
-    Args:
-        line (str): A string which should be parsed.
-
-    Returns:
-        datetime.datetime: Returns a datetime.datetime object.
-    """
-    # "." -> ":" replacement is for fixing bad clients (e.g. outlook express)
-    default_date = '1970-01-01 00:00:00 +0000'
-    msg_date = line.replace('.', ':')
-    date_ = email.utils.parsedate_to_datetime(msg_date)
-
-    if date_ is None:
-        # Now we are facing an invalid date.
-        return dateutil.parser.parse(default_date)
-    elif date_.tzname() is None:
-        return date_.replace(tzinfo=datetime.timezone.utc)
-    else:
-        return date_
-
-
-def parserouting(line: str) -> typing.Dict[str, typing.Any]:
-    """This method tries to parsed a e-mail header received line
-    and extract machine readable information.
-    Note that there are a large number of formats for these lines
-    and a lot of weird ones which are not commonly used.
-    We try our best to match a large number of formats.
-
-    Args:
-        line (str): Received line to be parsed.
-
-    Returns:
-        dict: Returns a dict with the extracted information.
-    """
-    #    if re.findall(reg_date, line):
-    #        return 'date\n'
-    # Preprocess the line to simplify from/by/with/for border detection.
-    out = {}  # type: typing.Dict[str, typing.Any]  # Result
-    out['src'] = line
-    line = line.lower()  # Convert everything to lowercase
-    npline = re.sub(r'\)', ' ) ', line)  # nORMALISE sPACE # Re-space () ")by " exists often
-    npline = re.sub(r'\(', ' ( ', npline)  # nORMALISE sPACE # Re-space ()
-    npline = re.sub(';', ' ; ', npline)  # nORMALISE sPACE # Re-space ;
-    npline = noparenthesis(npline)  # Remove any "()"
-    npline = re.sub('  *', ' ', npline)  # nORMALISE sPACE
-    npline = npline.strip('\n')  # Remove any NL
-    raw_find_data = re.findall(reg_date, npline)  # extract date on end line.
-
-    # Detect "sticked lines"
-    if " received: " in npline:
-        out['warning'] = ['Merged Received headers']
-        return out
-
-    if raw_find_data:
-        npdate = raw_find_data[0]  # Remove spaces and starting ;
-        npdate = npdate.lstrip(";")  # Remove Spaces and stating ; from date
-        npdate = npdate.strip()
-    else:
-        npdate = ""
-
-    npline = npline.replace(npdate, "")  # Remove date from input line
-    npline = npline.strip(' ')  # Remove any border WhiteSpace
-
-    borders = ['from ', 'by ', 'with ', 'for ']
-    candidate = []  # type: typing.List[str]
-    result = []  # type: typing.List[typing.Dict[str, typing.Any]]
-
-    # Scan the line to determine the order, and presence of each "from/by/with/for" words
-    for word in borders:
-        candidate = list(borders)
-        candidate.remove(word)
-        for endword in candidate:
-            if word in npline:
-                loc = npline.find(word)
-                end = npline.find(endword)
-                if end < loc or end == -1:
-                    end = 0xfffffff   # Kindof MAX 31 bits
-                result.append({'name_in': word, 'pos': loc, 'name_out': endword, 'weight': end + loc})
-                # print {'name_in': word, 'pos': loc, 'name_out': endword, 'weight': end+loc}
-
-    # Create the word list... "from/by/with/for" by sorting the list.
-    if not result:
-        out['warning'] = ['Nothing Parsable']
-        return out
-
-    tout = []
-    for word in borders:
-        result_max = 0xffffffff
-        line_max = {}  # type: typing.Dict[str, typing.Any]
-        for eline in result:
-            if eline['name_in'] == word and eline['weight'] <= result_max:
-                result_max = eline['weight']
-                line_max = eline
-
-        if len(line_max) > 0:
-            tout.append([line_max.get('pos'), line_max.get('name_in')])
-
-    tout = sorted(tout, key=getkey)
-
-    # build regex.
-    reg = ""
-    for item in tout:
-        reg += item[1] + "(?P<" + item[1].strip() + ">.*)"  # type: ignore
-    if npdate:
-        reg += regprep(npdate)
-
-    reparse = re.compile(reg)
-    reparseg = reparse.search(line)
-
-    # Fill the data
-    for item in borders:  # type: ignore
-        try:
-            out[item.strip()] = cleanline(reparseg.group(item.strip()))  # type: ignore
-        except Exception:
-            pass
-    out['date'] = robust_string2date(npdate)
-
-    # Fixup for "From" in "for" field
-    # ie google, do that...
-    if out.get('for'):
-        if 'from' in out.get('for', ''):
-            temp = re.split(' from ', out['for'])
-            out['for'] = temp[0]
-            out['from'] = '{0} {1}'.format(out['from'], " ".join(temp[1:]))
-
-        m = email_regex.findall(out['for'])
-        if m:
-            out['for'] = list(set(m))
-        else:
-            del out['for']
-
-    # Now.. find IP and Host in from
-    if out.get('from'):
-        out['from'] = give_dom_ip(out['from'])
-        if not out.get('from', []):  # if array is empty remove
-            del out['from']
-
-    # Now.. find IP and Host in from
-    if out.get('by'):
-        out['by'] = give_dom_ip(out['by'])
-        if not out.get('by', []):  # If array is empty remove
-            del out['by']
-
-    return out
-
-
-def give_dom_ip(line: str) -> typing.List[str]:
-    """Method returns all domains, IPv4 and IPv6 addresses found in a given string.
-
-    Args:
-        line (str): String to search in.
-
-    Returns:
-        list: Unique list of strings with matches
-    """
-    m = dom_regex.findall(" " + line) + ipv4_regex.findall(line) + ipv6_regex.findall(line)
-
-    return list(set(m))
 
 
 def parse_email(msg: email.message.Message, include_raw_body: bool = False, include_attachment_data: bool = False, pconf: typing.Optional[dict]=None) -> dict:
@@ -739,8 +414,9 @@ def parse_email(msg: email.message.Message, include_raw_body: bool = False, incl
         # https://bugs.python.org/issue27257
         # The field will be set to emtpy as a workaround.
         #
-        # @TODO Log warning if this exception occurs
-        _from = workaround_bug_27257(msg, 'from')
+        logger.exception('We hit bug 27257!')
+
+        _from = eml_parser.decode.workaround_bug_27257(msg, 'from')
         msg.__delitem__('from')
 
         if _from:
@@ -753,7 +429,7 @@ def parse_email(msg: email.message.Message, include_raw_body: bool = False, incl
         msg_header_field = _from
 
     if msg_header_field != '':
-        m = email_regex.search(msg_header_field)
+        m = eml_parser.regex.email_regex.search(msg_header_field)
         if m:
             headers_struc['from'] = m.group(1)
         else:
@@ -775,7 +451,7 @@ def parse_email(msg: email.message.Message, include_raw_body: bool = False, incl
     # parse and decode Date
     # If date field is present
     if 'date' in msg:
-        headers_struc['date'] = robust_string2date(msg.get('date'))
+        headers_struc['date'] = eml_parser.decode.robust_string2date(msg.get('date'))
     else:
         # If date field is absent...
         headers_struc['date'] = dateutil.parser.parse('1970-01-01T00:00:00+0000')
@@ -802,7 +478,7 @@ def parse_email(msg: email.message.Message, include_raw_body: bool = False, incl
             #   by array
             #   with string
             #   warning array
-            current_line = parserouting(l)
+            current_line = eml_parser.routing.parserouting(l)
 
             # If required collect the IP of the gateway that have injected the mail.
             # Iterate all parsed item and find IP
@@ -831,21 +507,21 @@ def parse_email(msg: email.message.Message, include_raw_body: bool = False, incl
             headers_struc['received'].append(current_line)
 
             # Parse IP in "received headers"
-            for ips in ipv6_regex.findall(l):
-                if not priv_ip_regex.match(ips):
+            for ips in eml_parser.regex.ipv6_regex.findall(l):
+                if not eml_parser.regex.priv_ip_regex.match(ips):
                     if ips.lower() not in pconf['whiteip']:
                         headers_struc['received_ip'].append(ips.lower())
-            for ips in ipv4_regex.findall(l):
-                if not priv_ip_regex.match(ips):
+            for ips in eml_parser.regex.ipv4_regex.findall(l):
+                if not eml_parser.regex.priv_ip_regex.match(ips):
                     if ips not in pconf['whiteip']:
                         headers_struc['received_ip'].append(ips.lower())
 
             # search for domain / e-mail addresses
-            for m in recv_dom_regex.findall(l):
+            for m in eml_parser.regex.recv_dom_regex.findall(l):
                 checks = True
                 if '.' in m:  # type: ignore  # type of findall is list[str], so this is correct
                     try:
-                        if ipv4_regex.match(m) or m == '127.0.0.1':  # type: ignore  # type of findall is list[str], so this is correct
+                        if eml_parser.regex.ipv4_regex.match(m) or m == '127.0.0.1':  # type: ignore  # type of findall is list[str], so this is correct
                             checks = False
                     except ValueError:
                         pass
@@ -854,7 +530,7 @@ def parse_email(msg: email.message.Message, include_raw_body: bool = False, incl
 
             # Extracts emails, but not the ones in the FOR on this received headers line.
             # Process Here line per line not finally to not miss a email not in from
-            m = email_regex.findall(l)  # type: ignore
+            m = eml_parser.regex.email_regex.findall(l)  # type: ignore
             if m:
                 for mail_candidate in m:  # type: ignore  # type of findall is list[str], so this is correct
                     if current_line.get('for'):
@@ -906,7 +582,7 @@ def parse_email(msg: email.message.Message, include_raw_body: bool = False, incl
         multipart = False  # No only "one" Part
     for body_tup in raw_body:
         bodie = {}  # type: typing.Dict[str, typing.Any]
-        encoding, body, body_multhead = body_tup
+        _, body, body_multhead = body_tup
         # Parse any URLs and mail found in the body
         list_observed_urls = []  # type: typing.List[str]
         list_observed_email = []  # type: typing.List[str]
@@ -921,16 +597,16 @@ def parse_email(msg: email.message.Message, include_raw_body: bool = False, incl
         # in order to reduce regex complexity.
         if len(body) < 4096:
             list_observed_urls = get_uri_ondata(body)
-            for match in email_regex.findall(body):
+            for match in eml_parser.regex.email_regex.findall(body):
                 list_observed_email.append(match.lower())
-            for match in dom_regex.findall(body):
+            for match in eml_parser.regex.dom_regex.findall(body):
                 list_observed_dom.append(match.lower())
-            for match in ipv4_regex.findall(body):
-                if not priv_ip_regex.match(match):
+            for match in eml_parser.regex.ipv4_regex.findall(body):
+                if not eml_parser.regex.priv_ip_regex.match(match):
                     if match not in pconf['whiteip']:
                         list_observed_ip.append(match)
-            for match in ipv6_regex.findall(body):
-                if not priv_ip_regex.match(match):
+            for match in eml_parser.regex.ipv6_regex.findall(body):
+                if not eml_parser.regex.priv_ip_regex.match(match):
                     if match.lower() not in pconf['whiteip']:
                         list_observed_ip.append(match.lower())
         else:
@@ -939,25 +615,25 @@ def parse_email(msg: email.message.Message, include_raw_body: bool = False, incl
 
             for scn_pt in findall('@', body):
                 # RFC 3696, 5322, 5321 for email size limitations
-                for match in email_regex.findall(body[scn_pt - 64:scn_pt + 255]):
+                for match in eml_parser.regex.email_regex.findall(body[scn_pt - 64:scn_pt + 255]):
                     list_observed_email.append(match.lower())
 
             for scn_pt in findall('.', body):
                 # The maximum length of a fqdn, not a hostname, is 1004 characters RFC1035
                 # The maximum length of a hostname is 253 characters. Imputed from RFC952, RFC1123 and RFC1035.
-                for match in dom_regex.findall(body[scn_pt - 253:scn_pt + 1004]):
+                for match in eml_parser.regex.dom_regex.findall(body[scn_pt - 253:scn_pt + 1004]):
                     list_observed_dom.append(match.lower())
 
                 # Find IPv4 addresses
-                for match in ipv4_regex.findall(body[scn_pt - 11:scn_pt + 3]):
-                    if not priv_ip_regex.match(match):
+                for match in eml_parser.regex.ipv4_regex.findall(body[scn_pt - 11:scn_pt + 3]):
+                    if not eml_parser.regex.priv_ip_regex.match(match):
                         if match not in pconf['whiteip']:
                             list_observed_ip.append(match)
 
             for scn_pt in findall(':', body):
                 # The maximum length of IPv6 is 32 Char + 7 ":"
-                for match in ipv6_regex.findall(body[scn_pt - 4:scn_pt + 35]):
-                    if not priv_ip_regex.match(match):
+                for match in eml_parser.regex.ipv6_regex.findall(body[scn_pt - 4:scn_pt + 35]):
+                    if not eml_parser.regex.priv_ip_regex.match(match):
                         if match.lower() not in pconf['whiteip']:
                             list_observed_ip.append(match.lower())
 
@@ -1056,9 +732,9 @@ def parse_email(msg: email.message.Message, include_raw_body: bool = False, incl
             # We have hit current open issue #27257
             # https://bugs.python.org/issue27257
             # The field will be set to emtpy as a workaround.
-            #
-            # @TODO Log warning if this exception occurs
-            value = workaround_bug_27257_field_value(msg, k)
+            logger.exception('We hit bug 27257!')
+
+            value = eml_parser.decode.workaround_bug_27257_field_value(msg, k)
 
             if k in header:
                 header[k] += value
