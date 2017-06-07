@@ -141,7 +141,7 @@ def workaround_bug_27257(msg: email.message.Message, header: str) -> typing.List
     Returns:
         list: Returns a list of strings which represent e-mail addresses.
     """
-    return_value = []
+    return_value = []  # type: typing.List[str]
 
     for value in workaround_bug_27257_field_value(msg, header):
         if value != '':
@@ -163,12 +163,12 @@ def workaround_bug_27257_field_value(msg: email.message.Message, header: str) ->
     Returns:
         list: Return an extracted list of strings.
     """
-    if msg.policy == email.policy.compat32:
+    if msg.policy == email.policy.compat32:  # type: ignore
         new_policy = None
     else:
-        new_policy = msg.policy
+        new_policy = msg.policy  # type: ignore
 
-    msg.policy = email.policy.compat32
+    msg.policy = email.policy.compat32  # type: ignore
     return_value = []
 
     for value in msg.get_all(header, []):
@@ -176,7 +176,7 @@ def workaround_bug_27257_field_value(msg: email.message.Message, header: str) ->
             return_value.append(value)
 
     if new_policy is not None:
-        msg.policy = new_policy
+        msg.policy = new_policy  # type: ignore
 
     return return_value
 

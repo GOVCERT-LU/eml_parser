@@ -421,12 +421,12 @@ def parse_email(msg: email.message.Message, include_raw_body: bool = False, incl
 
         if _from:
             msg.add_header('from', _from[0])
-            _from = _from[0].lower()
+            __from = _from[0].lower()
         else:
             msg.add_header('from', '')
-            _from = ''
+            __from = ''
 
-        msg_header_field = _from
+        msg_header_field = __from
 
     if msg_header_field != '':
         m = eml_parser.regex.email_regex.search(msg_header_field)
@@ -734,12 +734,12 @@ def parse_email(msg: email.message.Message, include_raw_body: bool = False, incl
             # The field will be set to emtpy as a workaround.
             logger.exception('We hit bug 27257!')
 
-            value = eml_parser.decode.workaround_bug_27257_field_value(msg, k)
+            decoded_values = eml_parser.decode.workaround_bug_27257_field_value(msg, k)
 
             if k in header:
-                header[k] += value
+                header[k] += decoded_values
             else:
-                header[k] = value
+                header[k] = decoded_values
         else:
             if k in header:
                 header[k].append(value)
