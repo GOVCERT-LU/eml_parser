@@ -318,7 +318,6 @@ def get_uri_ondata(body: str) -> typing.List[str]:
     return list_observed_urls
 
 
-# Convert email to a list from a given header field.
 def headeremail2list(mail: email.message.Message, header: str) -> typing.List[str]:
     """Parses a given header field with e-mail addresses to a list of e-mail addresses.
 
@@ -544,13 +543,12 @@ def parse_email(msg: email.message.Message, include_raw_body: bool = False, incl
 
     # Concatenate for emails into one array | uniq
     # for rapid "find"
-    if headers_struc.get('received'):
-        headers_struc['received_foremail'] = []
+    headers_struc['received_foremail'] = []
+    if 'received' in headers_struc:
         for line in headers_struc['received']:
-            if line.get('for'):
-                for itemfor in line.get('for'):
-                    if itemfor not in pconf['whitefor']:
-                        headers_struc['received_foremail'] += line.get('for')
+            for itemfor in line.get('for', []):
+                if itemfor not in pconf['whitefor']:
+                    headers_struc['received_foremail'].append(itemfor)
 
     # Uniq data found
     headers_struc['received_email'] = list(set(headers_struc['received_email']))
@@ -559,16 +557,20 @@ def parse_email(msg: email.message.Message, include_raw_body: bool = False, incl
 
     # Clean up if empty
     if not headers_struc['received_email']:
-        headers_struc.pop('received_email')
+        del headers_struc['received_email']
+
     if 'received_foremail' in headers_struc:
         if not headers_struc['received_foremail']:
             del headers_struc['received_foremail']
         else:
             headers_struc['received_foremail'] = list(set(headers_struc['received_foremail']))
+
     if not headers_struc['received_domain']:
         del headers_struc['received_domain']
+
     if not headers_struc['received_ip']:
         del headers_struc['received_ip']
+    ####################
 
     # Parse text body
     raw_body = get_raw_body_text(msg)
