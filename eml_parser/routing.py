@@ -13,6 +13,7 @@ import eml_parser.regex
 
 def noparenthesis(line: str) -> str:
     """Remove nested parenthesis, until none are present.
+    @FIXME rewrite this function.
 
     Args:
         line (str): Input text to search in for parenthesis.
@@ -24,6 +25,9 @@ def noparenthesis(line: str) -> str:
     idem = False
     line_ = line
 
+    if line == '':
+        return line
+
     while not idem:
         lline = line_
         line_ = eml_parser.regex.noparenthesis_regex.sub('', line_)
@@ -34,7 +38,7 @@ def noparenthesis(line: str) -> str:
 
 
 def getkey(item: typing.List[typing.Any]) -> typing.Any:
-    """Returns the first element of a list.
+    """Returns the first element of a list. Used for sorting.
 
     Args:
         item (list): List.
@@ -46,13 +50,22 @@ def getkey(item: typing.List[typing.Any]) -> typing.Any:
 
 
 def regprep(line: str) -> str:
+    """Prepare regular expression
+    @FIXME rewrite this method.
+
+    Args:
+        line (str): Input string.
+
+    Returns:
+        str: Regular expression string.
+    """
     for ch in '^$[]()+?.':
         line = re.sub('\\' + ch, '\\\\' + ch, line)
     return line
 
 
 def cleanline(line: str) -> str:
-    """Remove space and ; from start/end of line until it is not possible.
+    """Remove space and ; from start/end of line.
 
     Args:
         line (str): Line to clean.
@@ -60,14 +73,10 @@ def cleanline(line: str) -> str:
     Returns:
         str: Cleaned string.
     """
-    idem = False
-    while not idem:
-        lline = line
-        line = line.strip(";")
-        line = line.strip(" ")
-        if lline == line:
-            idem = True
-    return line
+    if line == '':
+        return line
+    else:
+        return eml_parser.regex.cleanline_regex.sub('', line)
 
 
 def give_dom_ip(line: str) -> typing.List[str]:

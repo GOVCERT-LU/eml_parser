@@ -36,3 +36,4 @@ priv_ip_regex = re.compile(r"^(((10(\.\d{1,3}){3})|(192\.168(\.\d{1,3}){2})|(172
 
 date_regex = re.compile(r';[ \w\s:,+\-\(\)]+$')
 noparenthesis_regex = re.compile(r'\([^()]*\)')
+cleanline_regex = re.compile(r'''(^[;\s]{0,}|[;\s]{0,}$)''')
