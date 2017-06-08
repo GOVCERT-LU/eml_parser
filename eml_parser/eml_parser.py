@@ -48,6 +48,7 @@ import hashlib
 import collections
 import urllib.parse
 import typing
+import binascii
 import dateutil.parser
 import eml_parser.decode
 import eml_parser.regex
@@ -91,16 +92,20 @@ def get_raw_body_text(msg: email.message.Message) -> typing.List[typing.Tuple[ty
         # Attachments with a file-extension of .htm/.html are implicitely treated
         # as text as well in order not to escape later checks (e.g. URL scan).
 
-        filename = msg.get_filename('').lower()
+        try:
+            filename = msg.get_filename('').lower()
+        except (binascii.Error, AssertionError):
+            logger.exception('Exception occured while trying to parse the content-disposition header. Collected data will not be complete.')
+            filename = ''
 
         if ('content-disposition' not in msg and msg.get_content_maintype() == 'text') \
-            or (filename.endswith('.html') or
-            filename.endswith('.htm')):
+            or (filename.endswith('.html') or filename.endswith('.htm')):
             encoding = msg.get('content-transfer-encoding', '').lower()
 
             charset = msg.get_content_charset()
-            if not charset:
+            if charset is None:
                 raw_body_str = msg.get_payload(decode=True)
+                raw_body_str = eml_parser.decode.decode_string(raw_body_str, None)
             else:
                 try:
                     raw_body_str = msg.get_payload(decode=True).decode(charset, 'ignore')
@@ -201,17 +206,16 @@ def traverse_multipart(msg: email.message.Message, counter: int = 0, include_att
             else:
                 filename = eml_parser.decode.decode_field(filename)
 
-            extension = get_file_extension(filename)
-            hash_ = get_file_hash(data)
-
             file_id = str(uuid.uuid1())
             attachments[file_id] = {}
             attachments[file_id]['filename'] = filename
             attachments[file_id]['size'] = file_size
 
+            extension = get_file_extension(filename)
             if extension:
                 attachments[file_id]['extension'] = extension
-            attachments[file_id]['hash'] = hash_
+
+            attachments[file_id]['hash'] = get_file_hash(data)
 
             if magic_ms is not None:
                 attachments[file_id]['mime_type'] = magic_ms.buffer(data)
@@ -224,6 +228,8 @@ def traverse_multipart(msg: email.message.Message, counter: int = 0, include_att
             ch = {}  # type: typing.Dict[str, typing.List[str]]
             for k, v in msg.items():
                 k = k.lower()
+                v = str(v)
+
                 if k in ch:
                     # print "%s<<<>>>%s" % (k, v)
                     ch[k].append(v)
@@ -233,6 +239,7 @@ def traverse_multipart(msg: email.message.Message, counter: int = 0, include_att
             attachments[file_id]['content_header'] = ch
 
             counter += 1
+
     return attachments
 
 
@@ -523,7 +530,8 @@ def parse_email(msg: email.message.Message, include_raw_body: bool = False, incl
                         if eml_parser.regex.ipv4_regex.match(m) or m == '127.0.0.1':  # type: ignore  # type of findall is list[str], so this is correct
                             checks = False
                     except ValueError:
-                        pass
+                        logger.exception('Exception occured while running regex.')
+
                 if checks:
                     headers_struc['received_domain'].append(m)
 
@@ -539,7 +547,7 @@ def parse_email(msg: email.message.Message, include_raw_body: bool = False, incl
                         headers_struc['received_email'] += [mail_candidate]
 
     except TypeError:  # Ready to parse email without received headers.
-        pass
+        logger.exception('Exception occured while parsing received lines.')
 
     # Concatenate for emails into one array | uniq
     # for rapid "find"
@@ -590,9 +598,6 @@ def parse_email(msg: email.message.Message, include_raw_body: bool = False, incl
         list_observed_email = []  # type: typing.List[str]
         list_observed_dom = []  # type: typing.List[str]
         list_observed_ip = []  # type: typing.List[str]
-
-        if sys.version_info >= (3, 0) and isinstance(body, (bytearray, bytes)):
-            body = body.decode('utf-8', 'ignore')
 
         # If we start directly a findall on 500K+ body we got time and memory issues...
         # if more than 4K.. lets cheat, we will cut around the thing we search "://, @, ."
@@ -681,6 +686,9 @@ def parse_email(msg: email.message.Message, include_raw_body: bool = False, incl
         # "c","truc"
         ch = {}  # type: typing.Dict[str, typing.List]
         for k, v in body_multhead:
+            # make sure we are working with strings only
+            v = str(v)
+
             # We are using replace . to : for avoiding issue in mongo
             k = k.lower().replace('.', ':')  # Lot of lowers, precompute :) .
             # print v
@@ -701,18 +709,15 @@ def parse_email(msg: email.message.Message, include_raw_body: bool = False, incl
         if include_raw_body:
             bodie['content'] = body
 
-        # Sometimes dirty peoples plays with multiple header.
-        # We "display" the "LAST" one .. as do a thunderbird
+        # Sometimes bad people play with multiple header instances.
+        # We "display" the "LAST" one .. as does thunderbird
         val = ch.get('content-type')
         if val:
-            header_val = str(val[-1])
+            header_val = val[-1]
             bodie['content_type'] = header_val.split(';', 1)[0].strip()
 
-        # Try hashing.. with failback for incorrect encoding (non ascii)
-        try:
-            bodie['hash'] = hashlib.sha256(body).hexdigest()
-        except Exception:
-            bodie['hash'] = hashlib.sha256(body.encode('UTF-8')).hexdigest()
+        # Hash the body
+        bodie['hash'] = hashlib.sha256(body.encode('utf-8')).hexdigest()
 
         uid = str(uuid.uuid1())
         bodys[uid] = bodie
@@ -751,9 +756,14 @@ def parse_email(msg: email.message.Message, include_raw_body: bool = False, incl
     headers_struc['header'] = header
 
     # parse attachments
-    report_struc['attachment'] = traverse_multipart(msg, 0, include_attachment_data)
+    try:
+        report_struc['attachment'] = traverse_multipart(msg, 0, include_attachment_data)
+    except (binascii.Error, AssertionError):
+        # we hit this exception if the payload contains invalid data
+        logger.exception('Exception occured while parsing attachment data. Collected data will not be complete!')
+        report_struc['attachment'] = None
 
-    # Dirty hack... transphorm hash in list.. need to be done in the function.
+    # Dirty hack... transform hash into list.. need to be done in the function.
     # Mandatory to search efficiently in mongodb
     # See Bug 11 of eml_parser
     if not report_struc['attachment']:

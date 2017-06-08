@@ -37,6 +37,7 @@ methods.
 
 import email
 import datetime
+import logging
 import typing
 import dateutil.parser
 import eml_parser.regex
@@ -48,6 +49,9 @@ try:
         import chardet
 except ImportError:
     chardet = None
+
+
+logger = logging.getLogger(__name__)
 
 
 def decode_field(field: str) -> str:
@@ -197,9 +201,19 @@ def robust_string2date(line: str) -> datetime.datetime:
         datetime.datetime: Returns a datetime.datetime object.
     """
     # "." -> ":" replacement is for fixing bad clients (e.g. outlook express)
-    default_date = '1970-01-01 00:00:00 +0000'
+    default_date = '1970-01-01T00:00:00+0000'
+
+    # if the input is empty, we return a default date
+    if line == '':
+        return dateutil.parser.parse(default_date)
+
     msg_date = line.replace('.', ':')
-    date_ = email.utils.parsedate_to_datetime(msg_date)
+
+    try:
+        date_ = email.utils.parsedate_to_datetime(msg_date)
+    except (TypeError, Exception):
+        logger.debug('Exception parsing date "{}"'.format(line), exc_info=True)
+        return dateutil.parser.parse(default_date)
 
     if date_ is None:
         # Now we are facing an invalid date.

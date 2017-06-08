@@ -39,6 +39,9 @@ def json_serial(obj):
     if isinstance(obj, datetime.datetime):
         serial = obj.isoformat()
         return serial
+    elif isinstance(obj, email.header.Header):
+        print(str(obj))
+        raise
 
     raise TypeError("Type not serializable")
 
