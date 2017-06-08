@@ -35,7 +35,6 @@ information found in the e-mail as well as computed information.
 #    if a mail-server (e.g. exchange) uses an ID which looks like a valid IP
 #
 
-import sys
 import logging
 import email
 import email.message
@@ -346,7 +345,7 @@ def headeremail2list(mail: email.message.Message, header: str) -> typing.List[st
 
 
 # Iterator that give all position of a given pattern (no regex)
-# FIXME :
+# @FIXME: Is this still required
 # Error may occurs when using unicode-literals or python 3 on dirty emails
 # Need to check if buffer is a clean one
 # may be tested with this byte code:
