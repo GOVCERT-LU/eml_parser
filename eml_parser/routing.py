@@ -22,11 +22,12 @@ def noparenthesis(line: str) -> str:
     Returns:
         str: Return a string with all paranthesis removed.
     """
+    # check empty string
+    if not line:
+        return line
+
     idem = False
     line_ = line
-
-    if line == '':
-        return line
 
     while not idem:
         lline = line_
@@ -35,33 +36,6 @@ def noparenthesis(line: str) -> str:
             idem = True
 
     return line_
-
-
-def getkey(item: typing.List[typing.Any]) -> typing.Any:
-    """Returns the first element of a list. Used for sorting.
-
-    Args:
-        item (list): List.
-
-    Returns:
-        object: Returns the first item of any kind of list object.
-    """
-    return item[0]
-
-
-def regprep(line: str) -> str:
-    """Prepare regular expression
-    @FIXME rewrite this method.
-
-    Args:
-        line (str): Input string.
-
-    Returns:
-        str: Regular expression string.
-    """
-    for ch in '^$[]()+?.':
-        line = re.sub('\\' + ch, '\\\\' + ch, line)
-    return line
 
 
 def cleanline(line: str) -> str:
@@ -114,7 +88,7 @@ def parserouting(line: str) -> typing.Dict[str, typing.Any]:
     line = line.lower()  # Convert everything to lowercase
     npline = re.sub(r'\)', ' ) ', line)  # nORMALISE sPACE # Re-space () ")by " exists often
     npline = re.sub(r'\(', ' ( ', npline)  # nORMALISE sPACE # Re-space ()
-    npline = re.sub(';', ' ; ', npline)  # nORMALISE sPACE # Re-space ;
+    npline = re.sub(r';', ' ; ', npline)  # nORMALISE sPACE # Re-space ;
     npline = noparenthesis(npline)  # Remove any "()"
     npline = re.sub('  *', ' ', npline)  # nORMALISE sPACE
     npline = npline.strip('\n')  # Remove any NL
@@ -169,14 +143,17 @@ def parserouting(line: str) -> typing.Dict[str, typing.Any]:
         if len(line_max) > 0:
             tout.append([line_max.get('pos'), line_max.get('name_in')])
 
-    tout = sorted(tout, key=getkey)
+    # structure is list[list[int, str]]
+    # we sort based on the first element of the sub list, i.e. int
+    tout = sorted(tout, key=lambda x: x[0])
 
     # build regex.
     reg = ""
     for item in tout:
         reg += item[1] + "(?P<" + item[1].strip() + ">.*)"  # type: ignore
     if npdate:
-        reg += regprep(npdate)
+        # escape special regex chars
+        reg += eml_parser.regex.escape_special_regex_chars.sub(r'''\\\1''', npdate)
 
     reparse = re.compile(reg)
     reparseg = reparse.search(line)

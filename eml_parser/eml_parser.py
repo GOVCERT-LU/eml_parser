@@ -46,6 +46,7 @@ import base64
 import hashlib
 import collections
 import urllib.parse
+import ipaddress
 import typing
 import binascii
 import dateutil.parser
@@ -470,20 +471,20 @@ def parse_email(msg: email.message.Message, include_raw_body: bool = False, incl
     try:
         found_smtpin = collections.Counter()  # type: collections.Counter  # Array for storing potential duplicate "HOP"
 
-        for l in msg.get_all('received', []):
-            l = str(l)
+        for received_line in msg.get_all('received', []):
+            line = str(received_line).lower()
 
-            l = re.sub(r'(\r|\n|\s|\t)+', ' ', l.lower(), flags=re.UNICODE)
+            received_line_flat = re.sub(r'(\r|\n|\s|\t)+', ' ', line, flags=re.UNICODE)
 
             # Parse and split routing headers.
-            # Return dict of array
+            # Return dict of list
             #   date string
-            #   from array
-            #   for array
-            #   by array
+            #   from list
+            #   for list
+            #   by list
             #   with string
-            #   warning array
-            current_line = eml_parser.routing.parserouting(l)
+            #   warning list
+            parsed_routing = eml_parser.routing.parserouting(received_line_flat)
 
             # If required collect the IP of the gateway that have injected the mail.
             # Iterate all parsed item and find IP
@@ -492,58 +493,52 @@ def parse_email(msg: email.message.Message, include_raw_body: bool = False, incl
             # Warning .. It may be spoofed !!
             # It add a warning if multiple identical items are found.
 
-            if 'byhostentry' in pconf:
-                if current_line.get('by'):
-                    for by_item in current_line.get('by'):  # type: ignore
-                        for byhostentry in pconf['byhostentry']:
-                            # print ("%s %s" % (byhostentry, by_item))
-                            if byhostentry.lower() in by_item:
-                                # Save the last Found.. ( most external )
-                                headers_struc['received_src'] = current_line.get('from')
+            if pconf.get('byhostentry'):
+                for by_item in parsed_routing.get('by', []):  # type: ignore
+                    for byhostentry_ in pconf['byhostentry']:
+                        byhostentry = byhostentry_.lower()
+                        # print ("%s %s" % (byhostentry, by_item))
+                        if byhostentry in by_item:
+                            # Save the last Found.. ( most external )
+                            headers_struc['received_src'] = parsed_routing.get('from')
 
-                                # Increment watched by detection counter, and warn if needed
-                                found_smtpin[byhostentry.lower()] += 1
-                                if found_smtpin[byhostentry.lower()] > 1:  # Twice found the header...
-                                    if current_line.get('warning'):
-                                        current_line['warning'].append(['Duplicate SMTP by entrypoint'])
-                                    else:
-                                        current_line['warning'] = ['Duplicate SMTP by entrypoint']
+                            # Increment watched by detection counter, and warn if needed
+                            found_smtpin[byhostentry] += 1
+                            if found_smtpin[byhostentry] > 1:  # Twice found the header...
+                                if parsed_routing.get('warning'):
+                                    parsed_routing['warning'].append(['Duplicate SMTP by entrypoint'])
+                                else:
+                                    parsed_routing['warning'] = ['Duplicate SMTP by entrypoint']
 
-            headers_struc['received'].append(current_line)
+            headers_struc['received'].append(parsed_routing)
 
-            # Parse IP in "received headers"
-            for ips in eml_parser.regex.ipv6_regex.findall(l):
-                if not eml_parser.regex.priv_ip_regex.match(ips):
-                    if ips.lower() not in pconf['whiteip']:
-                        headers_struc['received_ip'].append(ips.lower())
-            for ips in eml_parser.regex.ipv4_regex.findall(l):
-                if not eml_parser.regex.priv_ip_regex.match(ips):
-                    if ips not in pconf['whiteip']:
-                        headers_struc['received_ip'].append(ips.lower())
+            # Parse IPs in "received headers"
+            ips_in_received_line = eml_parser.regex.ipv6_regex.findall(received_line_flat) + \
+                eml_parser.regex.ipv4_regex.findall(received_line_flat)
+            for ip in ips_in_received_line:
+                try:
+                    ip_obj = ipaddress.ip_address(ip)  # type: ignore  # type of findall is list[str], so this is correct
+                except ValueError:
+                    logger.debug('Invalid IP in received line - "{}"'.format(ip))
+                else:
+                    if not (ip_obj.is_private or str(ip_obj) in pconf['whiteip']):
+                        headers_struc['received_ip'].append(str(ip_obj))
 
-            # search for domain / e-mail addresses
-            for m in eml_parser.regex.recv_dom_regex.findall(l):
-                checks = True
-                if '.' in m:  # type: ignore  # type of findall is list[str], so this is correct
-                    try:
-                        if eml_parser.regex.ipv4_regex.match(m) or m == '127.0.0.1':  # type: ignore  # type of findall is list[str], so this is correct
-                            checks = False
-                    except ValueError:
-                        logger.exception('Exception occured while running regex.')
-
-                if checks:
+            # search for domain
+            for m in eml_parser.regex.recv_dom_regex.findall(received_line_flat):
+                try:
+                    ip_obj = ipaddress.ip_address(m)  # type: ignore  # type of findall is list[str], so this is correct
+                    checks = False
+                except ValueError:
+                    # we find IPs using the previous IP crawler, hence we ignore them
+                    # here.
+                    # iff the regex fails, we add the entry
                     headers_struc['received_domain'].append(m)
 
-            # Extracts emails, but not the ones in the FOR on this received headers line.
-            # Process Here line per line not finally to not miss a email not in from
-            m = eml_parser.regex.email_regex.findall(l)  # type: ignore
-            if m:
-                for mail_candidate in m:  # type: ignore  # type of findall is list[str], so this is correct
-                    if current_line.get('for'):
-                        if mail_candidate not in current_line.get('for'):  # type: ignore
-                            headers_struc['received_email'] += [mail_candidate]
-                    else:
-                        headers_struc['received_email'] += [mail_candidate]
+            # search for e-mail addresses
+            for mail_candidate in eml_parser.regex.email_regex.findall(received_line_flat):
+                if mail_candidate not in parsed_routing.get('for', []):
+                    headers_struc['received_email'] += [mail_candidate]
 
     except TypeError:  # Ready to parse email without received headers.
         logger.exception('Exception occured while parsing received lines.')
@@ -552,8 +547,8 @@ def parse_email(msg: email.message.Message, include_raw_body: bool = False, incl
     # for rapid "find"
     headers_struc['received_foremail'] = []
     if 'received' in headers_struc:
-        for line in headers_struc['received']:
-            for itemfor in line.get('for', []):
+        for _parsed_routing in headers_struc['received']:
+            for itemfor in _parsed_routing.get('for', []):
                 if itemfor not in pconf['whitefor']:
                     headers_struc['received_foremail'].append(itemfor)
 
