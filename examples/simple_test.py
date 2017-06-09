@@ -68,6 +68,10 @@ def main():
     fulldata = options.fulldata
     pconf = {}
 
+    pconf['whiteip'] = ['192.168.1.1']
+    pconf['whitefor'] = ['a@example.com']
+    pconf['byhostentry'] = ['example.com']
+
     if options.whitelist_ip is not None:
         pconf['whiteip'] = options.whitelist_ip.split(',')
 
