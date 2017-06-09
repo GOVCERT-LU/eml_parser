@@ -528,7 +528,6 @@ def parse_email(msg: email.message.Message, include_raw_body: bool = False, incl
             for m in eml_parser.regex.recv_dom_regex.findall(received_line_flat):
                 try:
                     ip_obj = ipaddress.ip_address(m)  # type: ignore  # type of findall is list[str], so this is correct
-                    checks = False
                 except ValueError:
                     # we find IPs using the previous IP crawler, hence we ignore them
                     # here.
