@@ -9,11 +9,6 @@ samples_dir = os.path.join(parent_dir, 'samples')
 
 
 class TestEMLParser(object):
-    def test_get_file_extension(self):
-        assert eml_parser.eml_parser.get_file_extension('test.txt') == 'txt'
-        assert eml_parser.eml_parser.get_file_extension('test') == ''
-        assert eml_parser.eml_parser.get_file_extension('tést.txt') == 'txt'
-
     def test_get_file_hash(self):
         with open(os.path.join(samples_dir, 'sample.eml'), 'rb') as fhdl:
             raw_email = fhdl.read()

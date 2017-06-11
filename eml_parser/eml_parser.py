@@ -36,6 +36,7 @@ information found in the e-mail as well as computed information.
 #
 
 import logging
+import os.path
 import email
 import email.message
 import email.policy
@@ -118,24 +119,6 @@ def get_raw_body_text(msg: email.message.Message) -> typing.List[typing.Tuple[ty
     return raw_body
 
 
-def get_file_extension(filename: str) -> str:
-    """Return the file extention of a given filename
-
-    Args:
-      filename (str): The file name.
-
-    Returns:
-      str: The lower-case file extension
-    """
-    extension = ''
-    dot_idx = filename.rfind('.')
-
-    if dot_idx != -1:
-        extension = filename[dot_idx + 1:]
-
-    return extension.lower()
-
-
 def get_file_hash(data: bytes) -> typing.Dict[str, str]:
     """Generate hashes of various types (``MD5``, ``SHA-1``, ``SHA-256``, ``SHA-512``)
     for the provided data.
@@ -211,7 +194,9 @@ def traverse_multipart(msg: email.message.Message, counter: int = 0, include_att
             attachments[file_id]['filename'] = filename
             attachments[file_id]['size'] = file_size
 
-            extension = get_file_extension(filename)
+            # os.path always returns the extension as second element
+            # in case there is no extension it returns an empty string
+            extension = os.path.splitext(filename)[1].lower()
             if extension:
                 attachments[file_id]['extension'] = extension
 
