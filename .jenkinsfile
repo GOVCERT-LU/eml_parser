@@ -60,5 +60,4 @@ def analyze_coverage() {
           onlyStable: false,
           sourceEncoding: 'ASCII',
           zoomCoverageChart: false])
-    }
 }
