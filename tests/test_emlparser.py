@@ -1,4 +1,11 @@
+import os.path
+
 import eml_parser.eml_parser
+
+
+my_execution_dir = os.path.dirname(os.path.realpath(__file__))
+parent_dir = os.path.split(my_execution_dir)[0]
+samples_dir = os.path.join(parent_dir, 'samples')
 
 
 class TestEMLParser(object):
@@ -8,7 +15,7 @@ class TestEMLParser(object):
         assert eml_parser.eml_parser.get_file_extension('tést.txt') == 'txt'
 
     def test_get_file_hash(self):
-        with open('samples/sample.eml', 'rb') as fhdl:
+        with open(os.path.join(samples_dir, 'sample.eml'), 'rb') as fhdl:
             raw_email = fhdl.read()
 
         pre_computed_hashes = {'sha256': '99798841db2f773a11ead628526ab4d6226187e20ca715e3439bb7375806b275',
