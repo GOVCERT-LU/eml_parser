@@ -1,4 +1,9 @@
 import os.path
+import pytest
+from email.message import EmailMessage
+from email.headerregistry import Address
+import email.utils
+import email.policy
 
 import eml_parser.eml_parser
 
@@ -35,3 +40,32 @@ class TestEMLParser(object):
         expected_result = ['http://www.example.com', 'http://www.example.com/test1?bla', 'http://www.example.com/a/b/c/d/', 'https://www.example2.com']
 
         assert eml_parser.eml_parser.get_uri_ondata(test_urls) == expected_result
+
+    def test_headeremail2list_1(self):
+        msg = EmailMessage()
+        msg['Subject'] = 'Test subject éèàöüä${}'
+        msg['From'] = Address("John Doe", "john.doe", "example.com")
+        msg['To'] = (Address("Jané Doe", "jane.doe", "example.com"),
+                     Address("James Doe", "james.doe", "example.com"))
+        msg.set_content('''Hi,
+Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent feugiat vitae tellus et molestie. Duis est ipsum, tristique eu pulvinar vel, aliquet a nibh. Vestibulum ultricies semper euismod. Maecenas non sagittis elit. Mauris non feugiat leo. Cras vitae quam est. Donec dapibus justo ut dictum viverra. Aliquam eleifend tortor mollis, vulputate ante sit amet, sodales elit. Fusce scelerisque congue risus mollis pellentesque. Sed malesuada erat sit amet nisl laoreet mollis. Suspendisse potenti. Fusce cursus, tortor sit amet euismod molestie, sem enim semper quam, eu ultricies leo est vel turpis.
+''')
+
+        assert sorted(eml_parser.eml_parser.headeremail2list(mail=msg, header='to')) == ['james.doe@example.com', 'jane.doe@example.com']
+
+    def test_headeremail2list_2(self):
+        '''Here we test the headeremail2list function using an input which should trigger
+        a email library bug 27257
+        '''
+        with open(os.path.join(samples_dir, 'sample_bug27257.eml'), 'rb') as fhdl:
+            raw_email = fhdl.read()
+
+        msg = email.message_from_bytes(raw_email, policy=email.policy.default)
+
+        # just to be sure we still hit bug 27257 (else there is no more need for the workaround)
+        with pytest.raises(AttributeError):
+            msg.items()
+
+        # our parsing function should trigger an exception leading to the parsing
+        # using a workaround
+        assert eml_parser.eml_parser.headeremail2list(mail=msg, header='to') == ['test@example.com']

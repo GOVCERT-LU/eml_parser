@@ -320,7 +320,11 @@ def headeremail2list(mail: email.message.Message, header: str) -> typing.List[st
     Returns:
         list: Returns a list of strings which represent e-mail addresses.
     """
-    field = email.utils.getaddresses(eml_parser.decode.workaround_bug_27257(mail, header))
+    try:
+        field = email.utils.getaddresses(mail.get_all(header, []))
+    except (IndexError, AttributeError):
+        field = email.utils.getaddresses(eml_parser.decode.workaround_bug_27257(mail, header))
+
     return_field = []
 
     for m in field:
