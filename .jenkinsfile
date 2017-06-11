@@ -24,6 +24,10 @@ pipeline {
         script { analyze_pyflakes() }
       }
     }
+
+    stage('Test results') {
+        junit '**/junit-*.xml'
+    }
   }
 }
 
