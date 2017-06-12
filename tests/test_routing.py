@@ -24,3 +24,12 @@ class TestRouting(object):
 
         for test, expected_result in test_input.items():
             assert eml_parser.routing.noparenthesis(test) == expected_result
+
+    def test_cleanline(self):
+        test_input = {'   ;': '',
+                      '  test  ': 'test',
+                      ';  test;  ': 'test',
+                      }
+
+        for test, expected_result in test_input.items():
+            assert eml_parser.routing.cleanline(test) == expected_result
