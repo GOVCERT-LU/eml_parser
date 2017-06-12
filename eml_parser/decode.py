@@ -215,7 +215,7 @@ def robust_string2date(line: str) -> datetime.datetime:
 
         try:
             date_ = dateutil.parser.parse(line)
-        except (AttributeError, ValueError, OverflowError, Exception) as exc:
+        except (AttributeError, ValueError, OverflowError, Exception):
             date_ = None
 
     if date_ is None:
