@@ -191,8 +191,8 @@ def robust_string2date(line: str) -> datetime.datetime:
     It is guaranteed to always return a valid datetime.datetime object.
     If first tries the built-in email module method for parsing the date according
     to related RFC's.
-    If this fails it returns a datetime.datetime object representing
-    "1970-01-01 00:00:00 +0000".
+    If this fails it returns, dateutil is tried. If that fails as well, a datetime.datetime
+    object representing "1970-01-01 00:00:00 +0000" is returned.
     In case there is no timezone information in the parsed date, we set it to UTC.
 
     Args:
@@ -208,13 +208,15 @@ def robust_string2date(line: str) -> datetime.datetime:
     if line == '':
         return dateutil.parser.parse(default_date)
 
-    msg_date = line.replace('.', ':')
-
     try:
-        date_ = email.utils.parsedate_to_datetime(msg_date)
+        date_ = email.utils.parsedate_to_datetime(line)
     except (TypeError, Exception):
         logger.debug('Exception parsing date "{}"'.format(line), exc_info=True)
-        return dateutil.parser.parse(default_date)
+
+        try:
+            date_ = dateutil.parser.parse(line)
+        except (AttributeError, ValueError, OverflowError, Exception) as exc:
+            date_ = None
 
     if date_ is None:
         # Now we are facing an invalid date.

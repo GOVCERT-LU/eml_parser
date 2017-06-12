@@ -4,6 +4,7 @@ from email.message import EmailMessage
 from email.headerregistry import Address
 import email.utils
 import email.policy
+import dateutil.parser
 
 import eml_parser.eml_parser
 
@@ -34,3 +35,18 @@ class TestDecode(object):
 
         for clear, encoded in test_subjects.items():
             assert eml_parser.decode.decode_field(encoded) == clear
+
+    def test_robust_string2date(self):
+        """Test the converter function, it should never return the default date
+        on the provided input
+        """
+        default_date = '1970-01-01T00:00:00+0000'
+        default_date_date = dateutil.parser.parse(default_date)
+        test_input = ['Mon, 12 Jun 2017 22:25:19 +0200',
+                      'Mon, 12 Jun 2017 20:24:43 +0000 (UTC)',
+                      'Mon, 12 Jun 2017 16:24:21 -0400',
+                      '12 Jun 2017 22:01:19.5933'
+                      ]
+
+        for test in test_input:
+            assert eml_parser.decode.robust_string2date(test) != default_date_date
