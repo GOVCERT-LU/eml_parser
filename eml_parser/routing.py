@@ -90,7 +90,7 @@ def parserouting(line: str) -> typing.Dict[str, typing.Any]:
     npline = re.sub(r'\(', ' ( ', npline)  # nORMALISE sPACE # Re-space ()
     npline = re.sub(r';', ' ; ', npline)  # nORMALISE sPACE # Re-space ;
     npline = noparenthesis(npline)  # Remove any "()"
-    npline = re.sub('  *', ' ', npline)  # nORMALISE sPACE
+    npline = re.sub('\s+', ' ', npline)  # nORMALISE sPACE
     npline = npline.strip('\n')  # Remove any NL
     raw_find_data = eml_parser.regex.date_regex.findall(npline)  # extract date on end line.
 
@@ -124,7 +124,7 @@ def parserouting(line: str) -> typing.Dict[str, typing.Any]:
                 if end < loc or end == -1:
                     end = 0xfffffff   # Kindof MAX 31 bits
                 result.append({'name_in': word, 'pos': loc, 'name_out': endword, 'weight': end + loc})
-                # print {'name_in': word, 'pos': loc, 'name_out': endword, 'weight': end+loc}
+                #print({'name_in': word, 'pos': loc, 'name_out': endword, 'weight': end+loc})
 
     # Create the word list... "from/by/with/for" by sorting the list.
     if not result:

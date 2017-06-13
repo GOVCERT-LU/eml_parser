@@ -1,5 +1,6 @@
 import os.path
 import pytest
+import datetime
 from email.message import EmailMessage
 from email.headerregistry import Address
 import email.utils
@@ -39,5 +40,36 @@ class TestRouting(object):
                       }
 
         for test, expected_result in test_input.items():
-            print(test, sorted(eml_parser.routing.give_dom_ip(test)))
-            assert eml_parser.routing.give_dom_ip(test) == expected_result
+            assert sorted(eml_parser.routing.give_dom_ip(test)) == sorted(expected_result)
+
+    def test_parserouting(self):
+        test_input = {'test1': ('''Received: from mta1.example.com (mta1.example.com [192.168.1.100]) (using TLSv1 with cipher ADH-AES256-SHA (256/256 bits)) (No client certificate requested) by mta.example2.com (Postfix) with ESMTPS id 6388F684168 for <info@example.com>; Fri, 26 Apr 2013 13:15:55 +0200 (CEST)''',
+                                {'by': ['mta.example2.com'],
+                                 'for': ['info@example.com'],
+                                 'from': ['mta1.example.com', '192.168.1.100'],
+                                 'src': 'Received: from mta1.example.com (mta1.example.com [192.168.1.100]) (using TLSv1 with cipher ADH-AES256-SHA (256/256 bits)) (No client certificate requested) by mta.example2.com (Postfix) with ESMTPS id 6388F684168 for <info@example.com>; Fri, 26 Apr 2013 13:15:55 +0200 (CEST)',
+                                 'with': 'esmtps id 6388f684168',
+                                 'date': datetime.datetime(2013, 4, 26, 13, 15, 55, tzinfo=datetime.timezone(datetime.timedelta(0, 7200)))})
+                      }
+
+        for test_number, test in test_input.items():
+            test_output = eml_parser.routing.parserouting(test[0])
+
+            print('>>>>>')
+            print(test_output['src'])
+            print(test[1]['src'])
+            print()
+            assert test_output['src'] == test[1]['src']
+            assert test_output['with'] == test[1]['with']
+            assert test_output['date'] == test[1]['date']
+
+            assert len(test_output['by']) == len(test[1]['by'])
+            assert len(test_output['for']) == len(test[1]['for'])
+            assert len(test_output['from']) == len(test[1]['from'])
+
+            for test_key in ('by', 'for', 'from'):
+                for k in test_output[test_key]:
+                    assert k in test[1][test_key]
+
+                for k in test[1][test_key]:
+                    assert k in test_output[test_key]
