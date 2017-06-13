@@ -140,7 +140,7 @@ def parserouting(line: str) -> typing.Dict[str, typing.Any]:
                 result_max = eline['weight']
                 line_max = eline
 
-        if len(line_max) > 0:
+        if line_max:
             tout.append([line_max.get('pos'), line_max.get('name_in')])
 
     # structure is list[list[int, str]]
