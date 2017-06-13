@@ -124,7 +124,7 @@ def parserouting(line: str) -> typing.Dict[str, typing.Any]:
                 if end < loc or end == -1:
                     end = 0xfffffff   # Kindof MAX 31 bits
                 result.append({'name_in': word, 'pos': loc, 'name_out': endword, 'weight': end + loc})
-                #print({'name_in': word, 'pos': loc, 'name_out': endword, 'weight': end+loc})
+                # print({'name_in': word, 'pos': loc, 'name_out': endword, 'weight': end+loc})
 
     # Create the word list... "from/by/with/for" by sorting the list.
     if not result:
