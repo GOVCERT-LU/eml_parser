@@ -55,10 +55,6 @@ class TestRouting(object):
         for test_number, test in test_input.items():
             test_output = eml_parser.routing.parserouting(test[0])
 
-            print('>>>>>')
-            print(test_output['src'])
-            print(test[1]['src'])
-            print()
             assert test_output['src'] == test[1]['src']
             assert test_output['with'] == test[1]['with']
             assert test_output['date'] == test[1]['date']
