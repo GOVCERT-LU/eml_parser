@@ -33,3 +33,11 @@ class TestRouting(object):
 
         for test, expected_result in test_input.items():
             assert eml_parser.routing.cleanline(test) == expected_result
+
+    def test_give_dom_ip(self):
+        test_input = {' 192.168.1.1 abc bla bla www.example.com sdsf ::1 test ': ['192.168.1.1', '::1', 'www.example.com'],
+                      }
+
+        for test, expected_result in test_input.items():
+            print(test, sorted(eml_parser.routing.give_dom_ip(test)))
+            assert eml_parser.routing.give_dom_ip(test) == expected_result
