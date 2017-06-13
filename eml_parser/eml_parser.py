@@ -114,7 +114,14 @@ def get_raw_body_text(msg: email.message.Message) -> typing.List[typing.Tuple[ty
                     logger.debug('An exception occured while decoding the payload!', exc_info=True)
                     raw_body_str = msg.get_payload(decode=True).decode('ascii', 'ignore')
 
-            raw_body.append((encoding, raw_body_str, msg.items()))
+            """In case we hit bug 27257, try to downgrade the used policy"""
+            try:
+                raw_body.append((encoding, raw_body_str, msg.items()))
+            except AttributeError:
+                former_policy = msg.policy
+                msg.policy = email.policy.compat32
+                raw_body.append((encoding, raw_body_str, msg.items()))
+                msg.policy = former_policy
 
     return raw_body
 
@@ -175,7 +182,14 @@ def traverse_multipart(msg: email.message.Message, counter: int = 0, include_att
         for part in msg.get_payload():  # type: ignore
             attachments.update(traverse_multipart(part, counter, include_attachment_data))  # type: ignore
     else:
-        lower_keys = dict((k.lower(), v) for k, v in msg.items())
+        """In case we hit bug 27257, try to downgrade the used policy"""
+        try:
+            lower_keys = dict((k.lower(), v) for k, v in msg.items())
+        except AttributeError:
+            former_policy = msg.policy
+            msg.policy = email.policy.compat32
+            lower_keys = dict((k.lower(), v) for k, v in msg.items())
+            msg.policy = former_policy
 
         if 'content-disposition' in lower_keys or not msg.get_content_maintype() == 'text':
             # if it's an attachment-type, pull out the filename

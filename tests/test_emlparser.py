@@ -1,4 +1,8 @@
+# -*- coding: utf-8 -*-
+# pylint: disable=line-too-long
 import os.path
+import json
+import datetime
 import pytest
 from email.message import EmailMessage
 from email.headerregistry import Address
@@ -11,6 +15,51 @@ import eml_parser.eml_parser
 my_execution_dir = os.path.dirname(os.path.realpath(__file__))
 parent_dir = os.path.split(my_execution_dir)[0]
 samples_dir = os.path.join(parent_dir, 'samples')
+
+
+def recursive_compare(element_a: dict, element_b: dict):
+    '''Function for recursively comparing two variables and check if they are equal.
+    The idea behind this function is to check two objects generated from JSON strings.
+    Types which are supported by JSON are supported here as well.
+
+    Args:
+        element_a (dict): Object A to compare to object B.
+        element_b (dict): Object B to compare to object A.
+
+    Raises:
+        AssertionError: Raises an AssertionError whenever differences are found while
+                        comparing the objects.
+    '''
+    if isinstance(element_a, dict):
+        assert isinstance(element_b, dict)
+
+        for element_a_key, element_a_value in element_a.items():
+            assert element_a_key in element_b
+
+            recursive_compare(element_a_value, element_b[element_a_key])
+
+    elif isinstance(element_a, list):
+        assert isinstance(element_b, list)
+
+        for element_a_value in element_a:
+            assert element_a_value in element_b
+
+            recursive_compare(element_a_value, element_b[element_b.index(element_a_value)])
+
+    elif type(element_a) in (str, int, bool, None):
+        assert type(element_a) is type(element_b)
+        assert element_a == element_b
+
+    else:
+        raise ValueError('No idea how to handle - {}'.format(type(element_a)))
+
+
+def json_serial(obj):
+    """JSON serializer for objects not serializable by default json code"""
+
+    if isinstance(obj, datetime.datetime):
+        serial = obj.isoformat()
+        return serial
 
 
 class TestEMLParser(object):
@@ -69,3 +118,25 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
         # our parsing function should trigger an exception leading to the parsing
         # using a workaround
         assert eml_parser.eml_parser.headeremail2list(mail=msg, header='to') == ['test@example.com']
+
+    def test_parse_email_1(self):
+        msg = EmailMessage()
+        msg['Subject'] = 'Test subject éèàöüä${}'
+        msg['From'] = Address("John Doe", "john.doe", "example.com")
+        msg['To'] = (Address("Jané Doe", "jane.doe", "example.com"),
+                     Address("James Doe", "james.doe", "example.com"))
+        msg.set_content('''Hi,
+      Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent feugiat vitae tellus et molestie. Duis est ipsum, tristique eu pulvinar vel, aliquet a nibh. Vestibulum ultricies semper euismod. Maecenas non sagittis elit. Mauris non feugiat leo. Cras vitae quam est. Donec dapibus justo ut dictum viverra. Aliquam eleifend tortor mollis, vulputate ante sit amet, sodales elit. Fusce scelerisque congue risus mollis pellentesque. Sed malesuada erat sit amet nisl laoreet mollis. Suspendisse potenti. Fusce cursus, tortor sit amet euismod molestie, sem enim semper quam, eu ultricies leo est vel turpis.
+      ''')
+
+        good_output_json = r'''{"header": {"header": {"content-transfer-encoding": ["quoted-printable"], "content-type": ["text/plain; charset=\"utf-8\""], "from": ["John Doe <john.doe@example.com>"], "subject": ["Test subject \u00e9\u00e8\u00e0\u00f6\u00fc\u00e4${}"], "to": ["Jan\u00e9 Doe <jane.doe@example.com>, James Doe <james.doe@example.com>"], "mime-version": ["1.0"]}, "from": "john.doe@example.com", "subject": "Test subject \u00e9\u00e8\u00e0\u00f6\u00fc\u00e4${}", "received": [], "date": "1970-01-01T00:00:00+00:00", "to": ["jane.doe@example.com", "james.doe@example.com"]}, "body": [{"content_header": {"content-transfer-encoding": ["quoted-printable"], "content-type": ["text/plain; charset=\"utf-8\""]}, "hash": "f765993eba20df87927f5bf6e947696d48bdf936e75508b9d126bbe8aa1a1497", "content_type": "text/plain"}]}'''
+        good_output = json.loads(good_output_json)
+
+        test_output_json = json.dumps(eml_parser.eml_parser.parse_email(msg), default=json_serial)
+        test_output = json.loads(test_output_json)
+
+        recursive_compare(good_output, test_output)
+
+    def test_parse_email_2(self):
+        for k in os.listdir(samples_dir):
+            test = eml_parser.eml_parser.decode_email(os.path.join(samples_dir, k))
