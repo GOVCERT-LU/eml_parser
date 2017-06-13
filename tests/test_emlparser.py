@@ -140,3 +140,8 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
     def test_parse_email_2(self):
         for k in os.listdir(samples_dir):
             test = eml_parser.eml_parser.decode_email(os.path.join(samples_dir, k))
+
+        for k in os.listdir(samples_dir):
+            with open(os.path.join(samples_dir, k), 'rb') as fhdl:
+                raw_email = fhdl.read()
+                test = eml_parser.eml_parser.decode_email_b(raw_email)
