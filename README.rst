@@ -6,8 +6,8 @@
    :target: https://www.quantifiedcode.com/app/project/468b8039f5a94528aaa9d7a25ecc68eb
    :alt: Code issues
 
-.. image:: https://travis-ci.org/GOVCERT-LU/eml_parser.svg?branch=master
-    :target: https://travis-ci.org/GOVCERT-LU/eml_parser
+.. image:: https://travis-ci.org/GOVCERT-LU/eml_parser.svg?branch=static_types
+    :target: https://github.com/GOVCERT-LU/eml_parser/tree/static_types
 
 .. image:: https://readthedocs.org/projects/eml-parser/badge/
    :alt: Documentation Status
