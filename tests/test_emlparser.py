@@ -120,6 +120,7 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
         assert eml_parser.eml_parser.headeremail2list(mail=msg, header='to') == ['test@example.com']
 
     def test_parse_email_1(self):
+        """Parses a generated sample e-mail and tests it against a known good result"""
         msg = EmailMessage()
         msg['Subject'] = 'Test subject éèàöüä${}'
         msg['From'] = Address("John Doe", "john.doe", "example.com")
@@ -138,6 +139,7 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
         recursive_compare(good_output, test_output)
 
     def test_parse_email_2(self):
+        """Parses the e-mails from the samples folder"""
         for k in os.listdir(samples_dir):
             test = eml_parser.eml_parser.decode_email(os.path.join(samples_dir, k))
 
@@ -145,3 +147,29 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
             with open(os.path.join(samples_dir, k), 'rb') as fhdl:
                 raw_email = fhdl.read()
                 test = eml_parser.eml_parser.decode_email_b(raw_email)
+
+    def test_parse_email_3(self):
+        """Parses the e-mails from the samples folder while keeping raw data"""
+        for k in os.listdir(samples_dir):
+            test = eml_parser.eml_parser.decode_email(os.path.join(samples_dir, k), include_raw_body=True, include_attachment_data=True)
+
+        for k in os.listdir(samples_dir):
+            with open(os.path.join(samples_dir, k), 'rb') as fhdl:
+                raw_email = fhdl.read()
+                test = eml_parser.eml_parser.decode_email_b(raw_email, include_raw_body=True, include_attachment_data=True)
+
+    def test_parse_email_4(self):
+        """Parses the e-mails from the samples folder while keeping raw data and passing
+        in a filtering config 'pconf'"""
+        pconf = {'whiteip': ['192.168.1.1'],
+                 'whitefor': ['a@example.com'],
+                 'byhostentry': ['example.com']
+                 }
+
+        for k in os.listdir(samples_dir):
+            test = eml_parser.eml_parser.decode_email(os.path.join(samples_dir, k), include_raw_body=True, include_attachment_data=True, pconf=pconf)
+
+        for k in os.listdir(samples_dir):
+            with open(os.path.join(samples_dir, k), 'rb') as fhdl:
+                raw_email = fhdl.read()
+                test = eml_parser.eml_parser.decode_email_b(raw_email, include_raw_body=True, include_attachment_data=True, pconf=pconf)
