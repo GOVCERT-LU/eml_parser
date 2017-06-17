@@ -728,9 +728,12 @@ def parse_email(msg: email.message.Message, include_raw_body: bool = False, incl
     for k in set(msg.keys()):
         # We are using replace . to : for avoiding issue in mongo
         k = k.lower().replace('.', ':')  # Lot of lower, precompute...
+        decoded_values = []
 
         try:
-            value = str(msg[k])
+            for value in msg.get_all(k, []):
+                if value:
+                    decoded_values.append(value)
         except (IndexError, AttributeError):
             # We have hit current open issue #27257
             # https://bugs.python.org/issue27257
@@ -743,11 +746,12 @@ def parse_email(msg: email.message.Message, include_raw_body: bool = False, incl
                 header[k] += decoded_values
             else:
                 header[k] = decoded_values
-        else:
+
+        if decoded_values:
             if k in header:
-                header[k].append(value)
+                header[k] += decoded_values
             else:
-                header[k] = [value]
+                header[k] = decoded_values
 
     headers_struc['header'] = header
 
