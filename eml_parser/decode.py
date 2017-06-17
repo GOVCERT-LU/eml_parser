@@ -35,6 +35,7 @@ methods.
 #    if a mail-server (e.g. exchange) uses an ID which looks like a valid IP
 #
 
+import json
 import email
 import datetime
 import logging
@@ -225,3 +226,33 @@ def robust_string2date(line: str) -> datetime.datetime:
         return date_.replace(tzinfo=datetime.timezone.utc)
     else:
         return date_
+
+
+def json_serial(obj):
+    """JSON serializer for objects not serializable by default json code"""
+
+    if isinstance(obj, datetime.datetime):
+        if obj.tzinfo is not None:
+            serial = obj.astimezone(datetime.timezone.utc).isoformat()
+        else:
+            serial = obj.isoformat()
+
+        return serial
+
+    print(obj)
+    raise TypeError('Type not serializable - {}'.format(str(type(obj))))
+
+
+def export_to_json(parsed_msg: dict, sort_keys: bool=False) -> str:
+    """Function to convert a parsed e-mail dict to a JSON string.
+
+    Args:
+        parsed_msg (dict): The parsed e-mail dict which is the result of
+                           one of the decode_email functions.
+        sort_keys (bool, optional): If True, sorts the keys in the JSON output.
+                                    Default: False.
+
+    Returns:
+        str: Returns the JSON string.
+    """
+    return json.dumps(parsed_msg, default=json_serial, sort_keys=sort_keys, indent=2)
