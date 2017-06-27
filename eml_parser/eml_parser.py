@@ -212,7 +212,8 @@ def traverse_multipart(msg: email.message.Message, counter: int = 0, include_att
             # in case there is no extension it returns an empty string
             extension = os.path.splitext(filename)[1].lower()
             if extension:
-                attachments[file_id]['extension'] = extension
+                # strip leading dot
+                attachments[file_id]['extension'] = extension[1:]
 
             attachments[file_id]['hash'] = get_file_hash(data)
 
@@ -727,7 +728,7 @@ def parse_email(msg: email.message.Message, include_raw_body: bool = False, incl
     #
     for k in set(msg.keys()):
         # We are using replace . to : for avoiding issue in mongo
-        k = k.lower().replace('.', ':')  # Lot of lower, precompute...
+        k = k.lower()  # Lot of lower, precompute...
         decoded_values = []
 
         try:
