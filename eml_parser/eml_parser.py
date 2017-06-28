@@ -59,10 +59,15 @@ try:
     import magic
 except ImportError:
     magic = None
-    magic_ms = None
+    magic_mime = None
+    magic_none = None
 else:
-    magic_ms = magic.open(magic.MAGIC_MIME_TYPE)
-    magic_ms.load()
+    # MAGIC_MIME_TYPE gives the real mime-type
+    magic_mime = magic.open(magic.MAGIC_MIME_TYPE)
+    magic_mime.load()
+    # MAGIC_NONE gives the meta-information on the analysed file
+    magic_none = magic.open(magic.MAGIC_NONE)
+    magic_none.load()
 
 
 __author__ = 'Toth Georges, Jung Paul'
@@ -217,10 +222,10 @@ def traverse_multipart(msg: email.message.Message, counter: int = 0, include_att
 
             attachments[file_id]['hash'] = get_file_hash(data)
 
-            if magic_ms is not None:
-                attachments[file_id]['mime_type'] = magic_ms.buffer(data)
+            if not(magic_mime is None or magic_none is None):
+                attachments[file_id]['mime_type'] = magic_none.buffer(data)
                 # attachments[file_id]['mime_type_short'] = attachments[file_id]['mime_type'].split(",")[0]
-                attachments[file_id]['mime_type_short'] = magic_ms.buffer(data)
+                attachments[file_id]['mime_type_short'] = magic_mime.buffer(data)
 
             if include_attachment_data:
                 attachments[file_id]['raw'] = base64.b64encode(data)
