@@ -36,10 +36,11 @@ methods.
 #
 
 import json
-import email
 import datetime
 import logging
 import typing
+import email
+import email.utils
 import dateutil.parser
 import eml_parser.regex
 
@@ -209,6 +210,8 @@ def robust_string2date(line: str) -> datetime.datetime:
     if line == '':
         return dateutil.parser.parse(default_date)
 
+    date_ = None
+
     try:
         date_ = email.utils.parsedate_to_datetime(line)
     except (TypeError, Exception):
@@ -217,7 +220,7 @@ def robust_string2date(line: str) -> datetime.datetime:
         try:
             date_ = dateutil.parser.parse(line)
         except (AttributeError, ValueError, OverflowError, Exception):
-            date_ = None
+            pass
 
     if date_ is None:
         # Now we are facing an invalid date.
@@ -228,7 +231,7 @@ def robust_string2date(line: str) -> datetime.datetime:
         return date_
 
 
-def json_serial(obj):
+def json_serial(obj: typing.Any) -> typing.Optional[str]:
     """JSON serializer for objects not serializable by default json code"""
 
     if isinstance(obj, datetime.datetime):
@@ -239,7 +242,6 @@ def json_serial(obj):
 
         return serial
 
-    print(obj)
     raise TypeError('Type not serializable - {}'.format(str(type(obj))))
 
 

@@ -18,7 +18,6 @@ def noparenthesis(line: str) -> str:
     Args:
         line (str): Input text to search in for parenthesis.
 
-
     Returns:
         str: Return a string with all paranthesis removed.
     """
