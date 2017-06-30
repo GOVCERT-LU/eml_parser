@@ -1,3 +1,11 @@
-from __future__ import absolute_import, division, print_function, unicode_literals
+# -*- coding: utf-8 -*-
+# pylint: disable=line-too-long
 
-from eml_parser.eml_parser import decode_email_s, decode_email
+"""eml_parser serves as a python module for parsing eml files and returning various
+information found in the e-mail as well as computed information.
+"""
+
+from . import eml_parser
+
+
+__version__ = '1.4'

@@ -1,7 +1,6 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # pylint: disable=line-too-long
-from __future__ import absolute_import, division, print_function, unicode_literals
 
 #
 # Georges Toth (c) 2013-2014 <georges@trypill.org>
@@ -24,12 +23,13 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 import json
 import argparse
 import datetime
+import email.policy
 import eml_parser
 
 
-__author__ = 'Toth Georges, Jung Paul'
+__author__ = 'Toth Georges'
 __email__ = 'georges@trypill.org, georges.toth@govcert.etat.lu'
-__copyright__ = 'Copyright 2013-2014 Georges Toth, Copyright 2013-2017 GOVCERT Luxembourg'
+__copyright__ = 'Copyright 2013-2014 Georges Toth, Copyright 2013-present GOVCERT Luxembourg'
 __license__ = 'AGPL v3+'
 
 
@@ -39,6 +39,9 @@ def json_serial(obj):
     if isinstance(obj, datetime.datetime):
         serial = obj.isoformat()
         return serial
+    elif isinstance(obj, email.header.Header):
+        print(str(obj))
+        raise
 
     raise TypeError("Type not serializable")
 
@@ -65,6 +68,10 @@ def main():
     fulldata = options.fulldata
     pconf = {}
 
+    pconf['whiteip'] = ['192.168.1.1']
+    pconf['whitefor'] = ['a@example.com']
+    pconf['byhostentry'] = ['example.com']
+
     if options.whitelist_ip is not None:
         pconf['whiteip'] = options.whitelist_ip.split(',')
 
@@ -74,8 +81,12 @@ def main():
     if options.byhostentry is not None:
         pconf['byhostentry'] = options.byhostentry.split(',')
 
-    m = eml_parser.decode_email(msgfile, full, fulldata, pconf)
-    print (json.dumps(m, default=json_serial))
+    with open(msgfile, 'rb') as fhdl:
+        raw_email = fhdl.read()
+
+    m = eml_parser.eml_parser.decode_email_b(raw_email, include_raw_body=False, include_attachment_data=False, pconf=pconf)
+
+    print(json.dumps(m, default=json_serial))
 
 
 if __name__ == '__main__':

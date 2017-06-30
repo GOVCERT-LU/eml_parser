@@ -2,7 +2,9 @@
 import os.path
 from setuptools import setup
 
-__version__ = '1.3'
+import eml_parser
+
+__version__ = eml_parser.__version__
 
 
 f = open(os.path.join(os.path.dirname(__file__), 'README.rst'))
@@ -11,7 +13,8 @@ f.close()
 
 install_requires = ['python-dateutil',
                     'file-magic',
-                    'cchardet'
+                    'cchardet',
+                    'typing',
                     ]
 
 setup(name='eml_parser',
@@ -28,8 +31,9 @@ setup(name='eml_parser',
                    'License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)',
                    'Intended Audience :: Developers',
                    'Operating System :: OS Independent',
-                   'Programming Language :: Python :: 2.7',
-                   'Programming Language :: Python :: 3',
+                   'Programming Language :: Python :: 3.4',
+                   'Programming Language :: Python :: 3.5',
+                   'Programming Language :: Python :: 3.6',
                    'Programming Language :: Python :: Implementation :: CPython',
                    'Topic :: Communications :: Email'
                    ],

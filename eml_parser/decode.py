@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 # pylint: disable=line-too-long
 
-from __future__ import absolute_import, division, print_function, unicode_literals
+"""This module contains various string import, check and parse
+methods.
+"""
 
 #
 # Georges Toth (c) 2013-2014 <georges@trypill.org>
@@ -33,11 +35,14 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 #    if a mail-server (e.g. exchange) uses an ID which looks like a valid IP
 #
 
-import sys
+import json
+import datetime
+import logging
+import typing
 import email
-import re
-import base64
-import quopri
+import email.utils
+import dateutil.parser
+import eml_parser.regex
 
 try:
     try:
@@ -48,79 +53,10 @@ except ImportError:
     chardet = None
 
 
-# encoded string =?<encoding>?[QB]?<string>?=
-re_quoted_string = re.compile(r'''(                               # Group around entire regex to include it in matches
-                                   \=\?[^?]+\?([QB])\?[^?]+?\?\=  # Quoted String with subgroup for encoding method
-                                   |                              # or
-                                   .+?(?=\=\?|$)                  # Plain String
-                                  )''', (re.X | re.M | re.I))
-
-re_q_value = re.compile(r'\=\?(.+)?\?[Qq]\?(.+)?\?\=')
-re_b_value = re.compile(r'\=\?(.+)?\?[Bb]\?(.+)?\?\=')
+logger = logging.getLogger(__name__)
 
 
-def ascii_decode(string):
-    """Ascii Decode a given string; useful with dirty headers.
-
-    Args:
-      string (str): The string to be converted.
-
-    Returns:
-      str: Returns the decoded string.
-    """
-    # pylint: disable=no-else-return
-
-    if sys.version_info >= (3, 0) and isinstance(string, email.header.Header):
-        return str(string)
-
-    try:
-        if sys.version_info >= (3, 0):
-            return string.decode('latin-1')
-        else:
-            return string.decode('latin-1').encode('utf-8')
-    except Exception:
-        if sys.version_info >= (3, 0):
-            return string
-        else:
-            return string.encode('utf-8', 'replace')
-
-
-def force_string_decode(string):
-    """Force the decoding of a string.
-    It tries latin1 then utf-8, it stop of first win
-    It also convert None to empty string
-
-    #TODO this function should be merged with decode_field in order to simpilfy
-
-    Args:
-        string(str): Encoded string
-    Returns
-        str: Decoded string
-    """
-    if sys.version_info >= (3, 0) and isinstance(string, str):
-        return string
-
-    if string is None:
-        return ''
-
-    encodings = ('latin1', 'utf-8')
-    text = ''
-
-    for e in encodings:
-        try:
-            test = string.decode(e)
-            text = test
-            break
-        except UnicodeDecodeError:
-            pass
-
-    if text == '':
-        text = string.decode('ascii', 'ignore')
-
-    return text
-
-
-def decode_field(field):
+def decode_field(field: str) -> str:
     """Try to get the specified field using the Header module.
      If there is also an associated encoding, try to decode the
      field and return it, else return a specified default value.
@@ -131,142 +67,194 @@ def decode_field(field):
      Returns
         str: Clean encoded strings
      """
-
-    text = field
-
     try:
-        Header = email.Header
-    except AttributeError:
-        # Python3 support
-        Header = email.header
+        _decoded = email.header.decode_header(field)
+    except email.errors.HeaderParseError:
+        return field
 
-    try:
-        _decoded = Header.decode_header(field)
-        _text, charset = _decoded[0]
-    except (email.errors.HeaderParseError, UnicodeEncodeError):
-        _text, charset = None, None
+    string = ''
 
-    if charset:
+    for _text, charset in _decoded:
+        if charset:
+            string += decode_string(_text, charset)
+        else:
+            # @TODO might be an idea to check with chardet here
+            if isinstance(_text, bytes):
+                string += _text.decode('utf-8', 'ignore')
+            else:
+                string += _text
+
+    return string
+
+
+def decode_string(string: bytes, encoding: typing.Optional[str]) -> str:
+    """Try anyhting possible to parse an encoded bytes string and return the result.
+    We do this using the encoding hint, if this fails, we try to detect the correct
+    encoding using the chardet module, if that failed we try latin-1, utf-8 and
+    as a last resort ascii.
+    In any case we always return something.
+
+    Args:
+        string (bytes): The bytes string to be decoded.
+        encoding (str, optional): An optional encoding hint.
+
+    Returns:
+        str: A decoded form of the string.
+    """
+    if string == b'':
+        return ''
+
+    if encoding is not None:
         try:
-            text = decode_string(_text, charset)
-        except UnicodeDecodeError:
+            return string.decode(encoding)
+        except (UnicodeDecodeError, LookupError):
             pass
 
-    try:
-        text = decode_value(text)
-    except UnicodeDecodeError:
-        text = decode_string(text, 'latin-1')
+    if chardet:
+        enc = chardet.detect(string)
+        if not(enc['confidence'] is None or enc['encoding'] is None) and \
+            not (enc['confidence'] == 1 and enc['encoding'] == 'ascii'):
+            value = string.decode(enc['encoding'], 'replace')
+        else:
+            value = string.decode('ascii', 'replace')
+    else:
+        text = ''
 
-    return text
-
-
-def decode_string(string, encoding):
-    try:
-        value = string.decode(encoding)
-    except (UnicodeDecodeError, LookupError):
-        if chardet:
-            enc = chardet.detect(string)
+        for e in ('latin1', 'utf-8'):
             try:
-                if not (enc['confidence'] == 1 and enc['encoding'] == 'ascii'):
-                    value = string.decode(enc['encoding'])
-                else:
-                    value = string.decode('ascii', 'ignore')
+                text = string.decode(e)
             except UnicodeDecodeError:
-                value = force_string_decode(string)
+                pass
+            else:
+                break
+
+        if text == '':
+            value = string.decode('ascii', 'ignore')
+        else:
+            value = text
 
     return value
 
 
-def q_value_decode(string):
-    m = re_q_value.match(string)
-    if m:
-        encoding, e_string = m.groups()
-        if encoding.lower() != 'unknown':
-            d_string = quopri.decodestring(e_string).decode(encoding, 'ignore')
+def workaround_bug_27257(msg: email.message.Message, header: str) -> typing.List[str]:
+    """Function to work around bug 27257 and just tries its best using
+    the compat32 policy to extract any meaningful information, i.e.
+    e-mail addresses.
+
+    Args:
+        mail (email.message.Message): An e-mail message object.
+        header (str): The header field to decode.
+
+    Returns:
+        list: Returns a list of strings which represent e-mail addresses.
+    """
+    return_value = []  # type: typing.List[str]
+
+    for value in workaround_bug_27257_field_value(msg, header):
+        if value != '':
+            m = eml_parser.regex.email_regex.findall(value)
+            if m:
+                return_value += list(set(m))
+
+    return return_value
+
+
+def workaround_bug_27257_field_value(msg: email.message.Message, header: str) -> typing.List[str]:
+    """Function to work around bug 27257 and just tries its best using
+    the compat32 policy to extract any meaningful information.
+
+    Args:
+        mail (email.message.Message): An e-mail message object.
+        header (str): The header field to decode.
+
+    Returns:
+        list: Return an extracted list of strings.
+    """
+    if msg.policy == email.policy.compat32:  # type: ignore
+        new_policy = None
+    else:
+        new_policy = msg.policy  # type: ignore
+
+    msg.policy = email.policy.compat32  # type: ignore
+    return_value = []
+
+    for value in msg.get_all(header, []):
+        if value != '':
+            return_value.append(value)
+
+    if new_policy is not None:
+        msg.policy = new_policy  # type: ignore
+
+    return return_value
+
+
+def robust_string2date(line: str) -> datetime.datetime:
+    """Parses a date string to a datetime.datetime object using different methods.
+    It is guaranteed to always return a valid datetime.datetime object.
+    If first tries the built-in email module method for parsing the date according
+    to related RFC's.
+    If this fails it returns, dateutil is tried. If that fails as well, a datetime.datetime
+    object representing "1970-01-01 00:00:00 +0000" is returned.
+    In case there is no timezone information in the parsed date, we set it to UTC.
+
+    Args:
+        line (str): A string which should be parsed.
+
+    Returns:
+        datetime.datetime: Returns a datetime.datetime object.
+    """
+    # "." -> ":" replacement is for fixing bad clients (e.g. outlook express)
+    default_date = '1970-01-01T00:00:00+0000'
+
+    # if the input is empty, we return a default date
+    if line == '':
+        return dateutil.parser.parse(default_date)
+
+    date_ = None
+
+    try:
+        date_ = email.utils.parsedate_to_datetime(line)
+    except (TypeError, Exception):
+        logger.debug('Exception parsing date "{}"'.format(line), exc_info=True)
+
+        try:
+            date_ = dateutil.parser.parse(line)
+        except (AttributeError, ValueError, OverflowError, Exception):
+            pass
+
+    if date_ is None:
+        # Now we are facing an invalid date.
+        return dateutil.parser.parse(default_date)
+    elif date_.tzname() is None:
+        return date_.replace(tzinfo=datetime.timezone.utc)
+    else:
+        return date_
+
+
+def json_serial(obj: typing.Any) -> typing.Optional[str]:
+    """JSON serializer for objects not serializable by default json code"""
+
+    if isinstance(obj, datetime.datetime):
+        if obj.tzinfo is not None:
+            serial = obj.astimezone(datetime.timezone.utc).isoformat()
         else:
-            d_string = e_string.decode('utf-8', 'ignore')
-    else:
-        d_string = e_string.decode('utf-8', 'ignore')
-    return d_string
+            serial = obj.isoformat()
+
+        return serial
+
+    raise TypeError('Type not serializable - {}'.format(str(type(obj))))
 
 
-def b_value_decode(string):
-    m = re_b_value.match(string)
-    if m:
-        encoding, e_string = m.groups()
-        d_string = base64.b64decode(e_string).decode(encoding, 'ignore')
-    else:
-        d_string = e_string.decode('utf-8', 'ignore')
-
-    return d_string
-
-
-def splitonqp(string):
-    """Split a line on "=?" and "?=" and return an list for quoted style strings
+def export_to_json(parsed_msg: dict, sort_keys: bool=False) -> str:
+    """Function to convert a parsed e-mail dict to a JSON string.
 
     Args:
-        string(str): String to split
-    Returns
-        list: list of strings splitted by quoted space
+        parsed_msg (dict): The parsed e-mail dict which is the result of
+                           one of the decode_email functions.
+        sort_keys (bool, optional): If True, sorts the keys in the JSON output.
+                                    Default: False.
+
+    Returns:
+        str: Returns the JSON string.
     """
-    start = 0
-    pointer = 0
-    outstr = []
-    delims = ["=?", "?="]
-    toggle = 0
-    delim = delims[toggle]
-    for pointer in range(len(string) - 1):
-        if (pointer + 2) > (len(string) - 1):
-            # bounds check
-            break
-
-        if string[pointer:pointer + 2] == delim:
-            toggle = (toggle + 1) % 2  # Switch betwen separators
-            delim = delims[toggle]
-            pointer += 2
-            if (string[start - 2:start] == "=?") and (string[pointer - 2:pointer] == "?="):
-                # Borne par quoted print headers
-                outstr.append(string[start - 2:pointer])
-            else:
-                outstr.append(string[start:pointer - 2])
-            start = pointer
-
-    if start != pointer:
-        outstr.append(string[start:len(string)])
-    return outstr
-
-
-def decode_value(string):
-    """Decodes a given string as Base64 or Quoted Printable, depending on what
-    type it is.     String has to be of the format =?<encoding>?[QB]?<string>?=
-
-    Args:
-        string(str): Line to decode , mais contains multiple quoted printable
-    Returns
-        str: Decode string
-    """
-    # Optimization: If there's no encoded-words in the string, just return it
-    if "=?" not in string:
-        return string
-
-    # First, remove any CRLF, CR
-    input_str = string.replace('\r', '').replace('\n', '')
-    string_ = ""
-    for subset in splitonqp(input_str):
-        if '=?' in subset:
-            # Search for occurences of quoted strings or plain strings
-            for m in re_quoted_string.finditer(subset):
-                match_s, method = m.groups()
-                if '=?' in match_s:
-                    if not method:
-                        # if the encoding is not q or b we just drop the line as is
-                        # Bad encoding not q or b... just drop the line as is
-                        continue
-                    elif method.lower() == 'q':
-                        subset = q_value_decode(match_s)
-                        subset = subset.replace('_', ' ')
-                    elif method.lower() == 'b':
-                        subset = b_value_decode(match_s)
-                        subset = subset.replace('_', ' ')
-        string_ += subset
-    return string_
+    return json.dumps(parsed_msg, default=json_serial, sort_keys=sort_keys, indent=2)

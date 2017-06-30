@@ -1,0 +1,63 @@
+pipeline {
+  agent any
+  options {
+    ansiColor('xterm')
+    timestamps()
+    timeout(time: 1, unit: 'HOURS')
+  }
+
+  stages {
+    stage('Lint') {
+      steps {
+        sh "tox"
+      }
+    }
+
+    stage('Analysis - pylint') {
+      steps {
+        script { analyze_pylint() }
+      }
+    }
+
+    stage('Analysis - pyflakes') {
+      steps {
+        script { analyze_pyflakes() }
+      }
+    }
+
+    stage('Test results') {
+      steps {
+        junit '**/junit-*.xml'
+      }
+    }
+
+    stage('Coverage') {
+      steps {
+        script { analyze_coverage() }
+      }
+    }
+  }
+}
+
+
+def analyze_pylint() {
+      step([$class: 'WarningsPublisher', canComputeNew: false, canResolveRelativePaths: false, defaultEncoding: '', excludePattern: '', healthy: '', includePattern: '', messagesPattern: '', parserConfigurations: [[parserName: 'PyLint', pattern: 'pylint.log']], unHealthy: ''])
+}
+
+
+def analyze_pyflakes() {
+      step([$class: 'WarningsPublisher', canComputeNew: false, canResolveRelativePaths: false, defaultEncoding: '', excludePattern: '', healthy: '', includePattern: '', messagesPattern: '', parserConfigurations: [[parserName: 'PyFlakes', pattern: 'pyflakes.log']], unHealthy: ''])
+}
+
+def analyze_coverage() {
+      step([$class: 'CoberturaPublisher',
+          autoUpdateHealth: false,
+          autoUpdateStability: false,
+          coberturaReportFile: '**/coverage-*.xml',
+          failUnhealthy: false,
+          failUnstable: false,
+          maxNumberOfBuilds: 0,
+          onlyStable: false,
+          sourceEncoding: 'ASCII',
+          zoomCoverageChart: false])
+}

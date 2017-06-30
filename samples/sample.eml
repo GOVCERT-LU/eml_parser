@@ -1,0 +1,11 @@
+Received: from localhost
+	by mta.example.com (Postfix) with ESMTPS id 6388F684168
+	for <test@example.com>; Fri, 26 Apr 2013 13:15:55 +0200
+Content-Language: en-US
+Message-ID:  <F96257F63EAEB94C890EA6CE1437145C013B01FA@example.com>
+Date:         Fri, 26 Apr 2013 11:15:47 +0000
+From:         John Doe <john.doe@example.com>
+Subject: Sample EML
+To:           test@example.com
+
+Test e-mail.
