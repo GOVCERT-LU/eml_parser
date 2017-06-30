@@ -1,0 +1,5 @@
+# Ignore files for QuantifiedCode checks
+docs/*
+examples/*
+samples/*
+tests/*
