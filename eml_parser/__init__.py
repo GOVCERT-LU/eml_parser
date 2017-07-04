@@ -6,6 +6,6 @@ information found in the e-mail as well as computed information.
 """
 
 from . import eml_parser
-import .version
+from . import version
 
-__version__ = .version.__version__
+__version__ = version.__version__
