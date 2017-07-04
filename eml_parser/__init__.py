@@ -8,4 +8,4 @@ information found in the e-mail as well as computed information.
 from . import eml_parser
 from . import version
 
-__version__ = version.__version__
+__version__ = '1.6'
