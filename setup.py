@@ -2,9 +2,9 @@
 import os.path
 from setuptools import setup
 
-import eml_parser.__init__
+import eml_parser.version
 
-__version__ = eml_parser.__version__
+__version__ = eml_parser.version.__version__
 
 
 f = open(os.path.join(os.path.dirname(__file__), 'README.rst'))
