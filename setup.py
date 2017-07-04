@@ -2,7 +2,7 @@
 import os.path
 from setuptools import setup
 
-import eml_parser
+import eml_parser.__init__
 
 __version__ = eml_parser.__version__
 
