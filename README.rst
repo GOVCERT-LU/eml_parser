@@ -41,7 +41,12 @@ Install the latest version using pip:
   pip install eml-parser
 
 
-.. warning::
+**Note for OSX users**::
+
+  Make sure to install libmagic, else eml_parser will not work.
+
+
+**Warning:**::
 
   This release is only compatible with Python3. The last release to be compatible with
   Python2 is v1.2. If you do require Python2 support, please download that version.
