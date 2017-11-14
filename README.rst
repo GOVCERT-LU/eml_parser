@@ -2,10 +2,6 @@
    :target: https://landscape.io/github/GOVCERT-LU/eml_parser/master
    :alt: Code Health
 
-.. image:: https://www.quantifiedcode.com/api/v1/project/468b8039f5a94528aaa9d7a25ecc68eb/badge.svg
-   :target: https://www.quantifiedcode.com/app/project/468b8039f5a94528aaa9d7a25ecc68eb
-   :alt: Code issues
-
 .. image:: https://travis-ci.org/GOVCERT-LU/eml_parser.svg?branch=static_types
     :target: https://travis-ci.org/GOVCERT-LU/eml_parser
 
