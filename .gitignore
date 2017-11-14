@@ -1,5 +1,10 @@
 *.eml
 *.pyc
+
 build
 dist
 eml_parser.egg-info
+.coverage
+.idea
+.tox
+venv
