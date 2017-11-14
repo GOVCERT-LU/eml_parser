@@ -35,25 +35,29 @@ information found in the e-mail as well as computed information.
 #    if a mail-server (e.g. exchange) uses an ID which looks like a valid IP
 #
 
-import logging
-import os.path
+import base64
+import binascii
+import collections
 import email
 import email.message
 import email.policy
 import email.utils
-import re
-import uuid
-import base64
 import hashlib
-import collections
-import urllib.parse
 import ipaddress
+import logging
+import os.path
+import re
 import typing
-import binascii
+import urllib.parse
+import uuid
+
 import dateutil.parser
+
 import eml_parser.decode
 import eml_parser.regex
 import eml_parser.routing
+
+logger = logging.getLogger(__name__)
 
 try:
     import magic
@@ -62,21 +66,25 @@ except ImportError:
     magic_mime = None
     magic_none = None
 else:
-    # MAGIC_MIME_TYPE gives the real mime-type
-    magic_mime = magic.open(magic.MAGIC_MIME_TYPE)
-    magic_mime.load()
-    # MAGIC_NONE gives the meta-information on the analysed file
-    magic_none = magic.open(magic.MAGIC_NONE)
-    magic_none.load()
+    if hasattr(magic, 'open'):
+        # MAGIC_MIME_TYPE gives the real mime-type
+        magic_mime = magic.open(magic.MAGIC_MIME_TYPE)
+        magic_mime.load()
+        # MAGIC_NONE gives the meta-information on the analysed file
+        magic_none = magic.open(magic.MAGIC_NONE)
+        magic_none.load()
+    else:
+        logger.warning('You are using python-magic, though this module requires file-magic. Disabling magic usage due to incompatibilities.')
+
+        magic = None
+        magic_mime = None
+        magic_none = None
 
 
 __author__ = 'Toth Georges, Jung Paul'
 __email__ = 'georges@trypill.org, georges.toth@govcert.etat.lu'
 __copyright__ = 'Copyright 2013-2014 Georges Toth, Copyright 2013-2017 GOVCERT Luxembourg'
 __license__ = 'AGPL v3+'
-
-
-logger = logging.getLogger(__name__)
 
 
 def get_raw_body_text(msg: email.message.Message) -> typing.List[typing.Tuple[typing.Any, typing.Any, typing.Any]]:
