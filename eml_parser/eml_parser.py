@@ -60,11 +60,12 @@ import eml_parser.routing
 logger = logging.getLogger(__name__)
 
 try:
-   if os.name == 'nt':
-      import libmagic
-   else:
-      import magic
+    if os.name == 'nt':
+        import libmagic
+    else:
+        import magic
 except ImportError:
+    libmagic = None
     magic = None
     magic_mime = None
     magic_none = None
