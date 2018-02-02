@@ -61,11 +61,13 @@ logger = logging.getLogger(__name__)
 
 try:
     if os.name == 'nt':
-        import libmagic
+        try:
+            import libmagic
+        except ImportError:
+            libmagic = None
     else:
         import magic
 except ImportError:
-    libmagic = None
     magic = None
     magic_mime = None
     magic_none = None
