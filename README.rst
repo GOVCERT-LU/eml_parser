@@ -1,5 +1,5 @@
-.. image:: https://landscape.io/github/GOVCERT-LU/eml_parser/master/landscape.svg?style=flat
-   :target: https://landscape.io/github/GOVCERT-LU/eml_parser/master
+.. image:: https://api.codacy.com/project/badge/Grade/b9e4b5883aa14e55b0abf4d204d86993
+   :target: https://www.codacy.com/app/sim0nx/eml_parser?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=GOVCERT-LU/eml_parser&amp;utm_campaign=Badge_Grade
    :alt: Code Health
 
 .. image:: https://travis-ci.org/GOVCERT-LU/eml_parser.svg?branch=static_types
