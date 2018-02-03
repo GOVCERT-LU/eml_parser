@@ -1,17 +1,17 @@
 # -*- coding: utf-8 -*-
 # pylint: disable=line-too-long
-import os.path
-import json
 import datetime
-import typing
-import pytest
-from email.message import EmailMessage
-from email.headerregistry import Address
-import email.utils
 import email.policy
+import email.utils
+import json
+import os.path
+import typing
+from email.headerregistry import Address
+from email.message import EmailMessage
+
+import pytest
 
 import eml_parser.eml_parser
-
 
 my_execution_dir = os.path.dirname(os.path.realpath(__file__))
 parent_dir = os.path.split(my_execution_dir)[0]
@@ -31,6 +31,7 @@ def deep_flatten_object(obj: typing.Any) -> dict:
     Returns:
         dict: Returns a dict with the result.
     """
+
     def sub(obj: typing.Any, res: list) -> typing.Iterator[typing.Tuple[str, typing.Any]]:
         if type(obj) == dict:
             for k, v in obj.items():
@@ -94,7 +95,8 @@ class TestEMLParser(object):
         assert eml_parser.eml_parser.get_file_hash(raw_email) == pre_computed_hashes
 
     def test_wrap_hash_sha256(self):
-        assert eml_parser.eml_parser.wrap_hash_sha256('www.example.com') == '80fc0fb9266db7b83f85850fa0e6548b6d70ee68c8b5b412f1deea6ebdef0404'
+        assert eml_parser.eml_parser.wrap_hash_sha256(
+            'www.example.com') == '80fc0fb9266db7b83f85850fa0e6548b6d70ee68c8b5b412f1deea6ebdef0404'
 
     def test_get_uri_ondata(self):
         test_urls = '''Lorem ipsum dolor sit amet, consectetur adipiscing elit.
@@ -104,7 +106,8 @@ class TestEMLParser(object):
         Suspendisse ac rutrum leo, non vehicula purus. Quisque quis sapien lorem. Nunc velit enim,
         placerat quis vestibulum at, hxxps://www.example2.com condimentum non velit.'''
 
-        expected_result = ['http://www.example.com', 'http://www.example.com/test1?bla', 'http://www.example.com/a/b/c/d/', 'https://www.example2.com']
+        expected_result = ['http://www.example.com', 'http://www.example.com/test1?bla',
+                           'http://www.example.com/a/b/c/d/', 'https://www.example2.com']
 
         assert eml_parser.eml_parser.get_uri_ondata(test_urls) == expected_result
 
@@ -118,7 +121,8 @@ class TestEMLParser(object):
 Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent feugiat vitae tellus et molestie. Duis est ipsum, tristique eu pulvinar vel, aliquet a nibh. Vestibulum ultricies semper euismod. Maecenas non sagittis elit. Mauris non feugiat leo. Cras vitae quam est. Donec dapibus justo ut dictum viverra. Aliquam eleifend tortor mollis, vulputate ante sit amet, sodales elit. Fusce scelerisque congue risus mollis pellentesque. Sed malesuada erat sit amet nisl laoreet mollis. Suspendisse potenti. Fusce cursus, tortor sit amet euismod molestie, sem enim semper quam, eu ultricies leo est vel turpis.
 ''')
 
-        assert sorted(eml_parser.eml_parser.headeremail2list(mail=msg, header='to')) == ['james.doe@example.com', 'jane.doe@example.com']
+        assert sorted(eml_parser.eml_parser.headeremail2list(mail=msg, header='to')) == ['james.doe@example.com',
+                                                                                         'jane.doe@example.com']
 
     def test_headeremail2list_2(self):
         '''Here we test the headeremail2list function using an input which should trigger
@@ -169,12 +173,14 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
     def test_parse_email_3(self):
         """Parses the e-mails from the samples folder while keeping raw data"""
         for k in os.listdir(samples_dir):
-            test = eml_parser.eml_parser.decode_email(os.path.join(samples_dir, k), include_raw_body=True, include_attachment_data=True)
+            test = eml_parser.eml_parser.decode_email(os.path.join(samples_dir, k), include_raw_body=True,
+                                                      include_attachment_data=True)
 
         for k in os.listdir(samples_dir):
             with open(os.path.join(samples_dir, k), 'rb') as fhdl:
                 raw_email = fhdl.read()
-                test = eml_parser.eml_parser.decode_email_b(raw_email, include_raw_body=True, include_attachment_data=True)
+                test = eml_parser.eml_parser.decode_email_b(raw_email, include_raw_body=True,
+                                                            include_attachment_data=True)
 
     def test_parse_email_4(self):
         """Parses the e-mails from the samples folder while keeping raw data and passing
@@ -185,9 +191,11 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
                  }
 
         for k in os.listdir(samples_dir):
-            test = eml_parser.eml_parser.decode_email(os.path.join(samples_dir, k), include_raw_body=True, include_attachment_data=True, pconf=pconf)
+            test = eml_parser.eml_parser.decode_email(os.path.join(samples_dir, k), include_raw_body=True,
+                                                      include_attachment_data=True, pconf=pconf)
 
         for k in os.listdir(samples_dir):
             with open(os.path.join(samples_dir, k), 'rb') as fhdl:
                 raw_email = fhdl.read()
-                test = eml_parser.eml_parser.decode_email_b(raw_email, include_raw_body=True, include_attachment_data=True, pconf=pconf)
+                test = eml_parser.eml_parser.decode_email_b(raw_email, include_raw_body=True,
+                                                            include_attachment_data=True, pconf=pconf)

@@ -1,14 +1,8 @@
-import os.path
-import pytest
 import datetime
-from email.message import EmailMessage
-from email.headerregistry import Address
-import email.utils
-import email.policy
-import dateutil.parser
+import os.path
 
 import eml_parser.eml_parser
-
+import eml_parser.routing
 
 my_execution_dir = os.path.dirname(os.path.realpath(__file__))
 parent_dir = os.path.split(my_execution_dir)[0]
@@ -36,21 +30,23 @@ class TestRouting(object):
             assert eml_parser.routing.cleanline(test) == expected_result
 
     def test_give_dom_ip(self):
-        test_input = {' 192.168.1.1 abc bla bla www.example.com sdsf ::1 test ': ['192.168.1.1', '::1', 'www.example.com'],
-                      }
+        test_input = {
+            ' 192.168.1.1 abc bla bla www.example.com sdsf ::1 test ': ['192.168.1.1', '::1', 'www.example.com'],
+        }
 
         for test, expected_result in test_input.items():
             assert sorted(eml_parser.routing.give_dom_ip(test)) == sorted(expected_result)
 
     def test_parserouting(self):
-        test_input = {'test1': ('''Received: from mta1.example.com (mta1.example.com [192.168.1.100]) (using TLSv1 with cipher ADH-AES256-SHA (256/256 bits)) (No client certificate requested) by mta.example2.com (Postfix) with ESMTPS id 6388F684168 for <info@example.com>; Fri, 26 Apr 2013 13:15:55 +0200 (CEST)''',
-                                {'by': ['mta.example2.com'],
-                                 'for': ['info@example.com'],
-                                 'from': ['mta1.example.com', '192.168.1.100'],
-                                 'src': 'Received: from mta1.example.com (mta1.example.com [192.168.1.100]) (using TLSv1 with cipher ADH-AES256-SHA (256/256 bits)) (No client certificate requested) by mta.example2.com (Postfix) with ESMTPS id 6388F684168 for <info@example.com>; Fri, 26 Apr 2013 13:15:55 +0200 (CEST)',
-                                 'with': 'esmtps id 6388f684168',
-                                 'date': datetime.datetime(2013, 4, 26, 13, 15, 55, tzinfo=datetime.timezone(datetime.timedelta(0, 7200)))})
-                      }
+        test_input = {'test1': (
+            '''Received: from mta1.example.com (mta1.example.com [192.168.1.100]) (using TLSv1 with cipher ADH-AES256-SHA (256/256 bits)) (No client certificate requested) by mta.example2.com (Postfix) with ESMTPS id 6388F684168 for <info@example.com>; Fri, 26 Apr 2013 13:15:55 +0200 (CEST)''',
+            {'by': ['mta.example2.com'],
+             'for': ['info@example.com'],
+             'from': ['mta1.example.com', '192.168.1.100'],
+             'src': 'Received: from mta1.example.com (mta1.example.com [192.168.1.100]) (using TLSv1 with cipher ADH-AES256-SHA (256/256 bits)) (No client certificate requested) by mta.example2.com (Postfix) with ESMTPS id 6388F684168 for <info@example.com>; Fri, 26 Apr 2013 13:15:55 +0200 (CEST)',
+             'with': 'esmtps id 6388f684168',
+             'date': datetime.datetime(2013, 4, 26, 13, 15, 55, tzinfo=datetime.timezone(datetime.timedelta(0, 7200)))})
+        }
 
         for test_number, test in test_input.items():
             test_output = eml_parser.routing.parserouting(test[0])
