@@ -125,9 +125,9 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
                                                                                          'jane.doe@example.com']
 
     def test_headeremail2list_2(self):
-        '''Here we test the headeremail2list function using an input which should trigger
+        """Here we test the headeremail2list function using an input which should trigger
         a email library bug 27257
-        '''
+        """
         with open(os.path.join(samples_dir, 'sample_bug27257.eml'), 'rb') as fhdl:
             raw_email = fhdl.read()
 

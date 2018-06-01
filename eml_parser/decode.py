@@ -7,7 +7,7 @@ methods.
 
 #
 # Georges Toth (c) 2013-2014 <georges@trypill.org>
-# GOVCERT.LU (c) 2013-2017 <info@govcert.etat.lu>
+# GOVCERT.LU (c) 2013-present <info@govcert.etat.lu>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -40,6 +40,7 @@ import datetime
 import logging
 import typing
 import email
+import email.policy
 import email.utils
 import dateutil.parser
 import eml_parser.regex
@@ -112,8 +113,7 @@ def decode_string(string: bytes, encoding: typing.Optional[str]) -> str:
 
     if chardet:
         enc = chardet.detect(string)
-        if not(enc['confidence'] is None or enc['encoding'] is None) and \
-            not (enc['confidence'] == 1 and enc['encoding'] == 'ascii'):
+        if not(enc['confidence'] is None or enc['encoding'] is None) and not (enc['confidence'] == 1 and enc['encoding'] == 'ascii'):
             value = string.decode(enc['encoding'], 'replace')
         else:
             value = string.decode('ascii', 'replace')
@@ -142,7 +142,7 @@ def workaround_bug_27257(msg: email.message.Message, header: str) -> typing.List
     e-mail addresses.
 
     Args:
-        mail (email.message.Message): An e-mail message object.
+        msg (email.message.Message): An e-mail message object.
         header (str): The header field to decode.
 
     Returns:
@@ -164,7 +164,7 @@ def workaround_bug_27257_field_value(msg: email.message.Message, header: str) ->
     the compat32 policy to extract any meaningful information.
 
     Args:
-        mail (email.message.Message): An e-mail message object.
+        msg (email.message.Message): An e-mail message object.
         header (str): The header field to decode.
 
     Returns:

@@ -54,6 +54,8 @@ Example on how to use:
 
 .. code-block:: python
 
+  import datetime
+  import json
   import eml_parser
 
 

@@ -7,7 +7,7 @@ information found in the e-mail as well as computed information.
 
 #
 # Georges Toth (c) 2013-2014 <georges@trypill.org>
-# GOVCERT.LU (c) 2013-2017 <info@govcert.etat.lu>
+# GOVCERT.LU (c) 2013-present <info@govcert.etat.lu>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -112,8 +112,7 @@ def get_raw_body_text(msg: email.message.Message) -> typing.List[typing.Tuple[ty
             logger.exception('Exception occured while trying to parse the content-disposition header. Collected data will not be complete.')
             filename = ''
 
-        if ('content-disposition' not in msg and msg.get_content_maintype() == 'text') \
-            or (filename.endswith('.html') or filename.endswith('.htm')):
+        if ('content-disposition' not in msg and msg.get_content_maintype() == 'text') or (filename.endswith('.html') or filename.endswith('.htm')):
             encoding = msg.get('content-transfer-encoding', '').lower()
 
             charset = msg.get_content_charset()
@@ -231,9 +230,15 @@ def traverse_multipart(msg: email.message.Message, counter: int = 0, include_att
             attachments[file_id]['hash'] = get_file_hash(data)
 
             if not(magic_mime is None or magic_none is None):
-                attachments[file_id]['mime_type'] = magic_none.buffer(data)
-                # attachments[file_id]['mime_type_short'] = attachments[file_id]['mime_type'].split(",")[0]
-                attachments[file_id]['mime_type_short'] = magic_mime.buffer(data)
+                try:
+                    attachments[file_id]['mime_type'] = magic_none.buffer(data)
+                    # attachments[file_id]['mime_type_short'] = attachments[file_id]['mime_type'].split(",")[0]
+                    attachments[file_id]['mime_type_short'] = magic_mime.buffer(data)
+                except TypeError:
+                    # @FIXME this is a workaround for a file-magic bug which does not properly return None as stated
+                    # in its docs. When migrating to a different library or once that bug is fixed upstream,
+                    # remove this workaround.
+                    logger.warning('Error determining attachment mime-type - "{}"'.format(file_id))
 
             if include_attachment_data:
                 attachments[file_id]['raw'] = base64.b64encode(data)
@@ -332,7 +337,7 @@ def get_uri_ondata(body: str) -> typing.List[str]:
         found_url = match[0].replace('hxxp', 'http')
         found_url = urllib.parse.urlparse(found_url).geturl()
         # let's try to be smart by stripping of noisy bogus parts
-        found_url = re.split(r'''[\', ", \,, \), \}, \\]''', found_url)[0]
+        found_url = re.split(r'''[', ")}\\]''', found_url)[0]
         list_observed_urls.append(found_url)
 
     return list_observed_urls

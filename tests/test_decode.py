@@ -31,9 +31,6 @@ class TestDecode(object):
             }
 
         for clear, encoded in test_subjects.items():
-            print(eml_parser.decode.decode_field(encoded))
-            print(clear)
-            print()
             assert eml_parser.decode.decode_field(encoded) == clear
 
     def test_robust_string2date(self):
