@@ -230,14 +230,14 @@ def traverse_multipart(msg: email.message.Message, counter: int = 0, include_att
             attachments[file_id]['hash'] = get_file_hash(data)
 
             if not(magic_mime is None or magic_none is None):
-                try:
-                    attachments[file_id]['mime_type'] = magic_none.buffer(data)
+                mime_type = magic_none.buffer(data)
+                mime_type_short = magic_mime.buffer(data)
+
+                if not(mime_type is None or mime_type_short is None):
+                    attachments[file_id]['mime_type'] = mime_type
                     # attachments[file_id]['mime_type_short'] = attachments[file_id]['mime_type'].split(",")[0]
-                    attachments[file_id]['mime_type_short'] = magic_mime.buffer(data)
-                except TypeError:
-                    # @FIXME this is a workaround for a file-magic bug which does not properly return None as stated
-                    # in its docs. When migrating to a different library or once that bug is fixed upstream,
-                    # remove this workaround.
+                    attachments[file_id]['mime_type_short'] = mime_type_short
+                else:
                     logger.warning('Error determining attachment mime-type - "{}"'.format(file_id))
 
             if include_attachment_data:
