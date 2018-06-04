@@ -36,6 +36,14 @@ pipeline {
         script { analyze_coverage() }
       }
     }
+
+    stage('SonarQube analysis') {
+      steps {
+        withSonarQubeEnv('sonar') {
+          sh "/opt/sonar-scanner/bin/sonar-scanner -Dproject.settings=.sonar-project.properties"
+        }
+      }   
+    }
   }
 }
 
