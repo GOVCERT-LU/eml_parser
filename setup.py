@@ -10,10 +10,10 @@ long_description = f.read().strip()
 f.close()
 
 install_requires = ['python-dateutil',
-                    'file-magic',
                     'cchardet',
-                    'typing',
+                    'typing'
                     ]
+
 
 setup(name='eml_parser',
       description='Python EML parser library',
@@ -34,5 +34,8 @@ setup(name='eml_parser',
                    'Programming Language :: Python :: Implementation :: CPython',
                    'Topic :: Communications :: Email'
                    ],
+      extras_require = {
+        'file-magic': ["file-magic"]
+      },
       install_requires=install_requires,
       )
