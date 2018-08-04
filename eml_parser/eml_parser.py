@@ -261,7 +261,9 @@ def traverse_multipart(msg: email.message.Message, counter: int = 0, include_att
     return attachments
 
 
-def decode_email(eml_file: str, include_raw_body: bool = False, include_attachment_data: bool = False, pconf: typing.Optional[dict]=None, policy: email.policy.Policy=email.policy.default) -> dict:
+def decode_email(eml_file: str, include_raw_body: bool = False, include_attachment_data: bool = False,
+                 pconf: typing.Optional[dict]=None, policy: email.policy.Policy=email.policy.default,
+                 ignore_bad_start: bool=False) -> dict:
     """Function for decoding an EML file into an easily parsable structure.
     Some intelligence is applied while parsing the file in order to work around
     broken files.
@@ -282,17 +284,26 @@ def decode_email(eml_file: str, include_raw_body: bool = False, include_attachme
       policy (email.policy.Policy, optional): Policy to use when parsing e-mails.
             Default = email.policy.default.
 
+      ignore_bad_start (bool, optional): Ignore invalid file start. This has a considerable performance impact.
+
     Returns:
       dict: A dictionary with the content of the EML parsed and broken down into
             key-value pairs.
     """
     with open(eml_file, 'rb') as fp:
-        msg = email.message_from_binary_file(fp, policy=policy)
+        raw_email = fp.read()
 
-    return parse_email(msg, include_raw_body, include_attachment_data, pconf)
+    return decode_email_b(eml_file=raw_email,
+                          include_raw_body=include_raw_body,
+                          include_attachment_data=include_attachment_data,
+                          pconf=pconf,
+                          policy=policy,
+                          ignore_bad_start=ignore_bad_start)
 
 
-def decode_email_b(eml_file: bytes, include_raw_body: bool = False, include_attachment_data: bool = False, pconf: typing.Optional[dict]=None, policy: email.policy.Policy=email.policy.default) -> dict:
+def decode_email_b(eml_file: bytes, include_raw_body: bool = False, include_attachment_data: bool = False,
+                   pconf: typing.Optional[dict]=None, policy: email.policy.Policy=email.policy.default,
+                   ignore_bad_start: bool = False) -> dict:
     """Function for decoding an EML file into an easily parsable structure.
     Some intelligence is applied while parsing the file in order to work around
     broken files.
@@ -313,11 +324,32 @@ def decode_email_b(eml_file: bytes, include_raw_body: bool = False, include_atta
         policy (email.policy.Policy, optional): Policy to use when parsing e-mails.
               Default = email.policy.default.
 
+        ignore_bad_start (bool, optional): Ignore invalid file start. This has a considerable performance impact.
+
     Returns:
         dict: A dictionary with the content of the EML parsed and broken down into
               key-value pairs.
     """
-    msg = email.message_from_bytes(eml_file, policy=policy)
+    if ignore_bad_start:
+        # Skip invalid start of file
+        # Note that this has a considerable performance impact, which is why it is disabled by default.
+        _eml_file = b''
+
+        if not b':' in eml_file.split(b'\n', 1):
+            start = True
+            for line in eml_file.split(b'\n'):
+                if start and not b':' in line:
+                    continue
+                else:
+                    start = False
+
+                _eml_file += line
+        else:
+            _eml_file = eml_file
+    else:
+        _eml_file = eml_file
+
+    msg = email.message_from_bytes(_eml_file, policy=policy)
 
     return parse_email(msg, include_raw_body, include_attachment_data, pconf)
 
