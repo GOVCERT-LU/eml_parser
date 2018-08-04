@@ -34,7 +34,14 @@ Install the latest version using pip:
 
 .. code-block:: bash
 
-  pip install eml-parser
+  pip install eml_parser[file-magic]
+
+
+**Note: If you don't want to / cannot use file-magic (e.g. if you are using python-magic), install via**:
+
+.. code-block:: bash
+
+  pip install eml_parser
 
 
 **Note for OSX users**::
