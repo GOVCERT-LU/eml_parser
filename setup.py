@@ -2,7 +2,7 @@
 import os.path
 from setuptools import setup
 
-__version__ = '1.10'
+__version__ = '1.11'
 
 
 f = open(os.path.join(os.path.dirname(__file__), 'README.rst'))
