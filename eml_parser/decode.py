@@ -73,17 +73,7 @@ def decode_field(field: str) -> str:
     except email.errors.HeaderParseError:
         return field
 
-    string = ''
-
-    for _text, charset in _decoded:
-        if charset:
-            string += decode_string(_text, charset)
-        else:
-            # @TODO might be an idea to check with chardet here
-            if isinstance(_text, bytes):
-                string += _text.decode('utf-8', 'ignore')
-            else:
-                string += _text
+    string = str(email.header.make_header(_decoded))
 
     return string
 
