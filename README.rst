@@ -2,8 +2,8 @@
    :target: https://codebeat.co/projects/github-com-govcert-lu-eml_parser-master
    :alt: Code Health
 
-.. image:: https://travis-ci.org/GOVCERT-LU/eml_parser.svg?branch=static_types
-    :target: https://travis-ci.org/GOVCERT-LU/eml_parser
+.. image:: https://travis-ci.com/GOVCERT-LU/eml_parser.svg?branch=master
+    :target: https://travis-ci.com/GOVCERT-LU/eml_parser
 
 .. image:: https://readthedocs.org/projects/eml-parser/badge/
    :alt: Documentation Status
