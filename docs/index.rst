@@ -1,14 +1,18 @@
-.. image:: https://landscape.io/github/GOVCERT-LU/eml_parser/master/landscape.svg?style=flat
-   :target: https://landscape.io/github/GOVCERT-LU/eml_parser/master
+.. image:: https://codebeat.co/badges/d631cfb2-a7f8-476a-9d2e-58e58db95bc8
+   :target: https://codebeat.co/projects/github-com-govcert-lu-eml_parser-master
    :alt: Code Health
 
-.. image:: https://www.quantifiedcode.com/api/v1/project/468b8039f5a94528aaa9d7a25ecc68eb/badge.svg
-   :target: https://www.quantifiedcode.com/app/project/468b8039f5a94528aaa9d7a25ecc68eb
-   :alt: Code issues
+.. image:: https://travis-ci.com/GOVCERT-LU/eml_parser.svg?branch=master
+    :target: https://travis-ci.com/GOVCERT-LU/eml_parser
 
 .. image:: https://readthedocs.org/projects/eml-parser/badge/
    :alt: Documentation Status
+   :scale: 100%
    :target: http://eml-parser.readthedocs.io
+
+.. image:: https://badge.fury.io/py/eml-parser.svg
+    :target: https://badge.fury.io/py/eml-parser
+
 
 Welcome to eml-parser's documentation!
 ======================================
