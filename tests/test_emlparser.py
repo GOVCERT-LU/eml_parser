@@ -81,7 +81,7 @@ def json_serial(obj: typing.Any) -> typing.Optional[str]:
     return None
 
 
-class TestEMLParser(object):
+class TestEMLParser:
     def test_get_file_hash(self):
         with open(os.path.join(samples_dir, 'sample.eml'), 'rb') as fhdl:
             raw_email = fhdl.read()
@@ -199,3 +199,26 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
                 raw_email = fhdl.read()
                 test = eml_parser.eml_parser.decode_email_b(raw_email, include_raw_body=True,
                                                             include_attachment_data=True, pconf=pconf)
+
+    def test_parse_email_5(self):
+        """Parses a generated sample e-mail and tests it against a known good result. In this test
+        we want to specifically ignore e-mail addresses without TLD."""
+        msg = EmailMessage()
+        msg['Subject'] = 'Test subject éèàöüä${}'
+        msg['From'] = Address("John Doe", "john.doe", "example")
+        msg['To'] = (Address("Jané Doe", "jane.doe", "example.com"),
+                     Address("James Doe", "james.doe", "example.com"))
+        msg['Cc'] = (Address("Jané Doe", "jane.doe", "example"),
+                     Address("James Doe", "james.doe", "example"))
+        msg.set_content('''Hi,
+      Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent feugiat vitae tellus et molestie. Duis est ipsum, tristique eu pulvinar vel, aliquet a nibh. Vestibulum ultricies semper euismod. Maecenas non sagittis elit. Mauris non feugiat leo. Cras vitae quam est. Donec dapibus justo ut dictum viverra. Aliquam eleifend tortor mollis, vulputate ante sit amet, sodales elit. Fusce scelerisque congue risus mollis pellentesque. Sed malesuada erat sit amet nisl laoreet mollis. Suspendisse potenti. Fusce cursus, tortor sit amet euismod molestie, sem enim semper quam, eu ultricies leo est vel turpis.
+      You should subscribe by replying to test-reply@example.
+      ''')
+
+        good_output_json = r'''{"body": [{"content_header": {"content-type": ["text/plain; charset=\"utf-8\""], "content-transfer-encoding": ["quoted-printable"]}, "content_type": "text/plain", "hash": "07de6840458e398906e73b2cd188d0da813a80ee0337cc349228d983b5ec1c7e"}], "header": {"subject": "Test subject \u00e9\u00e8\u00e0\u00f6\u00fc\u00e4${}", "from": "john.doe@example", "to": ["jane.doe@example.com", "james.doe@example.com"], "date": "1970-01-01T00:00:00+00:00", "received": [], "header": {"cc": ["Jan\u00e9 Doe <jane.doe@example>, James Doe <james.doe@example>"], "from": ["John Doe <john.doe@example>"], "content-type": ["text/plain; charset=\"utf-8\""], "mime-version": ["1.0"], "subject": ["Test subject \u00e9\u00e8\u00e0\u00f6\u00fc\u00e4${}"], "to": ["Jan\u00e9 Doe <jane.doe@example.com>, James Doe <james.doe@example.com>"], "content-transfer-encoding": ["quoted-printable"]}}}'''
+        good_output = json.loads(good_output_json)
+
+        test_output_json = json.dumps(eml_parser.eml_parser.decode_email_b(msg.as_bytes(), email_force_tld=True), default=json_serial)
+        test_output = json.loads(test_output_json)
+
+        recursive_compare(good_output, test_output)

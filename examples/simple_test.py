@@ -41,7 +41,7 @@ def json_serial(obj):
         return serial
     elif isinstance(obj, email.header.Header):
         print(str(obj))
-        raise
+        raise Exception('object cannot be of type email.header.Header')
 
     raise TypeError("Type not serializable")
 
@@ -60,12 +60,12 @@ def main():
                         help='whitelist an email in routing headers "For"; comma-separated list of e-mail addresses, no spaces !')
     parser.add_argument('-b', dest='byhostentry',
                         help='collect the smtp injector IP using the "by" "host" in routing headers; comma-separated list of IPs, no spaces !')
+    parser.add_argument('--email-force-tld', dest='email_force_tld', action='store_true',
+                        help='Only parse e-mail addresses which include a tld.')
 
     options = parser.parse_args()
 
     msgfile = options.msgfile
-    full = options.debug
-    fulldata = options.fulldata
     pconf = {}
 
     pconf['whiteip'] = ['192.168.1.1']
@@ -84,7 +84,8 @@ def main():
     with open(msgfile, 'rb') as fhdl:
         raw_email = fhdl.read()
 
-    m = eml_parser.eml_parser.decode_email_b(raw_email, include_raw_body=False, include_attachment_data=False, pconf=pconf)
+    m = eml_parser.eml_parser.decode_email_b(raw_email, include_raw_body=options.fulldata, include_attachment_data=options.debug,
+                                             pconf=pconf, email_force_tld=options.email_force_tld)
 
     print(json.dumps(m, default=json_serial))
 

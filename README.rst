@@ -55,6 +55,7 @@ Install the latest version using pip:
   Python2 is v1.2. If you do require Python2 support, please download that version.
   You are strongly encouraged though to use Python3 as there are many parsing improvements
   and much better RFC support.
+  This release is only tested with Python >=3.5.
 
 
 Example on how to use:

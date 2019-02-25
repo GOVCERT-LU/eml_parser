@@ -10,7 +10,7 @@ parent_dir = os.path.split(my_execution_dir)[0]
 samples_dir = os.path.join(parent_dir, 'samples')
 
 
-class TestDecode(object):
+class TestDecode:
     def test_decode_field(self):
         test_subjects = {
             'Die Bezahlung mit Ihrer Kreditkarte wurde erfolgreich durchgeführt.': '=?utf-8?B?RGllIEJlemFobHVuZyBtaXQgSWhyZXIgS3JlZGl0a2FydGUgd3VyZGUgZXJmb2xncmVpY2ggZHVyY2hnZWbDvGhydC4=?=',

@@ -9,7 +9,7 @@ parent_dir = os.path.split(my_execution_dir)[0]
 samples_dir = os.path.join(parent_dir, 'samples')
 
 
-class TestRouting(object):
+class TestRouting:
     def test_noparenthesis(self):
         test_input = {'(test)': '',
                       '((test))': '',

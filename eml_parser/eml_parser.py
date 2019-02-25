@@ -263,7 +263,7 @@ def traverse_multipart(msg: email.message.Message, counter: int = 0, include_att
 
 def decode_email(eml_file: str, include_raw_body: bool = False, include_attachment_data: bool = False,
                  pconf: typing.Optional[dict]=None, policy: email.policy.Policy=email.policy.default,
-                 ignore_bad_start: bool=False) -> dict:
+                 ignore_bad_start: bool=False, email_force_tld: bool=False) -> dict:
     """Function for decoding an EML file into an easily parsable structure.
     Some intelligence is applied while parsing the file in order to work around
     broken files.
@@ -286,6 +286,9 @@ def decode_email(eml_file: str, include_raw_body: bool = False, include_attachme
 
       ignore_bad_start (bool, optional): Ignore invalid file start. This has a considerable performance impact.
 
+      email_force_tld (bool, optional): Only match e-mail addresses with a TLD. I.e exclude something like
+                                        john@doe. By default this is disabled.
+
     Returns:
       dict: A dictionary with the content of the EML parsed and broken down into
             key-value pairs.
@@ -298,12 +301,13 @@ def decode_email(eml_file: str, include_raw_body: bool = False, include_attachme
                           include_attachment_data=include_attachment_data,
                           pconf=pconf,
                           policy=policy,
-                          ignore_bad_start=ignore_bad_start)
+                          ignore_bad_start=ignore_bad_start,
+                          email_force_tld=email_force_tld)
 
 
 def decode_email_b(eml_file: bytes, include_raw_body: bool = False, include_attachment_data: bool = False,
                    pconf: typing.Optional[dict]=None, policy: email.policy.Policy=email.policy.default,
-                   ignore_bad_start: bool = False) -> dict:
+                   ignore_bad_start: bool = False, email_force_tld: bool=False) -> dict:
     """Function for decoding an EML file into an easily parsable structure.
     Some intelligence is applied while parsing the file in order to work around
     broken files.
@@ -326,10 +330,17 @@ def decode_email_b(eml_file: bytes, include_raw_body: bool = False, include_atta
 
         ignore_bad_start (bool, optional): Ignore invalid file start. This has a considerable performance impact.
 
+        email_force_tld (bool, optional): Only match e-mail addresses with a TLD. I.e exclude something like
+                                          john@doe. By default this is disabled.
+
     Returns:
         dict: A dictionary with the content of the EML parsed and broken down into
               key-value pairs.
     """
+    if email_force_tld:
+        eml_parser.regex.email_regex = eml_parser.regex.email_force_tld_regex
+        eml_parser.regex.parsing_email_force_tld = True
+
     if ignore_bad_start:
         # Skip invalid start of file
         # Note that this has a considerable performance impact, which is why it is disabled by default.
@@ -394,7 +405,11 @@ def headeremail2list(mail: email.message.Message, header: str) -> typing.List[st
 
     for m in field:
         if not m[1] == '':
-            return_field.append(m[1].lower())
+            if eml_parser.regex.parsing_email_force_tld:
+                if eml_parser.regex.email_force_tld_regex.match(m[1]):
+                    return_field.append(m[1].lower())
+            else:
+                return_field.append(m[1].lower())
 
     return return_field
 

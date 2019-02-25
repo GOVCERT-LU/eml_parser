@@ -1,2 +1,4 @@
 file-magic>=0.4.0
 python-dateutil
+cchardet
+typing
