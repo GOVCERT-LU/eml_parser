@@ -2,7 +2,6 @@
 import os.path
 from setuptools import setup
 
-__version__ = '1.11'
 
 
 f = open(os.path.join(os.path.dirname(__file__), 'README.rst'))
@@ -19,7 +18,7 @@ setup(name='eml_parser',
       description='Python EML parser library',
       license='AGPLv3+',
       long_description=long_description,
-      version=__version__,
+      version='1.11.1',
       author='Georges Toth',
       author_email='georges.toth@govcert.etat.lu',
       url='https://github.com/GOVCERT-LU/eml_parser',

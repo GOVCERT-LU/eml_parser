@@ -1,12 +1,21 @@
 pipeline {
   agent any
+
   options {
     ansiColor('xterm')
     timestamps()
     timeout(time: 1, unit: 'HOURS')
+    // Keep the 10 most recent builds
+    buildDiscarder(logRotator(numToKeepStr: '10'))
   }
 
   stages {
+    stage ("Code pull"){
+      steps{
+          checkout scm
+      }
+    }
+
     stage('Lint') {
       steps {
         sh "tox"
@@ -16,6 +25,14 @@ pipeline {
     stage('Analysis - pylint') {
       steps {
         script { analyze_pylint() }
+      }
+    }
+
+    stage('SonarQube analysis') {
+      steps {
+        withSonarQubeEnv('sonar') {
+          sh "/opt/sonar-scanner/bin/sonar-scanner -Dproject.settings=.sonar-project.properties"
+        }
       }
     }
 
@@ -37,12 +54,35 @@ pipeline {
       }
     }
 
-    stage('SonarQube analysis') {
-      steps {
-        withSonarQubeEnv('sonar') {
-          sh "/opt/sonar-scanner/bin/sonar-scanner -Dproject.settings=.sonar-project.properties"
+    stage('Build package') {
+      when {
+        allOf {
+          tag pattern: "v\\d+\\.\\d+\\.\\d+", comparator: "REGEXP"
+
+          expression {
+            currentBuild.result == null || currentBuild.result == 'SUCCESS'
+          }
         }
-      }   
+      }
+      steps {
+        sh  ''' virtualenv -p python3 buildvenv
+                source buildvenv/bin/activate
+                rm -f dist/*
+                python setup.py bdist_wheel
+            '''
+      }
+      post {
+        always {
+          withCredentials([usernamePassword(credentialsId: 'apps1-pypiserver-jenkins', usernameVariable: 'TWINE_USERNAME', passwordVariable: 'TWINE_PASSWORD')]) {
+            sh  ''' virtualenv -p python3 buildvenv
+                    source buildvenv/bin/activate
+                    pip install -U twine
+                    twine upload dist/*.whl
+                '''
+
+          }
+        }
+      }
     }
   }
 }
