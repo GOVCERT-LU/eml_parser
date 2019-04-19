@@ -44,7 +44,7 @@ pipeline {
 
     stage('Test results') {
       steps {
-        junit '**/junit-*.xml'
+        junit '**/junit.xml'
       }
     }
 
@@ -101,7 +101,7 @@ def analyze_coverage() {
       step([$class: 'CoberturaPublisher',
           autoUpdateHealth: false,
           autoUpdateStability: false,
-          coberturaReportFile: '**/coverage-*.xml',
+          coberturaReportFile: '**/coverage.xml',
           failUnhealthy: false,
           failUnstable: false,
           maxNumberOfBuilds: 0,

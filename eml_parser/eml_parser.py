@@ -74,16 +74,16 @@ else:
         magic_none = magic.open(magic.MAGIC_NONE)
         magic_none.load()
     else:
-        logger.warning('You are using python-magic, though this module requires file-magic. Disabling magic usage due to incompatibilities.')
+        logger.warning(
+            'You are using python-magic, though this module requires file-magic. Disabling magic usage due to incompatibilities.')
 
         magic = None
         magic_mime = None
         magic_none = None
 
-
 __author__ = 'Toth Georges, Jung Paul'
 __email__ = 'georges@trypill.org, georges.toth@govcert.etat.lu'
-__copyright__ = 'Copyright 2013-2014 Georges Toth, Copyright 2013-2017 GOVCERT Luxembourg'
+__copyright__ = 'Copyright 2013-2014 Georges Toth, Copyright 2013-present GOVCERT Luxembourg'
 __license__ = 'AGPL v3+'
 
 
@@ -109,10 +109,12 @@ def get_raw_body_text(msg: email.message.Message) -> typing.List[typing.Tuple[ty
         try:
             filename = msg.get_filename('').lower()
         except (binascii.Error, AssertionError):
-            logger.exception('Exception occured while trying to parse the content-disposition header. Collected data will not be complete.')
+            logger.exception(
+                'Exception occured while trying to parse the content-disposition header. Collected data will not be complete.')
             filename = ''
 
-        if ('content-disposition' not in msg and msg.get_content_maintype() == 'text') or (filename.endswith('.html') or filename.endswith('.htm')):
+        if ('content-disposition' not in msg and msg.get_content_maintype() == 'text') or (
+                filename.endswith('.html') or filename.endswith('.htm')):
             encoding = msg.get('content-transfer-encoding', '').lower()
 
             charset = msg.get_content_charset()
@@ -174,7 +176,8 @@ def wrap_hash_sha256(string: str) -> str:
     return hashlib.sha256(_string).hexdigest()
 
 
-def traverse_multipart(msg: email.message.Message, counter: int = 0, include_attachment_data: bool = False) -> typing.Dict[str, typing.Any]:
+def traverse_multipart(msg: email.message.Message, counter: int = 0, include_attachment_data: bool = False) -> \
+        typing.Dict[str, typing.Any]:
     """Recursively traverses all e-mail message multi-part elements and returns in a parsed form as a dict.
 
     Args:
@@ -191,79 +194,115 @@ def traverse_multipart(msg: email.message.Message, counter: int = 0, include_att
     attachments = {}
 
     if msg.is_multipart():
+        if 'content-type' in msg:
+            if msg.get_content_type() == 'message/rfc822':
+                # This is an e-mail message attachment, add it to the attachment list apart from parsing it
+                attachments.update(
+                    prepare_multipart_part_attachment(msg, counter, include_attachment_data))  # type: ignore
+
         for part in msg.get_payload():  # type: ignore
             attachments.update(traverse_multipart(part, counter, include_attachment_data))  # type: ignore
     else:
-        # In case we hit bug 27257, try to downgrade the used policy
-        try:
-            lower_keys = dict((k.lower(), v) for k, v in msg.items())
-        except AttributeError:
-            former_policy = msg.policy
-            msg.policy = email.policy.compat32
-            lower_keys = dict((k.lower(), v) for k, v in msg.items())
-            msg.policy = former_policy
-
-        if 'content-disposition' in lower_keys or not msg.get_content_maintype() == 'text':
-            # if it's an attachment-type, pull out the filename
-            # and calculate the size in bytes
-            data = msg.get_payload(decode=True)  # type: bytes  # type is always bytes here
-            file_size = len(data)
-
-            filename = msg.get_filename('')
-            if filename == '':
-                filename = 'part-{0:03d}'.format(counter)
-            else:
-                filename = eml_parser.decode.decode_field(filename)
-
-            file_id = str(uuid.uuid1())
-            attachments[file_id] = {}
-            attachments[file_id]['filename'] = filename
-            attachments[file_id]['size'] = file_size
-
-            # os.path always returns the extension as second element
-            # in case there is no extension it returns an empty string
-            extension = os.path.splitext(filename)[1].lower()
-            if extension:
-                # strip leading dot
-                attachments[file_id]['extension'] = extension[1:]
-
-            attachments[file_id]['hash'] = get_file_hash(data)
-
-            if not(magic_mime is None or magic_none is None):
-                mime_type = magic_none.buffer(data)
-                mime_type_short = magic_mime.buffer(data)
-
-                if not(mime_type is None or mime_type_short is None):
-                    attachments[file_id]['mime_type'] = mime_type
-                    # attachments[file_id]['mime_type_short'] = attachments[file_id]['mime_type'].split(",")[0]
-                    attachments[file_id]['mime_type_short'] = mime_type_short
-                else:
-                    logger.warning('Error determining attachment mime-type - "{}"'.format(file_id))
-
-            if include_attachment_data:
-                attachments[file_id]['raw'] = base64.b64encode(data)
-
-            ch = {}  # type: typing.Dict[str, typing.List[str]]
-            for k, v in msg.items():
-                k = k.lower()
-                v = str(v)
-
-                if k in ch:
-                    # print "%s<<<>>>%s" % (k, v)
-                    ch[k].append(v)
-                else:
-                    ch[k] = [v]
-
-            attachments[file_id]['content_header'] = ch
-
-            counter += 1
+        return prepare_multipart_part_attachment(msg, counter, include_attachment_data)
 
     return attachments
 
 
+def prepare_multipart_part_attachment(msg: email.message.Message, counter: int = 0,
+                                      include_attachment_data: bool = False) -> typing.Dict[str, typing.Any]:
+    """Extract meta-information from a multipart-part.
+
+    Args:
+        msg (email.message.Message): An e-mail message object.
+        counter (int, optional): A counter which is used for generating attachments
+            file-names in case there are none found in the header. Default = 0.
+        include_attachment_data (bool, optional): If true, method includes the raw attachment data when
+            returning. Default = False.
+
+    Returns:
+        dict: Returns a dict with original multi-part headers as well as generated hash check-sums,
+            date size, file extension, real mime-type.
+    """
+    attachment = {}
+
+    # In case we hit bug 27257, try to downgrade the used policy
+    try:
+        lower_keys = dict((k.lower(), v) for k, v in msg.items())
+    except AttributeError:
+        former_policy = msg.policy
+        msg.policy = email.policy.compat32
+        lower_keys = dict((k.lower(), v) for k, v in msg.items())
+        msg.policy = former_policy
+
+    if 'content-disposition' in lower_keys or not msg.get_content_maintype() == 'text':
+        # if it's an attachment-type, pull out the filename
+        # and calculate the size in bytes
+        if msg.get_content_type() == 'message/rfc822':
+            payload = msg.get_payload()
+            if len(payload) > 1:
+                logger.warning(
+                    'More than one payload for "message/rfc822" part detected. This is not supported, please report!')
+
+            data = bytes(payload[0])
+            file_size = len(data)
+        else:
+            data = msg.get_payload(decode=True)  # type: bytes  # type is always bytes here
+            file_size = len(data)
+
+        filename = msg.get_filename('')
+        if filename == '':
+            filename = 'part-{0:03d}'.format(counter)
+        else:
+            filename = eml_parser.decode.decode_field(filename)
+
+        file_id = str(uuid.uuid1())
+        attachment[file_id] = {}
+        attachment[file_id]['filename'] = filename
+        attachment[file_id]['size'] = file_size
+
+        # os.path always returns the extension as second element
+        # in case there is no extension it returns an empty string
+        extension = os.path.splitext(filename)[1].lower()
+        if extension:
+            # strip leading dot
+            attachment[file_id]['extension'] = extension[1:]
+
+        attachment[file_id]['hash'] = get_file_hash(data)
+
+        if not (magic_mime is None or magic_none is None):
+            mime_type = magic_none.buffer(data)
+            mime_type_short = magic_mime.buffer(data)
+
+            if not (mime_type is None or mime_type_short is None):
+                attachment[file_id]['mime_type'] = mime_type
+                # attachments[file_id]['mime_type_short'] = attachments[file_id]['mime_type'].split(",")[0]
+                attachment[file_id]['mime_type_short'] = mime_type_short
+            else:
+                logger.warning('Error determining attachment mime-type - "{}"'.format(file_id))
+
+        if include_attachment_data:
+            attachment[file_id]['raw'] = base64.b64encode(data)
+
+        ch = {}  # type: typing.Dict[str, typing.List[str]]
+        for k, v in msg.items():
+            k = k.lower()
+            v = str(v)
+
+            if k in ch:
+                ch[k].append(v)
+            else:
+                ch[k] = [v]
+
+        attachment[file_id]['content_header'] = ch
+
+        counter += 1
+
+    return attachment
+
+
 def decode_email(eml_file: str, include_raw_body: bool = False, include_attachment_data: bool = False,
-                 pconf: typing.Optional[dict]=None, policy: email.policy.Policy=email.policy.default,
-                 ignore_bad_start: bool=False, email_force_tld: bool=False) -> dict:
+                 pconf: typing.Optional[dict] = None, policy: email.policy.Policy = email.policy.default,
+                 ignore_bad_start: bool = False, email_force_tld: bool = False) -> dict:
     """Function for decoding an EML file into an easily parsable structure.
     Some intelligence is applied while parsing the file in order to work around
     broken files.
@@ -306,8 +345,8 @@ def decode_email(eml_file: str, include_raw_body: bool = False, include_attachme
 
 
 def decode_email_b(eml_file: bytes, include_raw_body: bool = False, include_attachment_data: bool = False,
-                   pconf: typing.Optional[dict]=None, policy: email.policy.Policy=email.policy.default,
-                   ignore_bad_start: bool = False, email_force_tld: bool=False) -> dict:
+                   pconf: typing.Optional[dict] = None, policy: email.policy.Policy = email.policy.default,
+                   ignore_bad_start: bool = False, email_force_tld: bool = False) -> dict:
     """Function for decoding an EML file into an easily parsable structure.
     Some intelligence is applied while parsing the file in order to work around
     broken files.
@@ -437,7 +476,8 @@ def findall(pat: str, data: str) -> typing.Iterator[int]:
         i = data.find(pat, i + 1)
 
 
-def parse_email(msg: email.message.Message, include_raw_body: bool = False, include_attachment_data: bool = False, pconf: typing.Optional[dict]=None) -> dict:
+def parse_email(msg: email.message.Message, include_raw_body: bool = False, include_attachment_data: bool = False,
+                pconf: typing.Optional[dict] = None) -> dict:
     """Parse an e-mail and return a dictionary containing the various parts of
     the e-mail broken down into key-value pairs.
 
@@ -526,13 +566,18 @@ def parse_email(msg: email.message.Message, include_raw_body: bool = False, incl
     # parse and decode Date
     # If date field is present
     if 'date' in msg:
-        headers_struc['date'] = eml_parser.decode.robust_string2date(msg.get('date'))
+        try:
+            headers_struc['date'] = eml_parser.decode.robust_string2date(msg.get('date'))
+        except (TypeError, Exception):
+            logger.warning('Error parsing date.')
+            headers_struc['date'] = dateutil.parser.parse('1970-01-01T00:00:00+0000')
+            msg.replace_header('date', headers_struc['date'])
     else:
         # If date field is absent...
         headers_struc['date'] = dateutil.parser.parse('1970-01-01T00:00:00+0000')
 
     # mail receiver path / parse any domain, e-mail
-    # @TODO parse case where domain is specified but in parantheses only an IP
+    # @TODO parse case where domain is specified but in parentheses only an IP
     headers_struc['received'] = []
     headers_struc['received_email'] = []
     headers_struc['received_domain'] = []
@@ -583,10 +628,11 @@ def parse_email(msg: email.message.Message, include_raw_body: bool = False, incl
 
             # Parse IPs in "received headers"
             ips_in_received_line = eml_parser.regex.ipv6_regex.findall(received_line_flat) + \
-                eml_parser.regex.ipv4_regex.findall(received_line_flat)
+                                   eml_parser.regex.ipv4_regex.findall(received_line_flat)
             for ip in ips_in_received_line:
                 try:
-                    ip_obj = ipaddress.ip_address(ip)  # type: ignore  # type of findall is list[str], so this is correct
+                    ip_obj = ipaddress.ip_address(
+                        ip)  # type: ignore  # type of findall is list[str], so this is correct
                 except ValueError:
                     logger.debug('Invalid IP in received line - "{}"'.format(ip))
                 else:
