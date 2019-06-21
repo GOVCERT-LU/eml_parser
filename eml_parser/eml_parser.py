@@ -113,8 +113,10 @@ def get_raw_body_text(msg: email.message.Message) -> typing.List[typing.Tuple[ty
                 'Exception occured while trying to parse the content-disposition header. Collected data will not be complete.')
             filename = ''
 
-        if ('content-disposition' not in msg and msg.get_content_maintype() == 'text') or (
-                filename.endswith('.html') or filename.endswith('.htm')):
+        if ('content-disposition' not in msg and msg.get_content_maintype() == 'text') \
+                or (filename.endswith('.html') or filename.endswith('.htm')) \
+                or ('content-disposition' in msg and msg.get_content_disposition() == 'inline'
+                    and msg.get_content_maintype() == 'text'):
             encoding = msg.get('content-transfer-encoding', '').lower()
 
             charset = msg.get_content_charset()
@@ -234,7 +236,8 @@ def prepare_multipart_part_attachment(msg: email.message.Message, counter: int =
         lower_keys = dict((k.lower(), v) for k, v in msg.items())
         msg.policy = former_policy
 
-    if 'content-disposition' in lower_keys or not msg.get_content_maintype() == 'text':
+    if ('content-disposition' in lower_keys and msg.get_content_disposition() != 'inline') \
+            or msg.get_content_maintype() != 'text':
         # if it's an attachment-type, pull out the filename
         # and calculate the size in bytes
         if msg.get_content_type() == 'message/rfc822':
