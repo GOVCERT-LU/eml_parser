@@ -870,24 +870,25 @@ def parse_email(msg: email.message.Message, include_raw_body: bool = False, incl
 
     headers_struc['header'] = header
 
-    # parse attachments
-    try:
-        report_struc['attachment'] = traverse_multipart(msg, 0, include_attachment_data)
-    except (binascii.Error, AssertionError):
-        # we hit this exception if the payload contains invalid data
-        logger.exception('Exception occured while parsing attachment data. Collected data will not be complete!')
-        report_struc['attachment'] = None
+    if include_attachment_data:
+        # parse attachments
+        try:
+            report_struc['attachment'] = traverse_multipart(msg, 0, include_attachment_data)
+        except (binascii.Error, AssertionError):
+            # we hit this exception if the payload contains invalid data
+            logger.exception('Exception occured while parsing attachment data. Collected data will not be complete!')
+            report_struc['attachment'] = None
 
-    # Dirty hack... transform hash into list.. need to be done in the function.
-    # Mandatory to search efficiently in mongodb
-    # See Bug 11 of eml_parser
-    if not report_struc['attachment']:
-        del report_struc['attachment']
-    else:
-        newattach = []
-        for attachment in report_struc['attachment']:
-            newattach.append(report_struc['attachment'][attachment])
-        report_struc['attachment'] = newattach
+        # Dirty hack... transform hash into list.. need to be done in the function.
+        # Mandatory to search efficiently in mongodb
+        # See Bug 11 of eml_parser
+        if not report_struc['attachment']:
+            del report_struc['attachment']
+        else:
+            newattach = []
+            for attachment in report_struc['attachment']:
+                newattach.append(report_struc['attachment'][attachment])
+            report_struc['attachment'] = newattach
 
     newbody = []
     for body in bodys_struc:
