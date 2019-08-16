@@ -506,10 +506,10 @@ def parse_email(msg: email.message.Message, include_raw_body: bool = False, incl
     # If no pconf was specified, default to empty dict
     pconf = pconf or {}
 
-    # If no whitelisting of if is required initiate the empty variable arry
+    # If no whitelisting is required, set to emtpy list
     if 'whiteip' not in pconf:
         pconf['whiteip'] = []
-    # If no whitelisting of if is required initiate the empty variable arry
+    # If no whitelisting is required, set to emtpy list
     if 'whitefor' not in pconf:
         pconf['whitefor'] = []
 
@@ -517,13 +517,13 @@ def parse_email(msg: email.message.Message, include_raw_body: bool = False, incl
     subject = msg.get('subject', '')
     headers_struc['subject'] = eml_parser.decode.decode_field(subject)
 
-    # If parsing had problem... report it...
+    # If parsing had problems, report it
     if msg.defects:
         headers_struc['defect'] = []
         for exception in msg.defects:
             headers_struc['defect'].append(str(exception))
 
-    # parse and decode from
+    # parse and decode "from"
     # @TODO verify if this hack is necessary for other e-mail fields as well
     try:
         msg_header_field = str(msg.get('from', '')).lower()
@@ -554,9 +554,9 @@ def parse_email(msg: email.message.Message, include_raw_body: bool = False, incl
             from_ = email.utils.parseaddr(msg.get('from', '').lower())
             headers_struc['from'] = from_[1]
 
-    # parse and decode to
+    # parse and decode "to"
     headers_struc['to'] = headeremail2list(msg, 'to')
-    # parse and decode Cc
+    # parse and decode "cc"
     headers_struc['cc'] = headeremail2list(msg, 'cc')
     if not headers_struc['cc']:
         headers_struc.pop('cc')
@@ -698,9 +698,13 @@ def parse_email(msg: email.message.Message, include_raw_body: bool = False, incl
         bodys_struc['raw_body'] = raw_body
 
     bodys = {}
-    multipart = True  # Is it a multipart email ?
+
+    # Is it a multipart email ?
     if len(raw_body) == 1:
-        multipart = False  # No only "one" Part
+        multipart = False
+    else:
+        multipart = True
+
     for body_tup in raw_body:
         bodie = {}  # type: typing.Dict[str, typing.Any]
         _, body, body_multhead = body_tup
@@ -801,7 +805,7 @@ def parse_email(msg: email.message.Message, include_raw_body: bool = False, incl
             v = str(v)
 
             # We are using replace . to : for avoiding issue in mongo
-            k = k.lower().replace('.', ':')  # Lot of lowers, precompute :) .
+            k = k.lower().replace('.', ':')  # Lot of lowers, pre-compute :) .
             # print v
             if multipart:
                 if k in ch:
@@ -810,7 +814,6 @@ def parse_email(msg: email.message.Message, include_raw_body: bool = False, incl
                     ch[k] = [v]
             else:  # if not multipart, store only content-xx related header with part
                 if k.startswith('content'):  # otherwise, we got all header headers
-                    k = k.lower().replace('.', ':')
                     if k in ch:
                         ch[k].append(v)
                     else:
