@@ -320,7 +320,7 @@ def decode_email(eml_file: str, include_raw_body: bool = False, include_attachme
       include_attachment_data (bool, optional): Boolean paramter which indicates whether
                                                 to include raw attachment data in the
                                                 returned structure. Default is False.
-      pconf (dict, optional): A dict with various optinal configuration parameters,
+      pconf (dict, optional): A dict with various optional configuration parameters,
                               e.g. whitelist IPs, whitelist e-mail addresses, etc.
 
       policy (email.policy.Policy, optional): Policy to use when parsing e-mails.
@@ -364,7 +364,7 @@ def decode_email_b(eml_file: bytes, include_raw_body: bool = False, include_atta
         include_attachment_data (bool, optional): Boolean paramter which indicates whether
                                                   to include raw attachment data in the
                                                   returned structure. Default is False.
-        pconf (dict, optional): A dict with various optinal configuration parameters,
+        pconf (dict, optional): A dict with various optional configuration parameters,
                                 e.g. whitelist IPs, whitelist e-mail addresses, etc.
 
         policy (email.policy.Policy, optional): Policy to use when parsing e-mails.
@@ -491,7 +491,7 @@ def parse_email(msg: email.message.Message, include_raw_body: bool = False, incl
       include_attachment_data (bool, optional): If True, includes the full attachment
                                                 data in the resulting dictionary.
                                                 Defaults to False.
-      pconf (dict, optional): A dict with various optinal configuration parameters,
+      pconf (dict, optional): A dict with various optional configuration parameters,
                               e.g. whitelist IPs, whitelist e-mail addresses, etc.
 
     Returns:

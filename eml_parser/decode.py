@@ -89,7 +89,7 @@ def decode_field(field: str) -> str:
 
 
 def decode_string(string: bytes, encoding: typing.Optional[str]) -> str:
-    """Try anyhting possible to parse an encoded bytes string and return the result.
+    """Try anything possible to parse an encoded bytes string and return the result.
     We do this using the encoding hint, if this fails, we try to detect the correct
     encoding using the chardet module, if that failed we try latin-1, utf-8 and
     as a last resort ascii.
