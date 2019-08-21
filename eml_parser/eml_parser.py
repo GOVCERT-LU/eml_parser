@@ -103,7 +103,7 @@ def get_raw_body_text(msg: email.message.Message) -> typing.List[typing.Tuple[ty
             raw_body.extend(get_raw_body_text(part))  # type: ignore
     else:
         # Treat text document attachments as belonging to the body of the mail.
-        # Attachments with a file-extension of .htm/.html are implicitely treated
+        # Attachments with a file-extension of .htm/.html are implicitly treated
         # as text as well in order not to escape later checks (e.g. URL scan).
 
         try:
@@ -305,7 +305,7 @@ def prepare_multipart_part_attachment(msg: email.message.Message, counter: int =
 
 def decode_email(eml_file: str, include_raw_body: bool = False, include_attachment_data: bool = False,
                  pconf: typing.Optional[dict] = None, policy: email.policy.Policy = email.policy.default,
-                 ignore_bad_start: bool = False, email_force_tld: bool = False) -> dict:
+                 ignore_bad_start: bool = False, email_force_tld: bool = False, parse_attachments: bool = True) -> dict:
     """Function for decoding an EML file into an easily parsable structure.
     Some intelligence is applied while parsing the file in order to work around
     broken files.
@@ -331,6 +331,10 @@ def decode_email(eml_file: str, include_raw_body: bool = False, include_attachme
       email_force_tld (bool, optional): Only match e-mail addresses with a TLD. I.e exclude something like
                                         john@doe. By default this is disabled.
 
+      parse_attachments (bool, optional): Set this to false if you want to disable the parsing of attachments.
+                                          Please note that HTML attachments as well as other text data marked to be
+                                          in-lined, will always be parsed.
+
     Returns:
       dict: A dictionary with the content of the EML parsed and broken down into
             key-value pairs.
@@ -344,12 +348,14 @@ def decode_email(eml_file: str, include_raw_body: bool = False, include_attachme
                           pconf=pconf,
                           policy=policy,
                           ignore_bad_start=ignore_bad_start,
-                          email_force_tld=email_force_tld)
+                          email_force_tld=email_force_tld,
+                          parse_attachments=parse_attachments)
 
 
 def decode_email_b(eml_file: bytes, include_raw_body: bool = False, include_attachment_data: bool = False,
                    pconf: typing.Optional[dict] = None, policy: email.policy.Policy = email.policy.default,
-                   ignore_bad_start: bool = False, email_force_tld: bool = False) -> dict:
+                   ignore_bad_start: bool = False, email_force_tld: bool = False,
+                   parse_attachments: bool = True) -> dict:
     """Function for decoding an EML file into an easily parsable structure.
     Some intelligence is applied while parsing the file in order to work around
     broken files.
@@ -374,6 +380,10 @@ def decode_email_b(eml_file: bytes, include_raw_body: bool = False, include_atta
 
         email_force_tld (bool, optional): Only match e-mail addresses with a TLD. I.e exclude something like
                                           john@doe. By default this is disabled.
+
+      parse_attachments (bool, optional): Set this to false if you want to disable the parsing of attachments.
+                                          Please note that HTML attachments as well as other text data marked to be
+                                          in-lined, will always be parsed.
 
     Returns:
         dict: A dictionary with the content of the EML parsed and broken down into
@@ -404,7 +414,7 @@ def decode_email_b(eml_file: bytes, include_raw_body: bool = False, include_atta
 
     msg = email.message_from_bytes(_eml_file, policy=policy)
 
-    return parse_email(msg, include_raw_body, include_attachment_data, pconf)
+    return parse_email(msg, include_raw_body, include_attachment_data, pconf, parse_attachments=parse_attachments)
 
 
 def get_uri_ondata(body: str) -> typing.List[str]:
@@ -480,7 +490,7 @@ def findall(pat: str, data: str) -> typing.Iterator[int]:
 
 
 def parse_email(msg: email.message.Message, include_raw_body: bool = False, include_attachment_data: bool = False,
-                pconf: typing.Optional[dict] = None) -> dict:
+                pconf: typing.Optional[dict] = None, parse_attachments: bool = True) -> dict:
     """Parse an e-mail and return a dictionary containing the various parts of
     the e-mail broken down into key-value pairs.
 
@@ -493,6 +503,10 @@ def parse_email(msg: email.message.Message, include_raw_body: bool = False, incl
                                                 Defaults to False.
       pconf (dict, optional): A dict with various optional configuration parameters,
                               e.g. whitelist IPs, whitelist e-mail addresses, etc.
+
+      parse_attachments (bool, optional): Set this to false if you want to disable the parsing of attachments.
+                                          Please note that HTML attachments as well as other text data marked to be
+                                          in-lined, will always be parsed.
 
     Returns:
       dict: A dictionary with the content of the EML parsed and broken down into
@@ -874,23 +888,24 @@ def parse_email(msg: email.message.Message, include_raw_body: bool = False, incl
     headers_struc['header'] = header
 
     # parse attachments
-    try:
-        report_struc['attachment'] = traverse_multipart(msg, 0, include_attachment_data)
-    except (binascii.Error, AssertionError):
-        # we hit this exception if the payload contains invalid data
-        logger.exception('Exception occured while parsing attachment data. Collected data will not be complete!')
-        report_struc['attachment'] = None
+    if parse_attachments:
+        try:
+            report_struc['attachment'] = traverse_multipart(msg, 0, include_attachment_data)
+        except (binascii.Error, AssertionError):
+            # we hit this exception if the payload contains invalid data
+            logger.exception('Exception occured while parsing attachment data. Collected data will not be complete!')
+            report_struc['attachment'] = None
 
-    # Dirty hack... transform hash into list.. need to be done in the function.
-    # Mandatory to search efficiently in mongodb
-    # See Bug 11 of eml_parser
-    if not report_struc['attachment']:
-        del report_struc['attachment']
-    else:
-        newattach = []
-        for attachment in report_struc['attachment']:
-            newattach.append(report_struc['attachment'][attachment])
-        report_struc['attachment'] = newattach
+        # Dirty hack... transform hash into list.. need to be done in the function.
+        # Mandatory to search efficiently in mongodb
+        # See Bug 11 of eml_parser
+        if not report_struc['attachment']:
+            del report_struc['attachment']
+        else:
+            newattach = []
+            for attachment in report_struc['attachment']:
+                newattach.append(report_struc['attachment'][attachment])
+            report_struc['attachment'] = newattach
 
     newbody = []
     for body in bodys_struc:
