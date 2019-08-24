@@ -9,7 +9,7 @@ f.close()
 
 install_requires = ['python-dateutil',
                     'cchardet',
-                    'typing'
+                    'typing; python_version < "3.5"'
                     ]
 
 setuptools.setup(name='eml_parser',
