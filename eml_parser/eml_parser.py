@@ -246,7 +246,11 @@ def prepare_multipart_part_attachment(msg: email.message.Message, counter: int =
                 logger.warning(
                     'More than one payload for "message/rfc822" part detected. This is not supported, please report!')
 
-            data = bytes(payload[0])
+            try:
+                data = payload[0].as_bytes()
+            except UnicodeEncodeError:
+                data = payload[0].as_bytes(policy=email.policy.compat32)
+
             file_size = len(data)
         else:
             data = msg.get_payload(decode=True)  # type: bytes  # type is always bytes here
