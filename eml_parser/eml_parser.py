@@ -98,8 +98,8 @@ def get_raw_body_text(msg: email.message.Message) -> typing.List[typing.Tuple[ty
     raw_body = []  # type: typing.List[typing.Tuple[typing.Any, typing.Any,typing.Any]]
 
     if msg.is_multipart():
-        for part in msg.get_payload():  # type: ignore
-            raw_body.extend(get_raw_body_text(part))  # type: ignore
+        for part in msg.get_payload():
+            raw_body.extend(get_raw_body_text(part))
     else:
         # Treat text document attachments as belonging to the body of the mail.
         # Attachments with a file-extension of .htm/.html are implicitly treated
@@ -199,10 +199,10 @@ def traverse_multipart(msg: email.message.Message, counter: int = 0, include_att
             if msg.get_content_type() == 'message/rfc822':
                 # This is an e-mail message attachment, add it to the attachment list apart from parsing it
                 attachments.update(
-                    prepare_multipart_part_attachment(msg, counter, include_attachment_data))  # type: ignore
+                    prepare_multipart_part_attachment(msg, counter, include_attachment_data))
 
-        for part in msg.get_payload():  # type: ignore
-            attachments.update(traverse_multipart(part, counter, include_attachment_data))  # type: ignore
+        for part in msg.get_payload():
+            attachments.update(traverse_multipart(part, counter, include_attachment_data))
     else:
         return prepare_multipart_part_attachment(msg, counter, include_attachment_data)
 
@@ -630,7 +630,7 @@ def parse_email(msg: email.message.Message, include_raw_body: bool = False, incl
             # It add a warning if multiple identical items are found.
 
             if pconf.get('byhostentry'):
-                for by_item in parsed_routing.get('by', []):  # type: ignore
+                for by_item in parsed_routing.get('by', []):
                     for byhostentry_ in pconf['byhostentry']:
                         byhostentry = byhostentry_.lower()
                         # print ("%s %s" % (byhostentry, by_item))
@@ -653,8 +653,7 @@ def parse_email(msg: email.message.Message, include_raw_body: bool = False, incl
                                    eml_parser.regex.ipv4_regex.findall(received_line_flat)
             for ip in ips_in_received_line:
                 try:
-                    ip_obj = ipaddress.ip_address(
-                        ip)  # type: ignore  # type of findall is list[str], so this is correct
+                    ip_obj = ipaddress.ip_address(ip)  # type of findall is list[str], so this is correct
                 except ValueError:
                     logger.debug('Invalid IP in received line - "{}"'.format(ip))
                 else:
@@ -664,7 +663,7 @@ def parse_email(msg: email.message.Message, include_raw_body: bool = False, incl
             # search for domain
             for m in eml_parser.regex.recv_dom_regex.findall(received_line_flat):
                 try:
-                    ip_obj = ipaddress.ip_address(m)  # type: ignore  # type of findall is list[str], so this is correct
+                    ip_obj = ipaddress.ip_address(m)  # type of findall is list[str], so this is correct
                 except ValueError:
                     # we find IPs using the previous IP crawler, hence we ignore them
                     # here.
