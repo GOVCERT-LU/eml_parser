@@ -158,6 +158,7 @@ pipeline {
                         export HTTP_PROXY="${PROXY}"
                         export HTTPS_PROXY="${PROXY}"
                         export NO_PROXY=localhost,127.0.0.1,.govcert.etat.lu
+                        export HOME=${PWD}
                         export PIP_CERT=${PWD}/ssl_cas.pem
                         export PATH=${PATH}:${PWD}/.local/bin
                         export TWINE_CERT=${PWD}/ssl_cas.pem
