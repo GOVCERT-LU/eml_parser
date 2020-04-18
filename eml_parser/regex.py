@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 # pylint: disable=line-too-long
 
-"""This module contains a number of regular expressions used by this Library.
-"""
+"""This module contains a number of regular expressions used by this Library."""
 
 import re
 

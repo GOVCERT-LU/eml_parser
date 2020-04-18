@@ -1,18 +1,18 @@
 # -*- coding: utf-8 -*-
 # pylint: disable=line-too-long
 
-"""This module is used for parsing the received lines into a machine readable structure.
-"""
-
+"""This module is used for parsing the received lines into a machine readable structure."""
 
 import re
 import typing
+
 import eml_parser.decode
 import eml_parser.regex
 
 
 def noparenthesis(line: str) -> str:
     """Remove nested parenthesis, until none are present.
+
     @FIXME rewrite this function.
 
     Args:
@@ -48,8 +48,8 @@ def cleanline(line: str) -> str:
     """
     if line == '':
         return line
-    else:
-        return eml_parser.regex.cleanline_regex.sub('', line)
+
+    return eml_parser.regex.cleanline_regex.sub('', line)
 
 
 def give_dom_ip(line: str) -> typing.List[str]:
@@ -67,8 +67,9 @@ def give_dom_ip(line: str) -> typing.List[str]:
 
 
 def parserouting(line: str) -> typing.Dict[str, typing.Any]:
-    """This method tries to parsed a e-mail header received line
+    """This method tries to parsed a e-mail header received line\
     and extract machine readable information.
+
     Note that there are a large number of formats for these lines
     and a lot of weird ones which are not commonly used.
     We try our best to match a large number of formats.
@@ -121,7 +122,7 @@ def parserouting(line: str) -> typing.Dict[str, typing.Any]:
                 loc = npline.find(word)
                 end = npline.find(endword)
                 if end < loc or end == -1:
-                    end = 0xfffffff   # Kindof MAX 31 bits
+                    end = 0xfffffff  # Kindof MAX 31 bits
                 result.append({'name_in': word, 'pos': loc, 'name_out': endword, 'weight': end + loc})
                 # print({'name_in': word, 'pos': loc, 'name_out': endword, 'weight': end+loc})
 

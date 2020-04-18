@@ -1,9 +1,8 @@
 # -*- coding: utf-8 -*-
 # pylint: disable=line-too-long
 
-"""eml_parser serves as a python module for parsing eml files and returning various
-information found in the e-mail as well as computed information.
-"""
+"""eml_parser serves as a python module for parsing eml files and returning various\
+information found in the e-mail as well as computed information."""
 
 #
 # Georges Toth (c) 2013-2014 <georges@trypill.org>
@@ -143,7 +142,7 @@ def get_raw_body_text(msg: email.message.Message) -> typing.List[typing.Tuple[ty
 
 
 def get_file_hash(data: bytes) -> typing.Dict[str, str]:
-    """Generate hashes of various types (``MD5``, ``SHA-1``, ``SHA-256``, ``SHA-512``)
+    """Generate hashes of various types (``MD5``, ``SHA-1``, ``SHA-256``, ``SHA-512``)\
     for the provided data.
 
     Args:
@@ -229,11 +228,11 @@ def prepare_multipart_part_attachment(msg: email.message.Message, counter: int =
 
     # In case we hit bug 27257, try to downgrade the used policy
     try:
-        lower_keys = dict((k.lower(), v) for k, v in msg.items())
+        lower_keys = {(k.lower(), v) for k, v in msg.items()}
     except AttributeError:
         former_policy = msg.policy
         msg.policy = email.policy.compat32
-        lower_keys = dict((k.lower(), v) for k, v in msg.items())
+        lower_keys = {(k.lower(), v) for k, v in msg.items()}
         msg.policy = former_policy
 
     if ('content-disposition' in lower_keys and msg.get_content_disposition() != 'inline') \
@@ -311,6 +310,7 @@ def decode_email(eml_file: str, include_raw_body: bool = False, include_attachme
                  pconf: typing.Optional[dict] = None, policy: email.policy.Policy = email.policy.default,
                  ignore_bad_start: bool = False, email_force_tld: bool = False, parse_attachments: bool = True) -> dict:
     """Function for decoding an EML file into an easily parsable structure.
+
     Some intelligence is applied while parsing the file in order to work around
     broken files.
     Besides just parsing, this function also computes hashes and extracts meta
@@ -361,6 +361,7 @@ def decode_email_b(eml_file: bytes, include_raw_body: bool = False, include_atta
                    ignore_bad_start: bool = False, email_force_tld: bool = False,
                    parse_attachments: bool = True) -> dict:
     """Function for decoding an EML file into an easily parsable structure.
+
     Some intelligence is applied while parsing the file in order to work around
     broken files.
     Besides just parsing, this function also computes hashes and extracts meta
@@ -402,13 +403,13 @@ def decode_email_b(eml_file: bytes, include_raw_body: bool = False, include_atta
         # Note that this has a considerable performance impact, which is why it is disabled by default.
         _eml_file = b''
 
-        if not b':' in eml_file.split(b'\n', 1):
+        if b':' not in eml_file.split(b'\n', 1):
             start = True
             for line in eml_file.split(b'\n'):
-                if start and not b':' in line:
+                if start and b':' not in line:
                     continue
-                else:
-                    start = False
+
+                start = False
 
                 _eml_file += line
         else:
@@ -495,7 +496,7 @@ def findall(pat: str, data: str) -> typing.Iterator[int]:
 
 def parse_email(msg: email.message.Message, include_raw_body: bool = False, include_attachment_data: bool = False,
                 pconf: typing.Optional[dict] = None, parse_attachments: bool = True) -> dict:
-    """Parse an e-mail and return a dictionary containing the various parts of
+    """Parse an e-mail and return a dictionary containing the various parts of\
     the e-mail broken down into key-value pairs.
 
     Args:

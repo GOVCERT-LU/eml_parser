@@ -1,9 +1,7 @@
 # -*- coding: utf-8 -*-
 # pylint: disable=line-too-long
 
-"""This module contains various string import, check and parse
-methods.
-"""
+"""This module contains various string import, check and parse methods."""
 
 #
 # Georges Toth (c) 2013-2014 <georges@trypill.org>
@@ -35,14 +33,16 @@ methods.
 #    if a mail-server (e.g. exchange) uses an ID which looks like a valid IP
 #
 
-import json
 import datetime
-import logging
-import typing
 import email
 import email.policy
 import email.utils
+import json
+import logging
+import typing
+
 import dateutil.parser
+
 import eml_parser.regex
 
 try:
@@ -53,21 +53,21 @@ try:
 except ImportError:
     chardet = None
 
-
 logger = logging.getLogger(__name__)
 
 
 def decode_field(field: str) -> str:
     """Try to get the specified field using the Header module.
-     If there is also an associated encoding, try to decode the
-     field and return it, else return a specified default value.
 
-     Args:
+    If there is also an associated encoding, try to decode the
+    field and return it, else return a specified default value.
+
+    Args:
         field (str): String to decode
 
-     Returns
+    Returns
         str: Clean encoded strings
-     """
+    """
     try:
         _decoded = email.header.decode_header(field)
     except email.errors.HeaderParseError:
@@ -90,6 +90,7 @@ def decode_field(field: str) -> str:
 
 def decode_string(string: bytes, encoding: typing.Optional[str]) -> str:
     """Try anything possible to parse an encoded bytes string and return the result.
+
     We do this using the encoding hint, if this fails, we try to detect the correct
     encoding using the chardet module, if that failed we try latin-1, utf-8 and
     as a last resort ascii.
@@ -113,7 +114,7 @@ def decode_string(string: bytes, encoding: typing.Optional[str]) -> str:
 
     if chardet:
         enc = chardet.detect(string)
-        if not(enc['confidence'] is None or enc['encoding'] is None) and not (enc['confidence'] == 1 and enc['encoding'] == 'ascii'):
+        if not (enc['confidence'] is None or enc['encoding'] is None) and not (enc['confidence'] == 1 and enc['encoding'] == 'ascii'):
             value = string.decode(enc['encoding'], 'replace')
         else:
             value = string.decode('ascii', 'replace')
@@ -137,8 +138,8 @@ def decode_string(string: bytes, encoding: typing.Optional[str]) -> str:
 
 
 def workaround_bug_27257(msg: email.message.Message, header: str) -> typing.List[str]:
-    """Function to work around bug 27257 and just tries its best using
-    the compat32 policy to extract any meaningful information, i.e.
+    """Function to work around bug 27257 and just tries its best using \
+    the compat32 policy to extract any meaningful information, i.e. \
     e-mail addresses.
 
     Args:
@@ -160,7 +161,7 @@ def workaround_bug_27257(msg: email.message.Message, header: str) -> typing.List
 
 
 def workaround_bug_27257_field_value(msg: email.message.Message, header: str) -> typing.List[str]:
-    """Function to work around bug 27257 and just tries its best using
+    """Function to work around bug 27257 and just tries its best using \
     the compat32 policy to extract any meaningful information.
 
     Args:
@@ -190,6 +191,7 @@ def workaround_bug_27257_field_value(msg: email.message.Message, header: str) ->
 
 def robust_string2date(line: str) -> datetime.datetime:
     """Parses a date string to a datetime.datetime object using different methods.
+
     It is guaranteed to always return a valid datetime.datetime object.
     If first tries the built-in email module method for parsing the date according
     to related RFC's.
@@ -225,15 +227,14 @@ def robust_string2date(line: str) -> datetime.datetime:
     if date_ is None:
         # Now we are facing an invalid date.
         return dateutil.parser.parse(default_date)
-    elif date_.tzname() is None:
+    if date_.tzname() is None:
         return date_.replace(tzinfo=datetime.timezone.utc)
-    else:
-        return date_
+
+    return date_
 
 
 def json_serial(obj: typing.Any) -> typing.Optional[str]:
-    """JSON serializer for objects not serializable by default json code"""
-
+    """JSON serializer for objects not serializable by default json code."""
     if isinstance(obj, datetime.datetime):
         if obj.tzinfo is not None:
             serial = obj.astimezone(datetime.timezone.utc).isoformat()
@@ -245,7 +246,7 @@ def json_serial(obj: typing.Any) -> typing.Optional[str]:
     raise TypeError('Type not serializable - {}'.format(str(type(obj))))
 
 
-def export_to_json(parsed_msg: dict, sort_keys: bool=False) -> str:
+def export_to_json(parsed_msg: dict, sort_keys: bool = False) -> str:
     """Function to convert a parsed e-mail dict to a JSON string.
 
     Args:
