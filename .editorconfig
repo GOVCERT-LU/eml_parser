@@ -1,0 +1,16 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+
+[{*.pyw,*.py}]
+indent_size = 4
+tab_width = 4
+max_line_length = 240
+ij_continuation_indent_size = 8
+ij_python_blank_line_at_file_end = true
+
+[{*.yml_sample,*.yaml_sample,*.yml,*.yaml}]
+indent_size = 2

@@ -11,3 +11,4 @@ eml_parser.egg-info
 .mypy_cache
 .pytest_cache
 venv
+.vscode

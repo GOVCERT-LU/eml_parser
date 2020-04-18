@@ -10,11 +10,10 @@ matrix:
 
 # command to install dependencies
 install:
-  - pip install -r requirements.txt
-  - pip install -e .
+  - pip install -e .[dev]
 
 # command to run pytest
-script: pytest tests
+script: pytest -v tests
 
 notifications:
   email: false

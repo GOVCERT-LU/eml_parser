@@ -7,50 +7,113 @@ pipeline {
     timeout(time: 1, unit: 'HOURS')
     // Keep the 10 most recent builds
     buildDiscarder(logRotator(numToKeepStr: '10'))
+
+    gitLabConnection('Gitlab')
+    gitlabBuilds(builds: ['Lint', 'Linters', 'Test results', 'Coverage'])
+  }
+  environment {
+     Python = "3.7"
   }
 
   stages {
     stage ("Code pull"){
       steps{
-          checkout scm
+        // make sure any earlier build is canceled
+        milestone label: '', ordinal:  Integer.parseInt(env.BUILD_ID) - 1
+        milestone label: '', ordinal:  Integer.parseInt(env.BUILD_ID)
+
+        checkout scm
+        sh 'cp /etc/ssl/certs/govcertCA.pem .'
       }
     }
 
     stage('Lint') {
-      steps {
-        sh "tox"
+      when {
+        not {
+          tag pattern: "v\\d+\\.\\d+\\.\\d+", comparator: "REGEXP"
+        }
       }
-    }
 
-    stage('Analysis - pylint') {
       steps {
-        script { analyze_pylint() }
-      }
-    }
+        gitlabCommitStatus('Lint') {
+            script {
+              try {
+                docker.image('python:${Python}').inside("--tmpfs /.local --tmpfs /.cache") {
+                  sh '''
+                        export
+                        export HTTP_PROXY="${PROXY}"
+                        export HTTPS_PROXY="${PROXY}"
+                        export NO_PROXY=localhost,127.0.0.1,.govcert.etat.lu
+                        export HOME=${PWD}
+                        export PYTHONUSERBASE=.py_${Python}
 
-    stage('SonarQube analysis') {
-      steps {
-        withSonarQubeEnv('sonar') {
-          sh "/opt/sonar-scanner/bin/sonar-scanner -Dproject.settings=.sonar-project.properties"
+                        python -m venv .py_${Python}
+                        source .py_${Python}/bin/activate
+                        pip install -U pip tox
+
+                        tox
+                      '''
+                }
+              } catch (err) {
+              }
+            }
         }
       }
     }
 
-    stage('Analysis - pyflakes') {
-      steps {
-        script { analyze_pyflakes() }
+    stage('Analysis') {
+      when {
+        not {
+          tag pattern: "v\\d+\\.\\d+\\.\\d+", comparator: "REGEXP"
+        }
       }
-    }
 
-    stage('Test results') {
-      steps {
-        junit '**/junit.xml'
-      }
-    }
+      parallel {
+        stage('Linters') {
+          steps {
+            gitlabCommitStatus('Linters') {
+                recordIssues(tools: [pyLint(pattern: "pylint_${Python}.log",
+                                            id: "Python_${Python}_pylint",
+                                            name: "Py-${Python} Pylint"),
+                                     myPy(pattern: "mypy_${Python}.log",
+                                          id: "Python_${Python}_mypy",
+                                          name: "Py-${Python} MyPy"),
+                                     flake8(pattern: "flake8_${Python}.log",
+                                            id: "Python_${Python}_flake8",
+                                            name: "Py-${Python} Flake8")
+                                     ])
+            }
+          }
+        }
 
-    stage('Coverage') {
-      steps {
-        script { analyze_coverage() }
+        stage('Test results') {
+          steps {
+            gitlabCommitStatus('Test results') {
+                xunit (
+                    thresholds: [ skipped(failureThreshold: '0'), failed(failureThreshold: '0') ],
+                    tools: [ JUnit(pattern: "**/junit_${Python}.xml") ]
+                    )
+            }
+          }
+        }
+
+        stage('Coverage') {
+          steps {
+            gitlabCommitStatus('Coverage') {
+                cobertura(autoUpdateHealth: false,
+                          autoUpdateStability: false,
+                          coberturaReportFile: "**/coverage_${Python}.xml",
+                          failUnhealthy: false,
+                          failUnstable: false,
+                          maxNumberOfBuilds: 20,
+                          onlyStable: false,
+                          sourceEncoding: 'ASCII',
+                          zoomCoverageChart: false
+                )
+            }
+          }
+        }
+
       }
     }
 
@@ -65,47 +128,73 @@ pipeline {
         }
       }
       steps {
-        sh  ''' virtualenv -p python3 buildvenv
-                source buildvenv/bin/activate
-                rm -f dist/*
-                python setup.py bdist_wheel
-            '''
+        script {
+          try {
+            docker.image('python:${Python}').inside("--tmpfs /.local --tmpfs /.cache") {
+              sh '''
+                    export
+                    export HTTP_PROXY="${PROXY}"
+                    export HTTPS_PROXY="${PROXY}"
+                    export NO_PROXY=localhost,127.0.0.1,.govcert.etat.lu
+                    export HOME=${PWD}
+                    export PYTHONUSERBASE=.py_${Python}
+
+                    mkdir -p dist
+                    pip wheel --no-deps -w dist/ .
+                  '''
+            }
+          } catch (err) {
+          }
+        }
       }
       post {
         always {
           withCredentials([usernamePassword(credentialsId: 'apps1-pypiserver-jenkins', usernameVariable: 'TWINE_USERNAME', passwordVariable: 'TWINE_PASSWORD')]) {
-            sh  ''' virtualenv -p python3 buildvenv
-                    source buildvenv/bin/activate
-                    pip install -U twine
-                    twine upload dist/*.whl
-                '''
+            script {
+              try {
+                docker.image('python:${Python}').inside("--tmpfs /.local --tmpfs /.cache") {
+                  sh '''cat govcertCA.pem /etc/ssl/certs/ca-certificates.crt > ssl_cas.pem
+                        export
+                        export HTTP_PROXY="${PROXY}"
+                        export HTTPS_PROXY="${PROXY}"
+                        export NO_PROXY=localhost,127.0.0.1,.govcert.etat.lu
+                        export PIP_CERT=${PWD}/ssl_cas.pem
+                        export PATH=${PATH}:${PWD}/.local/bin
+                        export TWINE_CERT=${PWD}/ssl_cas.pem
 
+                        pip install -U twine
+                        twine upload dist/*.whl
+                      '''
+                }
+              } catch (err) {
+              }
+            }
+
+            updateGitlabCommitStatus name: 'Lint', state: 'canceled'
+            updateGitlabCommitStatus name: 'Linters', state: 'canceled'
+            updateGitlabCommitStatus name: 'Test results', state: 'canceled'
+            updateGitlabCommitStatus name: 'Coverage', state: 'canceled'
           }
         }
       }
     }
   }
-}
 
+  post {
+    failure {
+      script {
+        def commitemail = sh(script:'cd ${WORKSPACE}; git log -1 --pretty=format:"%ce"', returnStdout:true).trim()
 
-def analyze_pylint() {
-      step([$class: 'WarningsPublisher', canComputeNew: false, canResolveRelativePaths: false, defaultEncoding: '', excludePattern: '', healthy: '', includePattern: '', messagesPattern: '', parserConfigurations: [[parserName: 'PyLint', pattern: 'pylint.log']], unHealthy: ''])
-}
+        emailext body: "${currentBuild.currentResult}: Job ${env.JOB_NAME} build ${env.BUILD_NUMBER}\n More info at: ${env.BUILD_URL}",
+            to: commitemail, subject: "Jenkins Build ${currentBuild.currentResult}: Job ${env.JOB_NAME}"
+      }
 
+      updateGitlabCommitStatus name: 'build', state: 'failed'
+    }
 
-def analyze_pyflakes() {
-      step([$class: 'WarningsPublisher', canComputeNew: false, canResolveRelativePaths: false, defaultEncoding: '', excludePattern: '', healthy: '', includePattern: '', messagesPattern: '', parserConfigurations: [[parserName: 'PyFlakes', pattern: 'pyflakes.log']], unHealthy: ''])
-}
+    success {
+      updateGitlabCommitStatus name: 'build', state: 'success'
+    }
+  }
 
-def analyze_coverage() {
-      step([$class: 'CoberturaPublisher',
-          autoUpdateHealth: false,
-          autoUpdateStability: false,
-          coberturaReportFile: '**/coverage.xml',
-          failUnhealthy: false,
-          failUnstable: false,
-          maxNumberOfBuilds: 0,
-          onlyStable: false,
-          sourceEncoding: 'ASCII',
-          zoomCoverageChart: false])
 }
