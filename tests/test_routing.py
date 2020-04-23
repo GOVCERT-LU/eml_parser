@@ -35,7 +35,7 @@ class TestRouting:
         }
 
         for test, expected_result in test_input.items():
-            assert sorted(eml_parser.routing.give_dom_ip(test)) == sorted(expected_result)
+            assert sorted(eml_parser.routing.get_domain_ip(test)) == sorted(expected_result)
 
     def test_parserouting(self):
         test_input = {'test1': (

@@ -1,90 +1,64 @@
-.. image:: https://codebeat.co/badges/d631cfb2-a7f8-476a-9d2e-58e58db95bc8
-   :target: https://codebeat.co/projects/github-com-govcert-lu-eml_parser-master
-   :alt: Code Health
-
-.. image:: https://travis-ci.com/GOVCERT-LU/eml_parser.svg?branch=master
-    :target: https://travis-ci.com/GOVCERT-LU/eml_parser
-
-.. image:: https://readthedocs.org/projects/eml-parser/badge/
-   :alt: Documentation Status
-   :scale: 100%
-   :target: http://eml-parser.readthedocs.io
-
-.. image:: https://badge.fury.io/py/eml-parser.svg
-    :target: https://badge.fury.io/py/eml-parser
-
+[![Code Health](https://codebeat.co/badges/d631cfb2-a7f8-476a-9d2e-58e58db95bc8)](https://codebeat.co/projects/github-com-govcert-lu-eml_parser-master)
+[![Travis CI](https://travis-ci.com/GOVCERT-LU/eml_parser.svg?branch=master)](https://travis-ci.com/GOVCERT-LU/eml_parser)
+[![Documentation Status](https://readthedocs.org/projects/eml-parser/badge/)](http://eml-parser.readthedocs.io)
+[![PyPI](https://badge.fury.io/py/eml-parser.svg)](https://badge.fury.io/py/eml-parser)
+[![PyPI pyversions](https://img.shields.io/pypi/pyversions/eml-parser.svg)](https://pypi.python.org/pypi/eml-parser/)
 
 eml_parser serves as a python module for parsing eml files and returning various
 information found in the e-mail as well as computed information.
 
 Extracted and generated information include but are not limited to:
-
-  - attachments
-    - hashes
-    - names
-  - from, to, cc
-  - received servers path
-  - subject
-  - list of URLs parsed from the text content of the mail (including HTML
-    body/attachments)
+- attachments
+  - hashes
+  - names
+- from, to, cc
+- received servers path
+- subject
+- list of URLs parsed from the text content of the mail (including HTML body/attachments)
 
 Please feel free to send me your comments / pull requests.
 
-Install the latest version using pip:
+For the changelog, please see [CHANGELOG.md](CHANGELOG.md).
 
-.. code-block:: bash
+### Installation:
+```shell script
+pip install eml_parser[file-magic]
+```
 
-  pip install eml_parser[file-magic]
+:warning: **Note:** If you don't want to / cannot use file-magic (e.g. if you are using python-magic), install via:
+```shell script
+pip install eml_parser
+```
 
-
-**Note: If you don't want to / cannot use file-magic (e.g. if you are using python-magic), install via**:
-
-.. code-block:: bash
-
-  pip install eml_parser
-
-
-**Note for OSX users**::
-
-  Make sure to install libmagic, else eml_parser will not work.
+### Note for **OSX** users:
+Make sure to install libmagic, else eml_parser will not work.
 
 
-**Warning**::
-
-  This release is only compatible with Python3. The last release to be compatible with
-  Python2 is v1.2. If you do require Python2 support, please download that version.
-  You are strongly encouraged though to use Python3 as there are many parsing improvements
-  and much better RFC support.
-  This release is only tested with Python >=3.5.
+### Example usage:
+```python
+import datetime
+import json
+import eml_parser
 
 
-Example on how to use:
-
-.. code-block:: python
-
-  import datetime
-  import json
-  import eml_parser
+def json_serial(obj):
+  if isinstance(obj, datetime.datetime):
+      serial = obj.isoformat()
+      return serial
 
 
-  def json_serial(obj):
-      if isinstance(obj, datetime.datetime):
-          serial = obj.isoformat()
-          return serial
+with open('sample.eml', 'rb') as fhdl:
+  raw_email = fhdl.read()
 
+ep = eml_parser.EmlParser()
+parsed_eml = ep.decode_email_bytes(raw_email)
 
-  with open('sample.eml', 'rb') as fhdl:
-      raw_email = fhdl.read()
-
-  parsed_eml = eml_parser.eml_parser.decode_email_b(raw_email)
-
-  print(json.dumps(parsed_eml, default=json_serial))
+print(json.dumps(parsed_eml, default=json_serial))
+```
 
 
 Which gives for a minimalistic EML file something like this:
-
-.. code-block:: json
-
+```json
   {
     "body": [
       {
@@ -148,3 +122,4 @@ Which gives for a minimalistic EML file something like this:
       ]
     }
   }
+```

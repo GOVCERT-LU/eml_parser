@@ -3,6 +3,22 @@
 
 """This module contains various string import, check and parse methods."""
 
+from __future__ import annotations
+
+import datetime
+import email
+import email.policy
+import email.utils
+import email.header
+import email.errors
+import json
+import logging
+import typing
+
+import dateutil.parser
+
+import eml_parser.regex
+
 #
 # Georges Toth (c) 2013-2014 <georges@trypill.org>
 # GOVCERT.LU (c) 2013-present <info@govcert.etat.lu>
@@ -32,18 +48,6 @@
 #  - searching for IPs in the e-mail header sometimes leads to false positives
 #    if a mail-server (e.g. exchange) uses an ID which looks like a valid IP
 #
-
-import datetime
-import email
-import email.policy
-import email.utils
-import json
-import logging
-import typing
-
-import dateutil.parser
-
-import eml_parser.regex
 
 try:
     try:
@@ -149,7 +153,7 @@ def workaround_bug_27257(msg: email.message.Message, header: str) -> typing.List
     Returns:
         list: Returns a list of strings which represent e-mail addresses.
     """
-    return_value = []  # type: typing.List[str]
+    return_value: typing.List[str] = []
 
     for value in workaround_bug_27257_field_value(msg, header):
         if value != '':
@@ -212,21 +216,17 @@ def robust_string2date(line: str) -> datetime.datetime:
     if line == '':
         return dateutil.parser.parse(default_date)
 
-    date_ = None
-
     try:
         date_ = email.utils.parsedate_to_datetime(line)
-    except (TypeError, Exception):
+    except (TypeError, ValueError, LookupError):
         logger.debug('Exception parsing date "{}"'.format(line), exc_info=True)
 
         try:
             date_ = dateutil.parser.parse(line)
-        except (AttributeError, ValueError, OverflowError, Exception):
-            pass
+        except (AttributeError, ValueError, OverflowError):
+            # Now we are facing an invalid date.
+            return dateutil.parser.parse(default_date)
 
-    if date_ is None:
-        # Now we are facing an invalid date.
-        return dateutil.parser.parse(default_date)
     if date_.tzname() is None:
         return date_.replace(tzinfo=datetime.timezone.utc)
 

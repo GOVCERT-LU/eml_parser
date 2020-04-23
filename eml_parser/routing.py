@@ -3,6 +3,8 @@
 
 """This module is used for parsing the received lines into a machine readable structure."""
 
+from __future__ import annotations
+
 import re
 import typing
 
@@ -19,20 +21,19 @@ def noparenthesis(line: str) -> str:
         line (str): Input text to search in for parenthesis.
 
     Returns:
-        str: Return a string with all paranthesis removed.
+        str: Return a string with all parenthesis removed.
     """
     # check empty string
     if not line:
         return line
 
-    idem = False
     line_ = line
 
-    while not idem:
+    while True:
         lline = line_
         line_ = eml_parser.regex.noparenthesis_regex.sub('', line_)
         if lline == line_:
-            idem = True
+            break
 
     return line_
 
@@ -52,7 +53,7 @@ def cleanline(line: str) -> str:
     return eml_parser.regex.cleanline_regex.sub('', line)
 
 
-def give_dom_ip(line: str) -> typing.List[str]:
+def get_domain_ip(line: str) -> typing.List[str]:
     """Method returns all domains, IPv4 and IPv6 addresses found in a given string.
 
     Args:
@@ -86,32 +87,31 @@ def parserouting(line: str) -> typing.Dict[str, typing.Any]:
     out = {}  # type: typing.Dict[str, typing.Any]  # Result
     out['src'] = line
     line = line.lower()  # Convert everything to lowercase
-    npline = re.sub(r'\)', ' ) ', line)  # nORMALISE sPACE # Re-space () ")by " exists often
-    npline = re.sub(r'\(', ' ( ', npline)  # nORMALISE sPACE # Re-space ()
-    npline = re.sub(r';', ' ; ', npline)  # nORMALISE sPACE # Re-space ;
+    npline = line.replace(')', ' ) ')  # normalise space # Re-space () ")by " exists often
+    npline = npline.replace('(', ' ( ')  # normalise space # Re-space ()
+    npline = npline.replace(';', ' ; ')  # normalise space # Re-space ;
     npline = noparenthesis(npline)  # Remove any "()"
-    npline = re.sub(r'\s+', ' ', npline)  # nORMALISE sPACE
-    npline = npline.strip('\n')  # Remove any NL
+    npline = ' '.join(npline.split())  # normalise space
+    npline = npline.strip('\n')  # Remove any new-line
     raw_find_data = eml_parser.regex.date_regex.findall(npline)  # extract date on end line.
 
     # Detect "sticked lines"
-    if " received: " in npline:
+    if ' received: ' in npline:
         out['warning'] = ['Merged Received headers']
         return out
 
     if raw_find_data:
         npdate = raw_find_data[0]  # Remove spaces and starting ;
-        npdate = npdate.lstrip(";")  # Remove Spaces and stating ; from date
+        npdate = npdate.lstrip(';')  # Remove Spaces and stating ; from date
         npdate = npdate.strip()
     else:
-        npdate = ""
+        npdate = ''
 
-    npline = npline.replace(npdate, "")  # Remove date from input line
+    npline = npline.replace(npdate, '')  # Remove date from input line
     npline = npline.strip(' ')  # Remove any border WhiteSpace
 
     borders = ['from ', 'by ', 'with ', 'for ']
-    candidate = []  # type: typing.List[str]
-    result = []  # type: typing.List[typing.Dict[str, typing.Any]]
+    result: typing.List[typing.Dict[str, typing.Any]] = []
 
     # Scan the line to determine the order, and presence of each "from/by/with/for" words
     for word in borders:
@@ -134,7 +134,7 @@ def parserouting(line: str) -> typing.Dict[str, typing.Any]:
     tout = []
     for word in borders:
         result_max = 0xffffffff
-        line_max = {}  # type: typing.Dict[str, typing.Any]
+        line_max: typing.Dict[str, typing.Any] = {}
         for eline in result:
             if eline['name_in'] == word and eline['weight'] <= result_max:
                 result_max = eline['weight']
@@ -148,7 +148,7 @@ def parserouting(line: str) -> typing.Dict[str, typing.Any]:
     tout = sorted(tout, key=lambda x: x[0])
 
     # build regex.
-    reg = ""
+    reg = ''
     for item in tout:
         reg += item[1] + "(?P<" + item[1].strip() + ">.*)"  # type: ignore
     if npdate:
@@ -162,7 +162,7 @@ def parserouting(line: str) -> typing.Dict[str, typing.Any]:
     for item in borders:  # type: ignore
         try:
             out[item.strip()] = cleanline(reparseg.group(item.strip()))  # type: ignore
-        except Exception:
+        except (LookupError, ValueError):
             pass
     out['date'] = eml_parser.decode.robust_string2date(npdate)
 
@@ -182,13 +182,13 @@ def parserouting(line: str) -> typing.Dict[str, typing.Any]:
 
     # Now.. find IP and Host in from
     if out.get('from'):
-        out['from'] = give_dom_ip(out['from'])
+        out['from'] = get_domain_ip(out['from'])
         if not out.get('from', []):  # if array is empty remove
             del out['from']
 
     # Now.. find IP and Host in from
     if out.get('by'):
-        out['by'] = give_dom_ip(out['by'])
+        out['by'] = get_domain_ip(out['by'])
         if not out.get('by', []):  # If array is empty remove
             del out['by']
 

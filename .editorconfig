@@ -9,7 +9,7 @@ indent_style = space
 indent_size = 4
 tab_width = 4
 max_line_length = 240
-ij_continuation_indent_size = 8
+ij_continuation_indent_size = 4
 ij_python_blank_line_at_file_end = true
 
 [{*.yml_sample,*.yaml_sample,*.yml,*.yaml}]

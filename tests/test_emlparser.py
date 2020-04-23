@@ -1,10 +1,13 @@
 # -*- coding: utf-8 -*-
 # pylint: disable=line-too-long
+from __future__ import annotations
+
 import datetime
 import email.policy
 import email.utils
 import json
 import os.path
+import pathlib
 import typing
 from email.headerregistry import Address
 from email.message import EmailMessage
@@ -13,9 +16,9 @@ import pytest
 
 import eml_parser.eml_parser
 
-my_execution_dir = os.path.dirname(os.path.realpath(__file__))
-parent_dir = os.path.split(my_execution_dir)[0]
-samples_dir = os.path.join(parent_dir, 'samples')
+my_execution_dir = pathlib.Path(__file__).resolve().parent
+parent_dir = my_execution_dir.parent
+samples_dir = pathlib.Path(parent_dir, 'samples')
 
 
 def deep_flatten_object(obj: typing.Any) -> dict:
@@ -44,7 +47,7 @@ def deep_flatten_object(obj: typing.Any) -> dict:
         else:
             yield ("_".join(res), obj)
 
-    flat_kv = {}  # type: typing.Dict[str, typing.List[str]]
+    flat_kv: typing.Dict[str, typing.List[str]] = {}
     for k, v in sub(obj, []):
         if k not in flat_kv:
             flat_kv[k] = [v]
@@ -83,7 +86,7 @@ def json_serial(obj: typing.Any) -> typing.Optional[str]:
 
 class TestEMLParser:
     def test_get_file_hash(self):
-        with open(os.path.join(samples_dir, 'sample.eml'), 'rb') as fhdl:
+        with pathlib.Path(samples_dir, 'sample.eml').open('rb') as fhdl:
             raw_email = fhdl.read()
 
         pre_computed_hashes = {'sha256': '99798841db2f773a11ead628526ab4d6226187e20ca715e3439bb7375806b275',
@@ -92,10 +95,10 @@ class TestEMLParser:
                                'sha1': 'effbc0f4702f8d8d1d4911a6f0228013919c2cdc'
                                }
 
-        assert eml_parser.eml_parser.get_file_hash(raw_email) == pre_computed_hashes
+        assert eml_parser.eml_parser.EmlParser.get_file_hash(raw_email) == pre_computed_hashes
 
     def test_wrap_hash_sha256(self):
-        assert eml_parser.eml_parser.wrap_hash_sha256(
+        assert eml_parser.eml_parser.EmlParser.wrap_hash_sha256(
             'www.example.com') == '80fc0fb9266db7b83f85850fa0e6548b6d70ee68c8b5b412f1deea6ebdef0404'
 
     def test_get_uri_ondata(self):
@@ -109,7 +112,7 @@ class TestEMLParser:
         expected_result = ['http://www.example.com', 'http://www.example.com/test1?bla',
                            'http://www.example.com/a/b/c/d/', 'https://www.example2.com']
 
-        assert eml_parser.eml_parser.get_uri_ondata(test_urls) == expected_result
+        assert eml_parser.eml_parser.EmlParser.get_uri_ondata(test_urls) == expected_result
 
     def test_headeremail2list_1(self):
         msg = EmailMessage()
@@ -120,15 +123,17 @@ class TestEMLParser:
         msg.set_content('''Hi,
 Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent feugiat vitae tellus et molestie. Duis est ipsum, tristique eu pulvinar vel, aliquet a nibh. Vestibulum ultricies semper euismod. Maecenas non sagittis elit. Mauris non feugiat leo. Cras vitae quam est. Donec dapibus justo ut dictum viverra. Aliquam eleifend tortor mollis, vulputate ante sit amet, sodales elit. Fusce scelerisque congue risus mollis pellentesque. Sed malesuada erat sit amet nisl laoreet mollis. Suspendisse potenti. Fusce cursus, tortor sit amet euismod molestie, sem enim semper quam, eu ultricies leo est vel turpis.
 ''')
+        ep = eml_parser.eml_parser.EmlParser()
+        ep.msg = msg
 
-        assert sorted(eml_parser.eml_parser.headeremail2list(mail=msg, header='to')) == ['james.doe@example.com',
-                                                                                         'jane.doe@example.com']
+        assert sorted(ep.headeremail2list(header='to')) == ['james.doe@example.com',
+                                                            'jane.doe@example.com']
 
     def test_headeremail2list_2(self):
         """Here we test the headeremail2list function using an input which should trigger
         a email library bug 27257
         """
-        with open(os.path.join(samples_dir, 'sample_bug27257.eml'), 'rb') as fhdl:
+        with pathlib.Path(samples_dir, 'sample_bug27257.eml').open('rb') as fhdl:
             raw_email = fhdl.read()
 
         msg = email.message_from_bytes(raw_email, policy=email.policy.default)
@@ -137,9 +142,12 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
         with pytest.raises(AttributeError):
             msg.items()
 
+        ep = eml_parser.eml_parser.EmlParser()
+        ep.msg = msg
+
         # our parsing function should trigger an exception leading to the parsing
         # using a workaround
-        assert eml_parser.eml_parser.headeremail2list(mail=msg, header='to') == ['test@example.com']
+        assert ep.headeremail2list(header='to') == ['test@example.com']
 
     def test_parse_email_1(self):
         """Parses a generated sample e-mail and tests it against a known good result"""
@@ -155,32 +163,37 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
         good_output_json = r'''{"header": {"header": {"content-transfer-encoding": ["quoted-printable"], "content-type": ["text/plain; charset=\"utf-8\""], "from": ["John Doe <john.doe@example.com>"], "subject": ["Test subject \u00e9\u00e8\u00e0\u00f6\u00fc\u00e4${}"], "to": ["Jan\u00e9 Doe <jane.doe@example.com>, James Doe <james.doe@example.com>"], "mime-version": ["1.0"]}, "from": "john.doe@example.com", "subject": "Test subject \u00e9\u00e8\u00e0\u00f6\u00fc\u00e4${}", "received": [], "date": "1970-01-01T00:00:00+00:00", "to": ["jane.doe@example.com", "james.doe@example.com"]}, "body": [{"content_header": {"content-transfer-encoding": ["quoted-printable"], "content-type": ["text/plain; charset=\"utf-8\""]}, "hash": "f765993eba20df87927f5bf6e947696d48bdf936e75508b9d126bbe8aa1a1497", "content_type": "text/plain"}]}'''
         good_output = json.loads(good_output_json)
 
-        test_output_json = json.dumps(eml_parser.eml_parser.parse_email(msg), default=json_serial)
+        ep = eml_parser.eml_parser.EmlParser()
+        ep.msg = msg
+
+        test_output_json = json.dumps(ep.parse_email(), default=json_serial)
         test_output = json.loads(test_output_json)
 
         recursive_compare(good_output, test_output)
 
     def test_parse_email_2(self):
         """Parses the e-mails from the samples folder"""
-        for k in os.listdir(samples_dir):
-            test = eml_parser.eml_parser.decode_email(os.path.join(samples_dir, k))
+        ep = eml_parser.eml_parser.EmlParser()
 
-        for k in os.listdir(samples_dir):
-            with open(os.path.join(samples_dir, k), 'rb') as fhdl:
+        for k in samples_dir.iterdir():
+            test = ep.decode_email(k)
+
+        for k in samples_dir.iterdir():
+            with k.open('rb') as fhdl:
                 raw_email = fhdl.read()
-                test = eml_parser.eml_parser.decode_email_b(raw_email)
+                test = ep.decode_email_bytes(raw_email)
 
     def test_parse_email_3(self):
         """Parses the e-mails from the samples folder while keeping raw data"""
-        for k in os.listdir(samples_dir):
-            test = eml_parser.eml_parser.decode_email(os.path.join(samples_dir, k), include_raw_body=True,
-                                                      include_attachment_data=True)
+        ep = eml_parser.eml_parser.EmlParser(include_raw_body=True, include_attachment_data=True)
 
-        for k in os.listdir(samples_dir):
-            with open(os.path.join(samples_dir, k), 'rb') as fhdl:
+        for k in samples_dir.iterdir():
+            test = ep.decode_email(k)
+
+        for k in samples_dir.iterdir():
+            with k.open('rb') as fhdl:
                 raw_email = fhdl.read()
-                test = eml_parser.eml_parser.decode_email_b(raw_email, include_raw_body=True,
-                                                            include_attachment_data=True)
+                test = ep.decode_email_bytes(raw_email)
 
     def test_parse_email_4(self):
         """Parses the e-mails from the samples folder while keeping raw data and passing
@@ -189,16 +202,15 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
                  'whitefor': ['a@example.com'],
                  'byhostentry': ['example.com']
                  }
+        ep = eml_parser.eml_parser.EmlParser(include_raw_body=True, include_attachment_data=True, pconf=pconf)
 
-        for k in os.listdir(samples_dir):
-            test = eml_parser.eml_parser.decode_email(os.path.join(samples_dir, k), include_raw_body=True,
-                                                      include_attachment_data=True, pconf=pconf)
+        for k in samples_dir.iterdir():
+            test = ep.decode_email(k)
 
-        for k in os.listdir(samples_dir):
-            with open(os.path.join(samples_dir, k), 'rb') as fhdl:
+        for k in samples_dir.iterdir():
+            with k.open('rb') as fhdl:
                 raw_email = fhdl.read()
-                test = eml_parser.eml_parser.decode_email_b(raw_email, include_raw_body=True,
-                                                            include_attachment_data=True, pconf=pconf)
+                test = ep.decode_email_bytes(raw_email)
 
     def test_parse_email_5(self):
         """Parses a generated sample e-mail and tests it against a known good result. In this test
@@ -215,10 +227,12 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
       You should subscribe by replying to test-reply@example.
       ''')
 
+        ep = eml_parser.eml_parser.EmlParser(email_force_tld=True)
+
         good_output_json = r'''{"body": [{"content_header": {"content-type": ["text/plain; charset=\"utf-8\""], "content-transfer-encoding": ["quoted-printable"]}, "content_type": "text/plain", "hash": "07de6840458e398906e73b2cd188d0da813a80ee0337cc349228d983b5ec1c7e"}], "header": {"subject": "Test subject \u00e9\u00e8\u00e0\u00f6\u00fc\u00e4${}", "from": "john.doe@example", "to": ["jane.doe@example.com", "james.doe@example.com"], "date": "1970-01-01T00:00:00+00:00", "received": [], "header": {"cc": ["Jan\u00e9 Doe <jane.doe@example>, James Doe <james.doe@example>"], "from": ["John Doe <john.doe@example>"], "content-type": ["text/plain; charset=\"utf-8\""], "mime-version": ["1.0"], "subject": ["Test subject \u00e9\u00e8\u00e0\u00f6\u00fc\u00e4${}"], "to": ["Jan\u00e9 Doe <jane.doe@example.com>, James Doe <james.doe@example.com>"], "content-transfer-encoding": ["quoted-printable"]}}}'''
         good_output = json.loads(good_output_json)
 
-        test_output_json = json.dumps(eml_parser.eml_parser.decode_email_b(msg.as_bytes(), email_force_tld=True), default=json_serial)
+        test_output_json = json.dumps(ep.decode_email_bytes(msg.as_bytes()), default=json_serial)
         test_output = json.loads(test_output_json)
 
         recursive_compare(good_output, test_output)
