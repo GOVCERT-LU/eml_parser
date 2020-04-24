@@ -65,23 +65,11 @@ try:
     import magic
 except ImportError:
     magic = None
-    magic_mime = None
-    magic_none = None
 else:
-    if hasattr(magic, 'open'):
-        # MAGIC_MIME_TYPE gives the real mime-type
-        magic_mime = magic.open(magic.MAGIC_MIME_TYPE)
-        magic_mime.load()
-        # MAGIC_NONE gives the meta-information on the analysed file
-        magic_none = magic.open(magic.MAGIC_NONE)
-        magic_none.load()
-    else:
-        logger.warning(
-            'You are using python-magic, though this module requires file-magic. Disabling magic usage due to incompatibilities.')
+    if not hasattr(magic, 'open'):
+        logger.warning('You are using python-magic, though this module requires file-magic. Disabling magic usage due to incompatibilities.')
 
         magic = None
-        magic_mime = None
-        magic_none = None
 
 __author__ = 'Toth Georges, Jung Paul'
 __email__ = 'georges@trypill.org, georges.toth@govcert.etat.lu'
@@ -880,15 +868,14 @@ class EmlParser:
 
             attachment[file_id]['hash'] = self.get_file_hash(data)
 
-            if not (magic_mime is None or magic_none is None):
-                mime_type = magic_none.buffer(data)
-                mime_type_short = magic_mime.buffer(data)
+            mime_type, mime_type_short = self.get_mime_type(data)
 
-                if not (mime_type is None or mime_type_short is None):
-                    attachment[file_id]['mime_type'] = mime_type
-                    # attachments[file_id]['mime_type_short'] = attachments[file_id]['mime_type'].split(",")[0]
-                    attachment[file_id]['mime_type_short'] = mime_type_short
-                else:
+            if not (mime_type is None or mime_type_short is None):
+                attachment[file_id]['mime_type'] = mime_type
+                # attachments[file_id]['mime_type_short'] = attachments[file_id]['mime_type'].split(",")[0]
+                attachment[file_id]['mime_type_short'] = mime_type_short
+            else:
+                if magic is not None:
                     logger.warning('Error determining attachment mime-type - "{}"'.format(file_id))
 
             if self.include_attachment_data:
@@ -909,6 +896,22 @@ class EmlParser:
             counter += 1
 
         return attachment
+
+    def get_mime_type(self, data: bytes) -> typing.Union[typing.Tuple[str, str], typing.Tuple[None, None]]:
+        """Get mime-type information based on the provided bytes object.
+
+        Args:
+            data: Binary data.
+
+        Returns:
+            typing.Tuple[str, str]: Identified mime information and mime-type. If **magic** is not available, returns *None, None*.
+                                    E.g. *"ELF 64-bit LSB shared object, x86-64, version 1 (SYSV)", "application/x-sharedlib"*
+        """
+        if magic is None:
+            return None, None
+
+        detected = magic.detect_from_content(data)
+        return detected.name, detected.mime_type
 
 
 def decode_email(eml_file: str, include_raw_body: bool = False, include_attachment_data: bool = False,

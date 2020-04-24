@@ -22,7 +22,7 @@ For the changelog, please see [CHANGELOG.md](CHANGELOG.md).
 
 ### Installation:
 ```shell script
-pip install eml_parser[file-magic]
+pip install eml_parser[filemagic]
 ```
 
 :warning: **Note:** If you don't want to / cannot use file-magic (e.g. if you are using python-magic), install via:
