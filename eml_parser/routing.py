@@ -62,7 +62,7 @@ def get_domain_ip(line: str) -> typing.List[str]:
     Returns:
         list: Unique list of strings with matches
     """
-    m = eml_parser.regex.dom_regex.findall(" " + line) + eml_parser.regex.ipv4_regex.findall(line) + eml_parser.regex.ipv6_regex.findall(line)
+    m = eml_parser.regex.dom_regex.findall(' ' + line) + eml_parser.regex.ipv4_regex.findall(line) + eml_parser.regex.ipv6_regex.findall(line)
 
     return list(set(m))
 
@@ -150,7 +150,7 @@ def parserouting(line: str) -> typing.Dict[str, typing.Any]:
     # build regex.
     reg = ''
     for item in tout:
-        reg += item[1] + "(?P<" + item[1].strip() + ">.*)"  # type: ignore
+        reg += item[1] + '(?P<' + item[1].strip() + '>.*)'  # type: ignore
     if npdate:
         # escape special regex chars
         reg += eml_parser.regex.escape_special_regex_chars.sub(r'''\\\1''', npdate)
@@ -172,7 +172,7 @@ def parserouting(line: str) -> typing.Dict[str, typing.Any]:
         if 'from' in out.get('for', ''):
             temp = re.split(' from ', out['for'])
             out['for'] = temp[0]
-            out['from'] = '{0} {1}'.format(out['from'], " ".join(temp[1:]))
+            out['from'] = '{} {}'.format(out['from'], ' '.join(temp[1:]))
 
         m = eml_parser.regex.email_regex.findall(out['for'])
         if m:
