@@ -22,6 +22,7 @@ import typing
 import urllib.parse
 import uuid
 import warnings
+from collections import Counter
 
 import dateutil.parser
 
@@ -419,88 +420,61 @@ class EmlParser:
             _, body, body_multhead = body_tup
             # Parse any URLs and mail found in the body
             list_observed_urls: typing.List[str] = []
-            list_observed_email: typing.List[str] = []
-            list_observed_dom: typing.List[str] = []
-            list_observed_ip: typing.List[str] = []
+            list_observed_email: typing.Counter[str] = Counter()
+            list_observed_dom: typing.Counter[str] = Counter()
+            list_observed_ip: typing.Counter[str] = Counter()
 
             # If we start directly a findall on 500K+ body we got time and memory issues...
             # if more than 4K.. lets cheat, we will cut around the thing we search "://, @, ."
             # in order to reduce regex complexity.
-            if len(body) < 4096:
-                list_observed_urls = self.get_uri_ondata(body)
-                for match in eml_parser.regex.email_regex.findall(body):
-                    list_observed_email.append(match.lower())
-                for match in eml_parser.regex.dom_regex.findall(body):
-                    list_observed_dom.append(match.lower())
-                for match in eml_parser.regex.ipv4_regex.findall(body):
+            for body_slice in self.string_sliding_window_loop(body):
+                list_observed_urls = self.get_uri_ondata(body_slice)
+                for match in eml_parser.regex.email_regex.findall(body_slice):
+                    list_observed_email[match.lower()] = 1
+                for match in eml_parser.regex.dom_regex.findall(body_slice):
+                    list_observed_dom[match.lower()] = 1
+                for match in eml_parser.regex.ipv4_regex.findall(body_slice):
                     if not eml_parser.regex.priv_ip_regex.match(match):
                         if match not in self.pconf['whiteip']:
-                            list_observed_ip.append(match)
-                for match in eml_parser.regex.ipv6_regex.findall(body):
-                    if not eml_parser.regex.priv_ip_regex.match(match):
-                        if match.lower() not in self.pconf['whiteip']:
-                            list_observed_ip.append(match.lower())
-            else:
-                for scn_pt in self.findall('://', body):
-                    list_observed_urls = self.get_uri_ondata(body[scn_pt - 16:scn_pt + 4096]) + list_observed_urls
-
-                for scn_pt in self.findall('@', body):
-                    # RFC 3696, 5322, 5321 for email size limitations
-                    for match in eml_parser.regex.email_regex.findall(body[scn_pt - 64:scn_pt + 255]):
-                        list_observed_email.append(match.lower())
-
-                for scn_pt in self.findall('.', body):
-                    # The maximum length of a fqdn, not a hostname, is 1004 characters RFC1035
-                    # The maximum length of a hostname is 253 characters. Imputed from RFC952, RFC1123 and RFC1035.
-                    for match in eml_parser.regex.dom_regex.findall(body[scn_pt - 253:scn_pt + 1004]):
-                        list_observed_dom.append(match.lower())
-
-                    # Find IPv4 addresses
-                    for match in eml_parser.regex.ipv4_regex.findall(body[scn_pt - 11:scn_pt + 3]):
-                        if not eml_parser.regex.priv_ip_regex.match(match):
-                            if match not in self.pconf['whiteip']:
-                                list_observed_ip.append(match)
-
-                for scn_pt in self.findall(':', body):
-                    # The maximum length of IPv6 is 32 Char + 7 ":"
-                    for match in eml_parser.regex.ipv6_regex.findall(body[scn_pt - 4:scn_pt + 35]):
-                        if not eml_parser.regex.priv_ip_regex.match(match):
-                            if match.lower() not in self.pconf['whiteip']:
-                                list_observed_ip.append(match.lower())
+                            list_observed_ip[match] = 1
+                for match in eml_parser.regex.ipv6_regex.findall(body_slice):
+                    if match.lower() not in self.pconf['whiteip']:
+                        list_observed_ip[match.lower()] = 1
 
             # Report uri,email and observed domain or hash if no raw body
             if self.include_raw_body:
                 if list_observed_urls:
-                    bodie['uri'] = list(set(list_observed_urls))
+                    bodie['uri'] = list(list_observed_urls)
 
                 if list_observed_email:
-                    bodie['email'] = list(set(list_observed_email))
+                    bodie['email'] = list(list_observed_email)
 
                 if list_observed_dom:
-                    bodie['domain'] = list(set(list_observed_dom))
+                    bodie['domain'] = list(list_observed_dom)
 
                 if list_observed_ip:
-                    bodie['ip'] = list(set(list_observed_ip))
+                    bodie['ip'] = list(list_observed_ip)
 
             else:
                 if list_observed_urls:
                     bodie['uri_hash'] = []
-                    for uri in list(set(list_observed_urls)):
-                        bodie['uri_hash'].append(self.wrap_hash_sha256(uri.lower()))
+                    for element in list_observed_urls:
+                        bodie['uri_hash'].append(self.wrap_hash_sha256(element.lower()))
                 if list_observed_email:
                     bodie['email_hash'] = []
-                    for emel in list(set(list_observed_email)):
+                    for element in list_observed_email:
                         # Email already lowered
-                        bodie['email_hash'].append(self.wrap_hash_sha256(emel))
+                        bodie['email_hash'].append(self.wrap_hash_sha256(element))
                 if list_observed_dom:
                     bodie['domain_hash'] = []
-                    for uri in list(set(list_observed_dom)):
-                        bodie['domain_hash'].append(self.wrap_hash_sha256(uri.lower()))
+                    # for uri in list(set(list_observed_dom)):
+                    for element in list_observed_dom:
+                        bodie['domain_hash'].append(self.wrap_hash_sha256(element))
                 if list_observed_ip:
                     bodie['ip_hash'] = []
-                    for fip in list(set(list_observed_ip)):
+                    for element in list_observed_ip:
                         # IP (v6) already lowered
-                        bodie['ip_hash'].append(self.wrap_hash_sha256(fip))
+                        bodie['ip_hash'].append(self.wrap_hash_sha256(element))
 
             # For mail without multipart we will only get the "content....something" headers
             # all other headers are in "header"
@@ -614,6 +588,42 @@ class EmlParser:
         return report_struc
 
     @staticmethod
+    def string_sliding_window_loop(body: str, slice_step: int = 500) -> typing.Iterator[str]:
+        """Yield a more or less constant slice of a large string.
+
+        If we start directly a *re* findall on 500K+ body we got time and memory issues.
+        If more than the configured slice step, lets cheat, we will cut around the thing we search "://, @, ."
+        in order to reduce regex complexity.
+
+        Args:
+            body: Body to slice into smaller pieces.
+            slice_step: Slice this number or characters.
+
+        Returns:
+            typing.Iterator[str]: Sliced body string.
+        """
+        body_length = len(body)
+
+        if body_length <= slice_step:
+            yield body
+
+        else:
+            ptr_start = 0
+
+            for ptr_end in range(slice_step, body_length, slice_step):
+                if ' ' in body[ptr_end - 1:ptr_end]:
+                    while not (eml_parser.regex.window_slice_regex.match(body[ptr_end - 1:ptr_end]) or ptr_end > body_length):
+                        if ptr_end > body_length:
+                            ptr_end = body_length
+                            break
+
+                        ptr_end += 1
+
+                yield body[ptr_start:ptr_end]
+
+                ptr_start = ptr_end
+
+    @staticmethod
     def get_uri_ondata(body: str) -> typing.List[str]:
         """Function for extracting URLs from the input string.
 
@@ -623,16 +633,16 @@ class EmlParser:
         Returns:
             list: Returns a list of URLs found in the input string.
         """
-        list_observed_urls: typing.List[str] = []
+        list_observed_urls: typing.Counter[str] = Counter()
 
         for match in eml_parser.regex.url_regex_simple.findall(body):
-            found_url = match[0].replace('hxxp', 'http')
+            found_url = match.replace('hxxp', 'http')
             found_url = urllib.parse.urlparse(found_url).geturl()
             # let's try to be smart by stripping of noisy bogus parts
-            found_url = re.split(r'''[', ")}\\]''', found_url)[0]
-            list_observed_urls.append(found_url)
+            found_url = re.split(r'''[', ")}\\]''', found_url, 1)[0]
+            list_observed_urls[found_url] = 1
 
-        return list_observed_urls
+        return list(list_observed_urls)
 
     def headeremail2list(self, header: str) -> typing.List[str]:
         """Parses a given header field with e-mail addresses to a list of e-mail addresses.
@@ -897,7 +907,8 @@ class EmlParser:
 
         return attachment
 
-    def get_mime_type(self, data: bytes) -> typing.Union[typing.Tuple[str, str], typing.Tuple[None, None]]:
+    @staticmethod
+    def get_mime_type(data: bytes) -> typing.Union[typing.Tuple[str, str], typing.Tuple[None, None]]:
         """Get mime-type information based on the provided bytes object.
 
         Args:
