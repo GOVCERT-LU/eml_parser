@@ -5,6 +5,18 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [v1.13.0]
+### Added
+- Simplify the code by using a sliding window body slicing method
+
+### Changed
+- Use alternative URL extraction regular-expression
+- Fix other regular-expressions (non-required escaping and ^)
+  - No longer support parsing h**xx**p(s) style URLs
+
+### Fixed
+- In some cases the extracted features (i.e. domain, IP, URL, e-mail) were not correct due to wrongfully cutting through the body. This has been fixed by extending the text slice to a character unrelated to the match pattern.
+
 ## [v1.12.0]
 ### Added
 - Added **EmlParser** class in order to simplify inner workings.
