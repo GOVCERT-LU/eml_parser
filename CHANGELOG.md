@@ -5,6 +5,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [v1.14.0]
+### Changed
+Use simple less time consuming regular expression for searching for IPv4 addresses, in turn use *ipaddress* for both IPv4 and IPv6 address validation which is fast and gives in turn leads to more correct matches.
+
 ## [v1.13.0]
 ### Added
 - Simplify the code by using a sliding window body slicing method

@@ -434,12 +434,21 @@ class EmlParser:
                 for match in eml_parser.regex.dom_regex.findall(body_slice):
                     list_observed_dom[match.lower()] = 1
                 for match in eml_parser.regex.ipv4_regex.findall(body_slice):
-                    if not eml_parser.regex.priv_ip_regex.match(match):
-                        if match not in self.pconf['whiteip']:
+                    try:
+                        ipaddress_match = ipaddress.ip_address(match)
+                    except ValueError:
+                        continue
+                    else:
+                        if not (ipaddress_match.is_private or match in self.pconf['whiteip']):
                             list_observed_ip[match] = 1
                 for match in eml_parser.regex.ipv6_regex.findall(body_slice):
-                    if match.lower() not in self.pconf['whiteip']:
-                        list_observed_ip[match.lower()] = 1
+                    try:
+                        ipaddress_match = ipaddress.ip_address(match)
+                    except ValueError:
+                        continue
+                    else:
+                        if not (ipaddress_match.is_private or match in self.pconf['whiteip']):
+                            list_observed_ip[match] = 1
 
             # Report uri,email and observed domain or hash if no raw body
             if self.include_raw_body:
