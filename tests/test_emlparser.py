@@ -236,3 +236,21 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
         test_output = json.loads(test_output_json)
 
         recursive_compare(good_output, test_output)
+
+
+    def test_parse_email_5(self):
+        with pathlib.Path(samples_dir, "sample_attachments.eml").open("rb") as fhdl:
+            raw_email = fhdl.read()
+
+        ep = eml_parser.eml_parser.EmlParser(include_attachment_data=True)
+        test = ep.decode_email_bytes(raw_email)
+
+        attachment_filenames = ["test.csv", "document.pdf", "text.txt"]
+
+        attachments = test.get("attachment", [])
+        assert len(attachments) == len(attachment_filenames)
+
+        for attachment in attachments:
+            filename = attachment.get("filename", "")
+            assert filename in attachment_filenames
+
