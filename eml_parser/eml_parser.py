@@ -840,12 +840,13 @@ class EmlParser:
 
         # In case we hit bug 27257, try to downgrade the used policy
         try:
-            lower_keys = {(k.lower(), v) for k, v in msg.items()}
+            lower_keys = [k.lower() for k in msg.keys()]
         except AttributeError:
             former_policy: email.policy.Policy = msg.policy  # type: ignore
             msg.policy = email.policy.compat32  # type: ignore
-            lower_keys = {(k.lower(), v) for k, v in msg.items()}
+            lower_keys = [k.lower() for k in msg.keys()]
             msg.policy = former_policy  # type: ignore
+
 
         if ('content-disposition' in lower_keys and msg.get_content_disposition() != 'inline') \
             or msg.get_content_maintype() != 'text':
