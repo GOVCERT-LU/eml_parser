@@ -847,7 +847,6 @@ class EmlParser:
             lower_keys = [k.lower() for k in msg.keys()]
             msg.policy = former_policy  # type: ignore
 
-
         if ('content-disposition' in lower_keys and msg.get_content_disposition() != 'inline') \
             or msg.get_content_maintype() != 'text':
             # if it's an attachment-type, pull out the filename
