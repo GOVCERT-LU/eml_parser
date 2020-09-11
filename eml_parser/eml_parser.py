@@ -544,18 +544,12 @@ class EmlParser:
                 for value in self.msg.get_all(k, []):
                     if value:
                         decoded_values.append(value)
-            except (IndexError, AttributeError):
-                # We have hit current open issue #27257
-                # https://bugs.python.org/issue27257
-                # The field will be set to emtpy as a workaround.
-                logger.exception('We hit bug 27257!')
-
-                decoded_values = eml_parser.decode.workaround_bug_27257_field_value(self.msg, k)
-
-                if k in header:
-                    header[k] += decoded_values
-                else:
-                    header[k] = decoded_values
+            except (IndexError, AttributeError, TypeError):
+                # We have hit a field value parsing error.
+                # Try to work around this by using a relaxed policy, if possible.
+                # Parsing might not give meaningful results in this case!
+                logger.error('ERROR: Field value parsing error, trying to work around this!')
+                decoded_values = eml_parser.decode.workaround_field_value_parsing_errors(self.msg, k)
 
             if decoded_values:
                 if k in header:
@@ -749,10 +743,10 @@ class EmlParser:
                         logger.debug('An exception occurred while decoding the payload!', exc_info=True)
                         raw_body_str = msg.get_payload(decode=True).decode('ascii', 'ignore')
 
-                # In case we hit bug 27257, try to downgrade the used policy
+                # In case we hit bug 27257 or any other parsing error, try to downgrade the used policy
                 try:
                     raw_body.append((encoding, raw_body_str, msg.items()))
-                except AttributeError:
+                except (AttributeError, TypeError):
                     former_policy: email.policy.Policy = msg.policy  # type: ignore
                     msg.policy = email.policy.compat32  # type: ignore
                     raw_body.append((encoding, raw_body_str, msg.items()))

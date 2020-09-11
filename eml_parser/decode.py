@@ -7,10 +7,10 @@ from __future__ import annotations
 
 import datetime
 import email
+import email.errors
+import email.header
 import email.policy
 import email.utils
-import email.header
-import email.errors
 import json
 import logging
 import typing
@@ -155,7 +155,7 @@ def workaround_bug_27257(msg: email.message.Message, header: str) -> typing.List
     """
     return_value: typing.List[str] = []
 
-    for value in workaround_bug_27257_field_value(msg, header):
+    for value in workaround_field_value_parsing_errors(msg, header):
         if value != '':
             m = eml_parser.regex.email_regex.findall(value)
             if m:
@@ -164,8 +164,8 @@ def workaround_bug_27257(msg: email.message.Message, header: str) -> typing.List
     return return_value
 
 
-def workaround_bug_27257_field_value(msg: email.message.Message, header: str) -> typing.List[str]:
-    """Function to work around bug 27257 and just tries its best using \
+def workaround_field_value_parsing_errors(msg: email.message.Message, header: str) -> typing.List[str]:
+    """Function to work around field value parsing errors by trying a best effor parsing using \
     the compat32 policy to extract any meaningful information.
 
     Args:

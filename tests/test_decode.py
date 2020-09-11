@@ -28,7 +28,7 @@ class TestDecode:
             'Léa Lala-Lulu <lealalalulu@example.com>': '=?iso-8859-1?Q?L=E9a_Lala-Lulu?= <lealalalulu@example.com>',
             '''[Spam][SPAM]\r
  Cliente Example Bank''': '=?utf-8?Q?=5BSpam=5D?= =?utf-8?Q?=5BSPAM=5D=0D=0A=20Cliente=20Example=20Bank?='
-            }
+        }
 
         for clear, encoded in test_subjects.items():
             assert eml_parser.decode.decode_field(encoded) == clear
