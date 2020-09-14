@@ -5,6 +5,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [v1.14.2]
+### Fixed
+Implemented a workaround for an upstream bug (https://bugs.python.org/issue30681) which breaks EML parsing if the source EML contains an unparsable date-time field (thanks @nth-attempt).
+
 ## [v1.14.1]
 ### Fixed
 Fixed a bug which prevented correct attachment parsing in certain situations (thanks @ninoseki).
