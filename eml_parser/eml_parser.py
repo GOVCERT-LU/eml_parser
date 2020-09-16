@@ -638,8 +638,12 @@ class EmlParser:
         """
         list_observed_urls: typing.Counter[str] = Counter()
 
-        for match in eml_parser.regex.url_regex_simple.findall(body):
-            found_url = match.replace('hxxp', 'http')
+        for found_url in eml_parser.regex.url_regex_simple.findall(body):
+            if '.' not in found_url:
+                # if we found a URL like e.g. http://afafasasfasfas; that makes no
+                # sense, thus skip it
+                continue
+
             found_url = urllib.parse.urlparse(found_url).geturl()
             # let's try to be smart by stripping of noisy bogus parts
             found_url = re.split(r'''[', ")}\\]''', found_url, 1)[0]
