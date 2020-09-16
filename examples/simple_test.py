@@ -20,12 +20,12 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-import json
 import argparse
 import datetime
 import email.policy
-import eml_parser
+import json
 
+import eml_parser
 
 __author__ = 'Toth Georges'
 __email__ = 'georges@trypill.org, georges.toth@govcert.etat.lu'
@@ -84,8 +84,11 @@ def main():
     with open(msgfile, 'rb') as fhdl:
         raw_email = fhdl.read()
 
-    m = eml_parser.eml_parser.decode_email_b(raw_email, include_raw_body=options.fulldata, include_attachment_data=options.debug,
-                                             pconf=pconf, email_force_tld=options.email_force_tld)
+    ep = eml_parser.EmlParser(include_raw_body=options.fulldata,
+                              include_attachment_data=options.debug,
+                              pconf=pconf,
+                              email_force_tld=options.email_force_tld)
+    m = ep.decode_email_bytes(raw_email)
 
     print(json.dumps(m, default=json_serial))
 
