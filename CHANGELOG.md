@@ -11,7 +11,7 @@ Adapted the *examples/simple_test.py* to use the eml_parser class instead of the
 - When parsing URLs from the body:
     - do not try to replace "hxxp" by "http" as we do not parse "hxxp" anyway (legacy)
     - skip URLs with no "."
-    - update the regex for searching for URLs based on https://gist.github.com/gruber/8891611 in order to prevent infinite runs in certain cases
+    - update the regex for searching for URLs based on https://gist.github.com/gruber/8891611 in order to prevent infinite runs in certain cases (thanks @kevin-dunas)
 
 ## [v1.14.2]
 ### Fixed
