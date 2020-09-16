@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Changed
+Adapted the *examples/simple_test.py* to use the eml_parser class instead of the deprecated method.
+
+### Fixed
+- When parsing URLs from the body:
+    - do not try to replace "hxxp" by "http" as we do not parse "hxxp" anyway (legacy)
+    - skip URLs with no "."
+    - update the regex for searching for URLs based on https://gist.github.com/gruber/8891611 in order to prevent infinite runs in certain cases
 
 ## [v1.14.2]
 ### Fixed
