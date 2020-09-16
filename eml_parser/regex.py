@@ -26,8 +26,12 @@ ipv6_regex = re.compile(r'''((?:[0-9A-Fa-f]{1,4}:){6}(?:[0-9A-Fa-f]{1,4}:[0-9A-F
 
 # simple version for searching for URLs
 # character set based on http://tools.ietf.org/html/rfc3986
-# url_regex_simple = re.compile(r'''((?:[a-z]{3,}s?://)[a-z0-9\-_:]+(?:\.[a-z0-9\-_]+)*(?:/[a-z0-9_\-.~!*'();:@&=+$,/ ?%#\[\]]*)?)''', re.VERBOSE | re.MULTILINE | re.I)
-url_regex_simple = re.compile(r'''(?:(?:https?|ftps?)://)(?:\S+(?::\S*)?@)?(?:(?:[1-9]\d?|1\d\d|2[01]\d|22[0-3])(?:\.(?:1?\d{1,2}|2[0-4]\d|25[0-5])){2}(?:\.(?:[1-9]\d?|1\d\d|2[0-4]\d|25[0-4]))|(?:(?:[a-z\u00a1-\uffff0-9]+-?)*[a-z\u00a1-\uffff0-9]+)(?:\.(?:[a-z\u00a1-\uffff0-9]+-?)*[a-z\u00a1-\uffff0-9]+)*(?:\.(?:[a-z\u00a1-\uffff]{2,})))(?::\d{2,5})?(?:/[^\s]*)?''')
+# url_regex_simple = re.compile(r'''(?:(?:https?|ftps?)://)(?:\S+(?::\S*)?@)?(?:(?:[1-9]\d?|1\d\d|2[01]\d|22[0-3])(?:\.(?:1?\d{1,2}|2[0-4]\d|25[0-5])){2}(?:\.(?:[1-9]\d?|1\d\d|2[0-4]\d|25[0-4]))|(?:(?:[a-z\u00a1-\uffff0-9]+-?)*[a-z\u00a1-\uffff0-9]+)(?:\.(?:[a-z\u00a1-\uffff0-9]+-?)*[a-z\u00a1-\uffff0-9]+)*(?:\.(?:[a-z\u00a1-\uffff]{2,})))(?::\d{2,5})?(?:/[^\s]*)?''')
+# regex updated from https://gist.github.com/gruber/8891611 but modified with:
+#   - do not use a fixed list of TLDs but rather \w
+#   - only check for URLs with scheme
+#   - modify the end marker to allow any acceptable char according to the RFC3986
+url_regex_simple = re.compile(r'''(?i)\b(?:(?:https?|ftps?):(?:/{1,3}|[a-z0-9%])(?:[^\s()<>{}\[\]]+|\([^\s()]*?\([^\s()]+\)[^\s()]*?\)|\([^\s]+?\))+(?:[\w\-._~%!$&'()*+,;=:/?#\[\]@]+)|(?:(?<!@)[a-z0-9]+(?:[.\-][a-z0-9]+)*[.](?:\w)\b/?(?!@)))''')
 
 date_regex = re.compile(r''';[ \w\s:,+\-()]+$''')
 noparenthesis_regex = re.compile(r'''\([^()]*\)''')
