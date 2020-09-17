@@ -1,0 +1,70 @@
+MAIL_FROM: email1@example.com
+ORG_RCPT_TO: email2@example.com
+RCPT_TO: email2@example.com
+X-SPAM-TYPE: SPAM
+X-HELO: helo hotmail.com
+X-RECEIVED-IP: 192.168.0.1
+Received: from 192.168.0.1 (192.168.0.1)
+	at Tue, 21 Apr 2020 23:32:11 +0900
+	by mail.com with ESMTP CrediShield
+X-MAIL-FROM: email1@example.com
+Received: from unknown (192.168.0.2)
+	by group21.example3.com with NNFMP; Tue, 21 Apr 2020 19:44:48 +0500
+Received: from [192.168.0.3] by mtu23.example.com with SMTP; Tue, 21 Apr 2020 19:40:19 +0500
+Received: from [192.168.0.4] by mail.example2.com with ESMTP; Tue, 21 Apr 2020 19:26:00 +0500
+Message-ID: <DC242514.A7EC8559@hotmail.com>
+Date: Tue, 21 Apr 2020 19:05:44 +0500
+Reply-To: "Giovanna" <email1@example.com>
+From: "Giovanna" <email1@example.com>
+User-Agent: Mozilla/5.0 (Macintosh; U; Intel Mac OS X; fr; rv:1.8.1.16) Gecko/20080707 Thunderbird/2.0.0.16
+X-Accept-Language: en-us
+MIME-Version: 1.0
+To: <email2@example.com>
+Subject: [Limited Time Offer] - Free Welcome Package
+Content-Type: text/html;
+	charset="iso-8859-1"
+Content-Transfer-Encoding: 7bit
+
+<center><img src="http://47fee4f03182a2437d6d-359a8ec3a1ca7be00e972dc7374155
+16.r50.cf3.example.com/img1.jpg" />Play a cool game!
+<table style="width: 550px;">
+<tbody>
+<tr>
+<td><center>Deposit and play the biggest and BestJackpots, giving you more
+chances to WIN BIG!</center></td>
+<td>&nbsp;</td>
+</tr>
+<tr>
+<td><center><span style="background-color: #ffff00;"><a
+style="background-color: #ffff00;"
+href="http://example2.com/spl.html" target="_blank"
+rel="noopener">Sign up today</a></span> and stand in line to receive
+generous daily and weekly promotions on top of your new
+PlayerBonus!</center></td>
+</tr>
+<tr>
+<td><center><span style="background-color: #ffff00; font-size: 24px;"><a
+style="background-color: #ffff00;"
+href="http://example2.com/spl.html" target="_blank"
+rel="noopener">&gt;&gt;&gt; JOIN NOW &lt;&lt;&lt;</a></span></center></td>
+</tr>
+</tbody>
+</table>
+<br /><br /><a href="http://www.mambaoffers.xyz/lc.html"><img
+src="http://47fee4f03182a2437d6d-359a8ec3a1ca7be00e972dc737415516.r50.cf3.example.com/img2.jpg" /></a>
+<table style="width: 550px; font-size: 18px;">
+<tbody>
+<tr>
+<td><center>Do not miss this chance! <strong><span style="color: red;">This
+bonus will expire in 12:00 Hours</span>!</strong></center></td>
+</tr>
+<tr>
+<td><center><a href="http://example2.com/spl.html" target="_blank"
+rel="noopener">Click here</a> to create your LIVE account</center></td>
+</tr>
+</tbody>
+</table>
+</center><center>You may unsubscribe at any time. <a
+href="mailto:email3@example.com">Unsubscribe</a></center>
+
+

@@ -264,3 +264,16 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
         test = ep.decode_email_bytes(raw_email)
 
         assert test['header']['header']['orig-date'][0] == 'Wed Jul 2020 23:11:43 +0100'
+
+    def test_parse_email_8(self):
+        """Parse the sample file and make sure the currently unparsable date is returned as is.
+
+        See https://github.com/GOVCERT-LU/eml_parser/issues/48 for details.
+        """
+        with pathlib.Path(samples_dir, 'github_issue_48.eml').open('rb') as fhdl:
+            raw_email = fhdl.read()
+
+        ep = eml_parser.eml_parser.EmlParser()
+        test = ep.decode_email_bytes(raw_email)
+
+        assert test['body'][0]['hash'] == '4c8b6a63156885b0ca0855b1d36816c54984e1eb6f68277b46b55b4777cfac89'
