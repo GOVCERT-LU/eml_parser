@@ -169,7 +169,8 @@ def parserouting(line: str) -> typing.Dict[str, typing.Any]:
     # Fixup for "From" in "for" field
     # ie google, do that...
     if out.get('for'):
-        if 'from' in out.get('for', ''):
+        # include spaces in test, otherwise there will be an exception with domains containing "from" in itself
+        if ' from ' in out.get('for', ''):
             temp = re.split(' from ', out['for'])
             out['for'] = temp[0]
             out['from'] = '{} {}'.format(out['from'], ' '.join(temp[1:]))
