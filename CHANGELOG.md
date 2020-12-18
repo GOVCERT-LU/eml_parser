@@ -5,6 +5,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [v1.14.4]
+### Fixed
+- Fix routing.parserouting() to handle domains containing the word 'from' by themselves (thanks @jgru #51).
+
 ## [v1.14.3]
 ### Changed
 Adapted the *examples/simple_test.py* to use the eml_parser class instead of the deprecated method.
