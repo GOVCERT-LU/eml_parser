@@ -544,7 +544,7 @@ class EmlParser:
                 for value in self.msg.get_all(k, []):
                     if value:
                         decoded_values.append(value)
-            except (IndexError, AttributeError, TypeError):
+            except (IndexError, AttributeError, TypeError, UnboundLocalError):
                 # We have hit a field value parsing error.
                 # Try to work around this by using a relaxed policy, if possible.
                 # Parsing might not give meaningful results in this case!
