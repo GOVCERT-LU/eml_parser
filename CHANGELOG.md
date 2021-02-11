@@ -5,6 +5,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [v1.14.5]
+### Fixed
+- Prevent routing.parserouting() from throwing an exception on unparsable receive lines (thanks @kinoute #54).
+
+### Changes
+- Do not unnecessarily call *eml_parser.decode.robust_string2date* on an empty string.
+
 ## [v1.14.4]
 ### Fixed
 - Fix routing.parserouting() to handle domains containing the word 'from' by themselves (thanks @jgru #51).

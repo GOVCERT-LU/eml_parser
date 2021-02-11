@@ -159,12 +159,15 @@ def parserouting(line: str) -> typing.Dict[str, typing.Any]:
     reparseg = reparse.search(line)
 
     # Fill the data
-    for item in borders:  # type: ignore
-        try:
-            out[item.strip()] = cleanline(reparseg.group(item.strip()))  # type: ignore
-        except (LookupError, ValueError):
-            pass
-    out['date'] = eml_parser.decode.robust_string2date(npdate)
+    if reparseg is not None:
+        for item in borders:  # type: ignore
+            try:
+                out[item.strip()] = cleanline(reparseg.group(item.strip()))  # type: ignore
+            except (LookupError, ValueError, AttributeError):
+                pass
+
+    if npdate:
+        out['date'] = eml_parser.decode.robust_string2date(npdate)
 
     # Fixup for "From" in "for" field
     # ie google, do that...

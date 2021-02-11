@@ -58,6 +58,14 @@ class TestRouting:
                  'with': 'local (envelope-from <b8u3hkqlkj@example.com>) id 1khypb-0001xe-ke',
                  'date': datetime.datetime(2020, 11, 24, 16, 58, 7, tzinfo=datetime.timezone(datetime.timedelta(seconds=10800)))
                  }
+            ),
+
+            'test3': (
+                # C.f. github issue #54; unsupported line; point of this test is to make sure we properly catch related exceptions
+                r'''Received: from)by ismtpd0112p1sjc2.abc.net (SG) with ESMTP id\n B4glDdmiQcqJYrMuLIqjUQfor <p-j.a@sdf.com>; Fri, 29 Jan 2021\n 07:24:22.501 +0000 (UTC)''',
+                {
+                    'src': r'Received: from)by ismtpd0112p1sjc2.abc.net (SG) with ESMTP id\n B4glDdmiQcqJYrMuLIqjUQfor <p-j.a@sdf.com>; Fri, 29 Jan 2021\n 07:24:22.501 +0000 (UTC)'
+                }
             )
         }
 
