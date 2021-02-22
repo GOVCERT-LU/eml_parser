@@ -20,8 +20,8 @@ for k in os.listdir('.'):
 
         m = eml_parser.eml_parser.decode_email(k, include_attachment_data=True)
 
-        if 'attachments' in m:
-            for a_id, a in m['attachments'].items():
+        if 'attachment' in m:
+            for a in m['attachment'].items():
                 if a['filename'] == '':
                     filename = a_id
                 else:
