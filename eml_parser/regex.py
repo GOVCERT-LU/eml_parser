@@ -31,7 +31,7 @@ ipv6_regex = re.compile(r'''((?:[0-9A-Fa-f]{1,4}:){6}(?:[0-9A-Fa-f]{1,4}:[0-9A-F
 #   - do not use a fixed list of TLDs but rather \w
 #   - only check for URLs with scheme
 #   - modify the end marker to allow any acceptable char according to the RFC3986
-url_regex_simple = re.compile(r'''(?i)\b(?:(?:https?|ftps?):(?:/{1,3}|[a-z0-9%])(?:[^\s()<>{}\[\]]+|\([^\s()]*?\([^\s()]+\)[^\s()]*?\)|\([^\s]+?\))+(?:[\w\-._~%!$&'()*+,;=:/?#\[\]@]+)|(?:(?<!@)[a-z0-9]+(?:[.\-][a-z0-9]+)*[.](?:\w)\b/?(?!@)))''')
+url_regex_simple = re.compile(r'''(?i)\b(?:https?|ftps?):(?:/{1,3}|[a-z0-9%])(?:[^\s()<>{}\[\]]+|\([^\s()]*?\([^\s()]+\)[^\s()]*?\)|\([^\s]+?\))+(?:[\w\-._~%!$&'()*+,;=:/?#\[\]@]+)''')
 
 date_regex = re.compile(r''';[ \w\s:,+\-()]+$''')
 noparenthesis_regex = re.compile(r'''\([^()]*\)''')

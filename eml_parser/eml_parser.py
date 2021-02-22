@@ -428,7 +428,11 @@ class EmlParser:
             # if more than 4K.. lets cheat, we will cut around the thing we search "://, @, ."
             # in order to reduce regex complexity.
             for body_slice in self.string_sliding_window_loop(body):
-                list_observed_urls = self.get_uri_ondata(body_slice)
+                _list_observed_urls = self.get_uri_ondata(body_slice)
+
+                if _list_observed_urls:
+                    list_observed_urls.extend(_list_observed_urls)
+
                 for match in eml_parser.regex.email_regex.findall(body_slice):
                     list_observed_email[match.lower()] = 1
                 for match in eml_parser.regex.dom_regex.findall(body_slice):
@@ -453,7 +457,7 @@ class EmlParser:
             # Report uri,email and observed domain or hash if no raw body
             if self.include_raw_body:
                 if list_observed_urls:
-                    bodie['uri'] = list(list_observed_urls)
+                    bodie['uri'] = list(set(list_observed_urls))
 
                 if list_observed_email:
                     bodie['email'] = list(list_observed_email)
@@ -591,16 +595,25 @@ class EmlParser:
         return report_struc
 
     @staticmethod
-    def string_sliding_window_loop(body: str, slice_step: int = 500) -> typing.Iterator[str]:
+    def string_sliding_window_loop(body: str, slice_step: int = 500, max_distance: int = 100) -> typing.Iterator[str]:
         """Yield a more or less constant slice of a large string.
 
-        If we start directly a *re* findall on 500K+ body we got time and memory issues.
+        If we directly do a *regex* findall on 500K+ body we get time and memory issues.
         If more than the configured slice step, lets cheat, we will cut around the thing we search "://, @, ."
         in order to reduce regex complexity.
+
+        In case we find a *://* at the first 8 characters of a sliced body window, we rewind the window by 16 characters.
+        If we find the same string at the end of a sliced body window we try to look for invalid URL characters up to *max_distance*
+        length, until which we give up and return the sliced body part. This is done in order to return a maximum possible
+        correct URLs.
+
+        The choice for 8 character is because *https://* is 8 characters, which is be the maximum size we accept for schemes.
 
         Args:
             body: Body to slice into smaller pieces.
             slice_step: Slice this number or characters.
+            max_distance: In case we find a *://* in a string window towards the end, we try our best to enlarge the window
+                            as to not cut off URLs. This variable sets the maximum permitted additional window size to consider.
 
         Returns:
             typing.Iterator[str]: Sliced body string.
@@ -620,6 +633,24 @@ class EmlParser:
                             ptr_end = body_length
                             break
 
+                        ptr_end += 1
+
+                # Found a :// near the start of the slice, rewind
+                if ptr_start > 16 and '://' in body[ptr_start - 8:ptr_start + 8]:
+                    ptr_start -= 16
+
+                # Found a :// near the end of the slice, rewind from that location
+                if ptr_end < body_length and '://' in body[ptr_end - 8:ptr_end + 8]:
+                    pos = body.rfind('://', ptr_end - 8, ptr_end + 8)
+                    ptr_end = pos - 8
+
+                # Found a :// within the slice; try to expand the slice until we find an invalid
+                # URL character in order to avoid cutting off URLs
+                if '://' in body[ptr_start:ptr_end] and not body[ptr_end - 1:ptr_end] == ' ':
+                    distance = 1
+
+                    while body[ptr_end - 1:ptr_end] not in (' ', '>') and distance < max_distance and ptr_end <= body_length:
+                        distance += 1
                         ptr_end += 1
 
                 yield body[ptr_start:ptr_end]
@@ -644,9 +675,19 @@ class EmlParser:
                 # sense, thus skip it
                 continue
 
-            found_url = urllib.parse.urlparse(found_url).geturl()
+            try:
+                found_url = urllib.parse.urlparse(found_url).geturl()
+            except ValueError:
+                logger.warning('Unable to parse URL - %s', found_url)
+                continue
+
             # let's try to be smart by stripping of noisy bogus parts
             found_url = re.split(r'''[', ")}\\]''', found_url, 1)[0]
+
+            # filter bogus URLs
+            if found_url.endswith('://'):
+                continue
+
             list_observed_urls[found_url] = 1
 
         return list(list_observed_urls)

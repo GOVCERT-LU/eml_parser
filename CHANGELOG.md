@@ -5,6 +5,17 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [v1.14.6]
+### Fixed
+- Fixed a major bug which resulted in not all URLs being returned because of a variable which was overwritten instead of being extended.
+- Handle URL parsing issue and only emit a warning with the problematic URL but do not break the rest of the parsing.
+- Filter out any scheme-only URLs.
+- Make sure the URL parsing regex only matches URLs with scheme (as it is supposed to).
+
+### Changes
+- Try to detect partial URLs (looking for a scheme) and extend the sliced body window accordingly. This allows for better URL extraction.
+
+
 ## [v1.14.5]
 ### Fixed
 - Prevent routing.parserouting() from throwing an exception on unparsable receive lines (thanks @kinoute #54).
