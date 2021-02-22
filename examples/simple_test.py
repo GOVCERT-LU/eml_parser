@@ -42,8 +42,10 @@ def json_serial(obj):
     elif isinstance(obj, email.header.Header):
         print(str(obj))
         raise Exception('object cannot be of type email.header.Header')
+    elif isinstance(obj, bytes):
+        return obj.decode('utf-8', errors='ignore')
 
-    raise TypeError("Type not serializable")
+    raise TypeError(f'Type "{str(type(obj))}" not serializable')
 
 
 def main():
