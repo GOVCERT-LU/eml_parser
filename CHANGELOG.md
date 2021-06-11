@@ -6,6 +6,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## [Unreleased]
 ### Changes
 - Cleanup example scripts.
+- Handle extra case of when chardet detects VISCII text which Python is currently unable to decode (thanks @cccs-rs #59).
+- Add multipart boundary marker as discussed in #56, in order to easier distinguish parts.
 
 ## [v1.14.6]
 ### Fixed

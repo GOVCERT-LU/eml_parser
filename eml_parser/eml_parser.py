@@ -417,7 +417,7 @@ class EmlParser:
 
         for body_tup in raw_body:
             bodie: typing.Dict[str, typing.Any] = {}
-            _, body, body_multhead = body_tup
+            _, body, body_multhead, boundary = body_tup
             # Parse any URLs and mail found in the body
             list_observed_urls: typing.List[str] = []
             list_observed_email: typing.Counter[str] = Counter()
@@ -528,6 +528,10 @@ class EmlParser:
 
             # Hash the body
             bodie['hash'] = hashlib.sha256(body.encode('utf-8')).hexdigest()
+
+            if boundary is not None:
+                # only include boundary key if there is a value set
+                bodie['boundary'] = boundary
 
             uid = str(uuid.uuid1())
             bodys[uid] = bodie
@@ -744,20 +748,22 @@ class EmlParser:
             yield i
             i = data.find(pat, i + 1)
 
-    def get_raw_body_text(self, msg: email.message.Message) -> typing.List[typing.Tuple[typing.Any, typing.Any, typing.Any]]:
+    def get_raw_body_text(self, msg: email.message.Message, boundary: typing.Optional[str] = None) -> typing.List[typing.Tuple[typing.Any, typing.Any, typing.Any, typing.Optional[str]]]:
         """This method recursively retrieves all e-mail body parts and returns them as a list.
 
         Args:
             msg (email.message.Message): The actual e-mail message or sub-message.
+            boundary: Used for passing the boundary marker of multipart messages, and used to easier distinguish different parts.
 
         Returns:
-            list: Returns a list of sets which are in the form of "set(encoding, raw_body_string, message field headers)"
+            list: Returns a list of sets which are in the form of "set(encoding, raw_body_string, message field headers, possible boundary marker)"
         """
-        raw_body: typing.List[typing.Tuple[typing.Any, typing.Any, typing.Any]] = []
+        raw_body: typing.List[typing.Tuple[typing.Any, typing.Any, typing.Any, typing.Optional[str]]] = []
 
         if msg.is_multipart():
+            boundary = msg.get_boundary(failobj=None)
             for part in msg.get_payload():
-                raw_body.extend(self.get_raw_body_text(part))
+                raw_body.extend(self.get_raw_body_text(part, boundary=boundary))
         else:
             # Treat text document attachments as belonging to the body of the mail.
             # Attachments with a file-extension of .htm/.html are implicitly treated
@@ -790,11 +796,11 @@ class EmlParser:
 
                 # In case we hit bug 27257 or any other parsing error, try to downgrade the used policy
                 try:
-                    raw_body.append((encoding, raw_body_str, msg.items()))
+                    raw_body.append((encoding, raw_body_str, msg.items(), boundary))
                 except (AttributeError, TypeError):
                     former_policy: email.policy.Policy = msg.policy  # type: ignore
                     msg.policy = email.policy.compat32  # type: ignore
-                    raw_body.append((encoding, raw_body_str, msg.items()))
+                    raw_body.append((encoding, raw_body_str, msg.items(), boundary))
                     msg.policy = former_policy  # type: ignore
 
         return raw_body
