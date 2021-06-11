@@ -118,12 +118,13 @@ def decode_string(string: bytes, encoding: typing.Optional[str]) -> str:
 
     if chardet:
         enc = chardet.detect(string)
-        if not(enc['confidence'] is None or enc['encoding'] is None) and not(enc['confidence'] == 1 and enc['encoding'] == 'ascii'):
+        if enc['encoding'] and enc['encoding'].lower() == 'viscii':
+            value = string.decode('ascii', 'replace')
+        elif not(enc['confidence'] is None or enc['encoding'] is None) and not(enc['confidence'] == 1 and enc['encoding'] == 'ascii'):
             try:
                 value = string.decode(enc['encoding'], 'replace')
             except LookupError:
-                if enc['encoding'] == 'VISCII':
-                    value = string.decode('ascii', 'replace')
+                value = string.decode('ascii', 'replace')
 
         else:
             value = string.decode('ascii', 'replace')
