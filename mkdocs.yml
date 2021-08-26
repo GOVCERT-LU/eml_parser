@@ -1,0 +1,26 @@
+site_name: eml_parser
+site_url: https://github.com/GOVCERT-LU/eml_parser
+repo_url: https://github.com/GOVCERT-LU/eml_parser
+
+
+theme:
+  name: "material"
+  font: false
+
+plugins:
+- search
+- mkdocstrings:
+    default_handler: python
+    handlers:
+      python:
+        rendering:
+          show_source: true
+    watch:
+      - eml_parser
+
+markdown_extensions:
+  - pymdownx.highlight:
+      linenums: true
+      linenums_style: pymdownx-inline
+  - pymdownx.superfences
+  - admonition

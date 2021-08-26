@@ -989,7 +989,8 @@ def decode_email(eml_file: str, include_raw_body: bool = False, include_attachme
     Besides just parsing, this function also computes hashes and extracts meta
     information from the source file.
 
-    .. deprecated:: 1.12.0
+    !!! important
+        Deprecated since version 1.12.0
 
     Args:
       eml_file (str): Full absolute path to the file to be parsed.
@@ -1044,7 +1045,8 @@ def decode_email_b(eml_file: bytes, include_raw_body: bool = False, include_atta
     Besides just parsing, this function also computes hashes and extracts meta
     information from the source file.
 
-    .. deprecated:: 1.12.0
+    !!! important
+        Deprecated since version 1.12.0
 
     Args:
         eml_file (bytes): Contents of the raw EML file passed to this function as string.
