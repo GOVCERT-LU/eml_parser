@@ -30,8 +30,18 @@ pip install eml_parser[filemagic]
 pip install eml_parser
 ```
 
-### Note for **OSX** users:
+### Known Issues
+#### **OSX** users
 Make sure to install libmagic, else eml_parser will not work.
+
+#### Python <=3.7.4 "rare header field parsing issue"
+It has been reported (in #60) that there are parsing issues in some particular cases which seem
+to be caused by a bug in the *email* module of the Python standard library. At least versions <=3.7.4 are affected.
+
+Python versions >=3.7.11 are not affected. If you do get *KeyError* exceptions on header field parsing, you should
+consider upgrading to a more recent version of Python.
+
+-> Please open an issue if the error persists after upgrading.
 
 
 ### Example usage:
