@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import re
+import re2
 import typing
 
 import eml_parser.decode
@@ -155,7 +156,7 @@ def parserouting(line: str) -> typing.Dict[str, typing.Any]:
         # escape special regex chars
         reg += eml_parser.regex.escape_special_regex_chars.sub(r'''\\\1''', npdate)
 
-    reparse = re.compile(reg)
+    reparse = re2.compile(reg)
     reparseg = reparse.search(line)
 
     # Fill the data

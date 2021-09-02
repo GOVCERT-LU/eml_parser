@@ -17,7 +17,7 @@ import hashlib
 import ipaddress
 import logging
 import os.path
-import re
+import re2
 import typing
 import urllib.parse
 import uuid
@@ -302,7 +302,7 @@ class EmlParser:
             for received_line in self.msg.get_all('received', []):
                 line = str(received_line).lower()
 
-                received_line_flat = re.sub(r'(\r|\n|\s|\t)+', ' ', line, flags=re.UNICODE)
+                received_line_flat = re2.sub(r'(\r|\n|\s|\t)+', ' ', line, flags=re2.UNICODE)
 
                 # Parse and split routing headers.
                 # Return dict of list
@@ -686,7 +686,7 @@ class EmlParser:
                 continue
 
             # let's try to be smart by stripping of noisy bogus parts
-            found_url = re.split(r'''[', ")}\\]''', found_url, 1)[0]
+            found_url = re2.split(r'''[', ")}\\]''', found_url, 1)[0]
 
             # filter bogus URLs
             if found_url.endswith('://'):
