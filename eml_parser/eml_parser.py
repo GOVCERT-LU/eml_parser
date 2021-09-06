@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import binascii
 import collections
+import collections.abc
 import email
 import email.message
 import email.policy
@@ -255,11 +256,17 @@ class EmlParser:
             msg_header_field = __from
 
         if msg_header_field != '':
-            m = eml_parser.regex.email_regex.search(msg_header_field)
-            if m:
-                headers_struc['from'] = m.group(1)
+            from_ = email.utils.parseaddr(msg_header_field)
+
+            if (from_ and from_ == ('', '')) or not isinstance(from_, collections.abc.Sequence):
+                m = eml_parser.regex.email_regex.search(msg_header_field)
+                if m:
+                    headers_struc['from'] = m.group(1)
+                else:
+                    logger.warning('FROM header parsing failed.')
+                    headers_struc['from'] = msg_header_field
+
             else:
-                from_ = email.utils.parseaddr(self.msg.get('from', '').lower())
                 headers_struc['from'] = from_[1]
 
         # parse and decode "to"

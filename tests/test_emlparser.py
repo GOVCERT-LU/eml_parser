@@ -277,3 +277,49 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
         test = ep.decode_email_bytes(raw_email)
 
         assert test['body'][0]['hash'] == '4c8b6a63156885b0ca0855b1d36816c54984e1eb6f68277b46b55b4777cfac89'
+
+    def test_parse_email_from_email_email(self):
+        """Parses a generated sample e-mail and tests it against a known good result. In this test
+        we want to specifically test for correct from address parsing where the from field contains two e-mail addresses."""
+        msg = EmailMessage()
+        msg['Subject'] = 'Test subject éèàöüä${}'
+        msg['From'] = Address("john@fake-example.com", "john", "example.com")
+        msg['To'] = (Address("Jané Doe", "jane.doe", "example.com"),
+                     Address("James Doe", "james.doe", "example.com"))
+        msg.set_content('''Hi,
+      Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent feugiat vitae tellus et molestie. Duis est ipsum, tristique eu pulvinar vel, aliquet a nibh. Vestibulum ultricies semper euismod. Maecenas non sagittis elit. Mauris non feugiat leo. Cras vitae quam est. Donec dapibus justo ut dictum viverra. Aliquam eleifend tortor mollis, vulputate ante sit amet, sodales elit. Fusce scelerisque congue risus mollis pellentesque. Sed malesuada erat sit amet nisl laoreet mollis. Suspendisse potenti. Fusce cursus, tortor sit amet euismod molestie, sem enim semper quam, eu ultricies leo est vel turpis.
+      You should subscribe by replying to test-reply@example.
+      ''')
+
+        ep = eml_parser.eml_parser.EmlParser()
+
+        good_output_json = r'''{"body": [{"content_header": {"content-type": ["text/plain; charset=\"utf-8\""], "content-transfer-encoding": ["quoted-printable"]}, "content_type": "text/plain", "hash": "07de6840458e398906e73b2cd188d0da813a80ee0337cc349228d983b5ec1c7e"}], "header": {"subject": "Test subject \u00e9\u00e8\u00e0\u00f6\u00fc\u00e4${}", "from": "john@example.com", "to": ["jane.doe@example.com", "james.doe@example.com"], "date": "1970-01-01T00:00:00+00:00", "received": [], "header":{"content-transfer-encoding": ["quoted-printable"], "from": ["\"john@fake-example.com\" <john@example.com>"], "content-type": ["text/plain; charset=\"utf-8\""], "to": ["Jan\u00e9 Doe <jane.doe@example.com>, James Doe <james.doe@example.com>"], "subject": ["Test subject \u00e9\u00e8\u00e0\u00f6\u00fc\u00e4${}"], "mime-version": ["1.0"]}}}'''
+        good_output = json.loads(good_output_json)
+
+        test_output_json = json.dumps(ep.decode_email_bytes(msg.as_bytes()), default=json_serial)
+        test_output = json.loads(test_output_json)
+
+        recursive_compare(good_output, test_output)
+
+    def test_parse_email_to_email_email(self):
+        """Parses a generated sample e-mail and tests it against a known good result. In this test
+        we want to specifically test for correct to address parsing where the to field contains two e-mail addresses."""
+        msg = EmailMessage()
+        msg['Subject'] = 'Test subject éèàöüä${}'
+        msg['From'] = Address("john@fake-example.com", "john", "example.com")
+        msg['To'] = (Address("jane@fake-example.com", "jane.doe", "example.com"),
+                     Address("James Doe", "james.doe", "example.com"))
+        msg.set_content('''Hi,
+      Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent feugiat vitae tellus et molestie. Duis est ipsum, tristique eu pulvinar vel, aliquet a nibh. Vestibulum ultricies semper euismod. Maecenas non sagittis elit. Mauris non feugiat leo. Cras vitae quam est. Donec dapibus justo ut dictum viverra. Aliquam eleifend tortor mollis, vulputate ante sit amet, sodales elit. Fusce scelerisque congue risus mollis pellentesque. Sed malesuada erat sit amet nisl laoreet mollis. Suspendisse potenti. Fusce cursus, tortor sit amet euismod molestie, sem enim semper quam, eu ultricies leo est vel turpis.
+      You should subscribe by replying to test-reply@example.
+      ''')
+
+        ep = eml_parser.eml_parser.EmlParser()
+
+        good_output_json = r'''{"body": [{"content_header": {"content-type": ["text/plain; charset=\"utf-8\""], "content-transfer-encoding": ["quoted-printable"]}, "content_type": "text/plain", "hash": "07de6840458e398906e73b2cd188d0da813a80ee0337cc349228d983b5ec1c7e"}], "header": {"subject": "Test subject \u00e9\u00e8\u00e0\u00f6\u00fc\u00e4${}", "from": "john@example.com", "to": ["jane.doe@example.com", "james.doe@example.com"], "date": "1970-01-01T00:00:00+00:00", "received": [], "header":{"content-transfer-encoding": ["quoted-printable"], "from": ["\"john@fake-example.com\" <john@example.com>"], "content-type": ["text/plain; charset=\"utf-8\""], "to": ["\"jane@fake-example.com\" <jane.doe@example.com>, James Doe <james.doe@example.com>"], "subject": ["Test subject \u00e9\u00e8\u00e0\u00f6\u00fc\u00e4${}"], "mime-version": ["1.0"]}}}'''
+        good_output = json.loads(good_output_json)
+
+        test_output_json = json.dumps(ep.decode_email_bytes(msg.as_bytes()), default=json_serial)
+        test_output = json.loads(test_output_json)
+
+        recursive_compare(good_output, test_output)
