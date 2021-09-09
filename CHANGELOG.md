@@ -3,6 +3,13 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.14.8]
+### Changes
+- Converted the documentation to mkdocs.
+
+### Fixed
+- Fixed a bug in FROM header field parsing. In case the *display name* part contained an e-mail address, that one was naively used instead of properly parsing the field.
+
 ## [v1.14.7]
 ### Changes
 - Cleanup example scripts.
