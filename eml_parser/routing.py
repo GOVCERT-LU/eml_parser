@@ -9,7 +9,7 @@ import re
 import typing
 
 import eml_parser.decode
-import eml_parser.regex
+import eml_parser.regexes
 
 
 def noparenthesis(line: str) -> str:
@@ -31,7 +31,7 @@ def noparenthesis(line: str) -> str:
 
     while True:
         lline = line_
-        line_ = eml_parser.regex.noparenthesis_regex.sub('', line_)
+        line_ = eml_parser.regexes.noparenthesis_regex.sub('', line_)
         if lline == line_:
             break
 
@@ -50,7 +50,7 @@ def cleanline(line: str) -> str:
     if line == '':
         return line
 
-    return eml_parser.regex.cleanline_regex.sub('', line)
+    return eml_parser.regexes.cleanline_regex.sub('', line)
 
 
 def get_domain_ip(line: str) -> typing.List[str]:
@@ -62,7 +62,7 @@ def get_domain_ip(line: str) -> typing.List[str]:
     Returns:
         list: Unique list of strings with matches
     """
-    m = eml_parser.regex.dom_regex.findall(' ' + line) + eml_parser.regex.ipv4_regex.findall(line) + eml_parser.regex.ipv6_regex.findall(line)
+    m = eml_parser.regexes.dom_regex.findall(' ' + line) + eml_parser.regexes.ipv4_regex.findall(line) + eml_parser.regexes.ipv6_regex.findall(line)
 
     return list(set(m))
 
@@ -93,7 +93,7 @@ def parserouting(line: str) -> typing.Dict[str, typing.Any]:
     npline = noparenthesis(npline)  # Remove any "()"
     npline = ' '.join(npline.split())  # normalise space
     npline = npline.strip('\n')  # Remove any new-line
-    raw_find_data = eml_parser.regex.date_regex.findall(npline)  # extract date on end line.
+    raw_find_data = eml_parser.regexes.date_regex.findall(npline)  # extract date on end line.
 
     # Detect "sticked lines"
     if ' received: ' in npline:
@@ -153,7 +153,7 @@ def parserouting(line: str) -> typing.Dict[str, typing.Any]:
         reg += item[1] + '(?P<' + item[1].strip() + '>.*)'  # type: ignore
     if npdate:
         # escape special regex chars
-        reg += eml_parser.regex.escape_special_regex_chars.sub(r'''\\\1''', npdate)
+        reg += eml_parser.regexes.escape_special_regex_chars.sub(r'''\\\1''', npdate)
 
     reparse = re.compile(reg)
     reparseg = reparse.search(line)
@@ -178,7 +178,7 @@ def parserouting(line: str) -> typing.Dict[str, typing.Any]:
             out['for'] = temp[0]
             out['from'] = '{} {}'.format(out['from'], ' '.join(temp[1:]))
 
-        m = eml_parser.regex.email_regex.findall(out['for'])
+        m = eml_parser.regexes.email_regex.findall(out['for'])
         if m:
             out['for'] = list(set(m))
         else:

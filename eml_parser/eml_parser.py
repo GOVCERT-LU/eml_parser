@@ -28,7 +28,7 @@ from collections import Counter
 import dateutil.parser
 
 import eml_parser.decode
-import eml_parser.regex
+import eml_parser.regexes
 import eml_parser.routing
 
 #
@@ -121,7 +121,7 @@ class EmlParser:
         self.parse_attachments = parse_attachments
 
         if self.email_force_tld:
-            eml_parser.regex.email_regex = eml_parser.regex.email_force_tld_regex
+            eml_parser.regexes.email_regex = eml_parser.regexes.email_force_tld_regex
 
         # If no whitelisting is required, set to emtpy list
         if 'whiteip' not in self.pconf:
@@ -259,7 +259,7 @@ class EmlParser:
             from_ = email.utils.parseaddr(msg_header_field)
 
             if (from_ and from_ == ('', '')) or not isinstance(from_, collections.abc.Sequence):
-                m = eml_parser.regex.email_regex.search(msg_header_field)
+                m = eml_parser.regexes.email_regex.search(msg_header_field)
                 if m:
                     headers_struc['from'] = m.group(1)
                 else:
@@ -348,8 +348,8 @@ class EmlParser:
                 headers_struc['received'].append(parsed_routing)
 
                 # Parse IPs in "received headers"
-                ips_in_received_line = eml_parser.regex.ipv6_regex.findall(received_line_flat) + \
-                                       eml_parser.regex.ipv4_regex.findall(received_line_flat)
+                ips_in_received_line = eml_parser.regexes.ipv6_regex.findall(received_line_flat) + \
+                                       eml_parser.regexes.ipv4_regex.findall(received_line_flat)
                 for ip in ips_in_received_line:
                     try:
                         ip_obj = ipaddress.ip_address(ip)  # type of findall is list[str], so this is correct
@@ -360,7 +360,7 @@ class EmlParser:
                             headers_struc['received_ip'].append(str(ip_obj))
 
                 # search for domain
-                for m in eml_parser.regex.recv_dom_regex.findall(received_line_flat):
+                for m in eml_parser.regexes.recv_dom_regex.findall(received_line_flat):
                     try:
                         ip_obj = ipaddress.ip_address(m)  # type of findall is list[str], so this is correct
                     except ValueError:
@@ -370,7 +370,7 @@ class EmlParser:
                         headers_struc['received_domain'].append(m)
 
                 # search for e-mail addresses
-                for mail_candidate in eml_parser.regex.email_regex.findall(received_line_flat):
+                for mail_candidate in eml_parser.regexes.email_regex.findall(received_line_flat):
                     if mail_candidate not in parsed_routing.get('for', []):
                         headers_struc['received_email'] += [mail_candidate]
 
@@ -440,11 +440,11 @@ class EmlParser:
                 if _list_observed_urls:
                     list_observed_urls.extend(_list_observed_urls)
 
-                for match in eml_parser.regex.email_regex.findall(body_slice):
+                for match in eml_parser.regexes.email_regex.findall(body_slice):
                     list_observed_email[match.lower()] = 1
-                for match in eml_parser.regex.dom_regex.findall(body_slice):
+                for match in eml_parser.regexes.dom_regex.findall(body_slice):
                     list_observed_dom[match.lower()] = 1
-                for match in eml_parser.regex.ipv4_regex.findall(body_slice):
+                for match in eml_parser.regexes.ipv4_regex.findall(body_slice):
                     try:
                         ipaddress_match = ipaddress.ip_address(match)
                     except ValueError:
@@ -452,7 +452,7 @@ class EmlParser:
                     else:
                         if not (ipaddress_match.is_private or match in self.pconf['whiteip']):
                             list_observed_ip[match] = 1
-                for match in eml_parser.regex.ipv6_regex.findall(body_slice):
+                for match in eml_parser.regexes.ipv6_regex.findall(body_slice):
                     try:
                         ipaddress_match = ipaddress.ip_address(match)
                     except ValueError:
@@ -639,7 +639,7 @@ class EmlParser:
 
             for ptr_end in range(slice_step, body_length, slice_step):
                 if ' ' in body[ptr_end - 1:ptr_end]:
-                    while not (eml_parser.regex.window_slice_regex.match(body[ptr_end - 1:ptr_end]) or ptr_end > body_length):
+                    while not (eml_parser.regexes.window_slice_regex.match(body[ptr_end - 1:ptr_end]) or ptr_end > body_length):
                         if ptr_end > body_length:
                             ptr_end = body_length
                             break
@@ -680,7 +680,7 @@ class EmlParser:
         """
         list_observed_urls: typing.Counter[str] = Counter()
 
-        for found_url in eml_parser.regex.url_regex_simple.findall(body):
+        for found_url in eml_parser.regexes.url_regex_simple.findall(body):
             if '.' not in found_url:
                 # if we found a URL like e.g. http://afafasasfasfas; that makes no
                 # sense, thus skip it
@@ -725,7 +725,7 @@ class EmlParser:
         for m in field:
             if not m[1] == '':
                 if self.email_force_tld:
-                    if eml_parser.regex.email_force_tld_regex.match(m[1]):
+                    if eml_parser.regexes.email_force_tld_regex.match(m[1]):
                         return_field.append(m[1].lower())
                 else:
                     return_field.append(m[1].lower())

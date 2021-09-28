@@ -17,7 +17,7 @@ import typing
 
 import dateutil.parser
 
-import eml_parser.regex
+import eml_parser.regexes
 
 #
 # Georges Toth (c) 2013-2014 <georges@trypill.org>
@@ -164,7 +164,7 @@ def workaround_bug_27257(msg: email.message.Message, header: str) -> typing.List
 
     for value in workaround_field_value_parsing_errors(msg, header):
         if value != '':
-            m = eml_parser.regex.email_regex.findall(value)
+            m = eml_parser.regexes.email_regex.findall(value)
             if m:
                 return_value += list(set(m))
 

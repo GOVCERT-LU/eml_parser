@@ -3,6 +3,20 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.15.0]
+### Added
+- As has been reported in #62 and #63 there can be issues with certain regular expressions (in this case URL regex) where the regex engine just runs forever (commonly referred to "catastrophic backtracking").
+In order to make testing two seemingly popular (and with good cross-platform wheel support) alternative regex engines easier, two *extra* flags have been introduced:
+  - **regex** - for testing the [regex](https://pypi.org/project/regex/) library
+  - **pyre2** - for testing the [pyre2](https://pypi.org/project/pyre2/) library
+
+  **Note-1:** These are temporary extra tags which may be removed in future releases.
+
+  **Note-2:** eml_parser will transparently use regex if it is found, or pyre2 (in that order).
+
+### Changes
+- *eml_parser.regex* has been renamed to *eml_parser.regexes* in order not to clash with the *regex* python module.
+
 ## [v1.14.8]
 ### Changes
 - Converted the documentation to mkdocs.

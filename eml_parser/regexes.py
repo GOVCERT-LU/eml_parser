@@ -3,7 +3,13 @@
 
 """This module contains a number of regular expressions used by this Library."""
 
-import re
+try:
+    import regex as re
+except ImportError:
+    try:
+        import re2 as re
+    except ImportError:
+        import re
 
 __author__ = 'Toth Georges, Jung Paul'
 __email__ = 'georges@trypill.org, georges.toth@govcert.etat.lu'
