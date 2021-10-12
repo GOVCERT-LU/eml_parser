@@ -39,6 +39,10 @@ ipv6_regex = re.compile(r'''((?:[0-9A-Fa-f]{1,4}:){6}(?:[0-9A-Fa-f]{1,4}:[0-9A-F
 #   - modify the end marker to allow any acceptable char according to the RFC3986
 url_regex_simple = re.compile(r'''(?i)\b(?:https?|ftps?):(?:/{1,3}|[a-z0-9%])(?:[^\s()<>{}\[\]]+|\([^\s()]*?\([^\s()]+\)[^\s()]*?\)|\([^\s]+?\))+(?:[\w\-._~%!$&'()*+,;=:/?#\[\]@]+)''')
 
+# Search for URLs in HTML IMG or A tags
+# regex overlaps with url_regex_simple, so simple URL content that starts with "<a " or "<img " still matches.
+url_regex_href = re.compile(r'''(?i)(?:<(?:a|img)[\s\/]+[^>]*?\b(?:href|src)[\s\/]*=[\s\/]*[\'\"]?[\s\/]*((?:(?:https?|ftps?):(?:/{1,3}|[a-za-z0-9%]))?[\w.-]{1,500}(?!aspx|html?|jpe?g|js|php)[\w-]{2,50}(?:[\/:#&?][^<>\'\"]*)?)(?=[\s\/]*[\'\">]))''')
+
 date_regex = re.compile(r''';[ \w\s:,+\-()]+$''')
 noparenthesis_regex = re.compile(r'''\([^()]*\)''')
 cleanline_regex = re.compile(r'''(^[;\s]{0,}|[;\s]{0,}$)''')

@@ -669,37 +669,47 @@ class EmlParser:
                 ptr_start = ptr_end
 
     @staticmethod
-    def get_uri_ondata(body: str) -> typing.List[str]:
+    def get_uri_ondata(body: str, include_href: bool = True) -> typing.List[str]:
         """Function for extracting URLs from the input string.
 
         Args:
             body (str): Text input which should be searched for URLs.
+            include_href (bool): Include potential URLs in HREFs matching non-simple regular expressions
 
         Returns:
             list: Returns a list of URLs found in the input string.
         """
         list_observed_urls: typing.Counter[str] = Counter()
 
-        for found_url in eml_parser.regexes.url_regex_simple.findall(body):
-            if '.' not in found_url:
+        def clean_found_uri(url: str) -> typing.Optional[str]:
+            if '.' not in url:
                 # if we found a URL like e.g. http://afafasasfasfas; that makes no
                 # sense, thus skip it
-                continue
+                return
 
             try:
-                found_url = urllib.parse.urlparse(found_url).geturl()
+                url = urllib.parse.urlparse(url).geturl()
             except ValueError:
-                logger.warning('Unable to parse URL - %s', found_url)
-                continue
+                logger.warning('Unable to parse URL - %s', url)
+                return
 
             # let's try to be smart by stripping of noisy bogus parts
-            found_url = re.split(r'''[', ")}\\]''', found_url, 1)[0]
+            url = re.split(r'''[', ")}\\]''', url, 1)[0]
 
             # filter bogus URLs
-            if found_url.endswith('://'):
-                continue
+            if url.endswith('://'):
+                return
 
-            list_observed_urls[found_url] = 1
+            return url
+
+        for found_url in eml_parser.regexes.url_regex_simple.findall(body):
+            if clean_found_uri(found_url) is not None:
+                list_observed_urls[found_url] = 1
+
+        if include_href:
+            for found_url in eml_parser.regexes.url_regex_href.findall(body):
+                if clean_found_uri(found_url) is not None:
+                    list_observed_urls[found_url] = 1
 
         return list(list_observed_urls)
 
