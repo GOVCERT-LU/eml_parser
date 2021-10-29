@@ -681,7 +681,7 @@ class EmlParser:
         list_observed_urls: typing.Counter[str] = Counter()
 
         for found_url in eml_parser.regexes.url_regex_simple.findall(body):
-            if '.' not in found_url:
+            if '.' not in found_url and ':' not in found_url:
                 # if we found a URL like e.g. http://afafasasfasfas; that makes no
                 # sense, thus skip it
                 continue
