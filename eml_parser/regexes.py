@@ -37,21 +37,39 @@ ipv6_regex = re.compile(r'''((?:[0-9A-Fa-f]{1,4}:){6}(?:[0-9A-Fa-f]{1,4}:[0-9A-F
 #   - do not use a fixed list of TLDs but rather \w
 #   - only check for URLs with scheme
 #   - modify the end marker to allow any acceptable char according to the RFC3986
-url_regex_simple = re.compile(r'''
-\b
-(?:https?|ftps?):
-(?:/{1,3}|[a-z0-9%])
-(?:
-  \([^\x00-\x20\s()]*?\([^\s()]+\)[^\x00-\x20\s()]*?\)
-|
-  \([^\x00-\x20\s]+?\)
-|
-  \[[0-9a-f:.]{2,40}(?:%[^\x00-\x20\s\]]{1,100})?\]
-|
-  [^\x00-\x20\s`()<>{}\[\]\/'"«»“”‘’]+
-)+
-(?:[\w\-._~%!$&'()*+,;=:/?#\[\]@\U00001000-\U0010FFFF]*[^\x00-\x20\s`!()\[\]{};:'".,<>?«»“”‘’])?
-''', flags=re.IGNORECASE | re.VERBOSE)
+
+try:
+    url_regex_simple = re.compile(r'''
+    \b
+    (?:https?|ftps?):
+    (?:/{1,3}|[a-z0-9%])
+    (?:
+      \([^\x00-\x20\s()]*?\([^\s()]+\)[^\x00-\x20\s()]*?\)
+    |
+      \([^\x00-\x20\s]+?\)
+    |
+      \[[0-9a-f:.]{2,40}(?:%[^\x00-\x20\s\]]{1,100})?\]
+    |
+      [^\x00-\x20\s`()<>{}\[\]\/'"«»“”‘’]+
+    )+
+    (?:[\w\-._~%!$&'()*+,;=:/?#\[\]@\U00001000-\U0010FFFF]*[^\x00-\x20\s`!()\[\]{};:'".,<>?«»“”‘’])?
+    ''', flags=re.IGNORECASE | re.VERBOSE)
+except re.error:
+    url_regex_simple = re.compile(r'''
+    \b
+    (?:https?|ftps?):
+    (?:/{1,3}|[a-z0-9%])
+    (?:
+      \([^\x00-\x20\s()]*?\([^\s()]+\)[^\x00-\x20\s()]*?\)
+    |
+      \([^\x00-\x20\s]+?\)
+    |
+      \[[0-9a-f:.]{2,40}(?:%[^\x00-\x20\s\]]{1,100})?\]
+    |
+      [^\x00-\x20\s`()<>{}\[\]\/'"«»“”‘’]+
+    )+
+    (?:[\w\-._~%!$&'()*+,;=:/?#\[\]@\x{00001000}-\x{0010FFFF}]*[^\x00-\x20\s`!()\[\]{};:'".,<>?«»“”‘’])?
+    ''', flags=re.IGNORECASE | re.VERBOSE)
 
 date_regex = re.compile(r''';[ \w\s:,+\-()]+$''')
 noparenthesis_regex = re.compile(r'''\([^()]*\)''')
