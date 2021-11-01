@@ -24,12 +24,20 @@ import urllib.parse
 import uuid
 import warnings
 from collections import Counter
+from html import unescape
 
 import dateutil.parser
 
 import eml_parser.decode
 import eml_parser.regexes
 import eml_parser.routing
+
+try:
+    import publicsuffixlist
+    psl = publicsuffixlist.PublicSuffixList()
+except ImportError:
+    publicsuffixlist = None
+    psl = None
 
 #
 # Georges Toth (c) 2013-2014 <georges@trypill.org>
@@ -669,12 +677,13 @@ class EmlParser:
                 ptr_start = ptr_end
 
     @staticmethod
-    def get_uri_ondata(body: str, include_href: bool = True) -> typing.List[str]:
+    def get_uri_ondata(body: str, include_href: bool = True, psl_tld_only: bool = False) -> typing.List[str]:
         """Function for extracting URLs from the input string.
 
         Args:
             body (str): Text input which should be searched for URLs.
             include_href (bool): Include potential URLs in HREFs matching non-simple regular expressions
+            psl_tld_only (bool): Only return URLs with hostnames that end in a public suffix
 
         Returns:
             list: Returns a list of URLs found in the input string.
@@ -682,13 +691,20 @@ class EmlParser:
         list_observed_urls: typing.Counter[str] = Counter()
 
         def clean_found_uri(url: str) -> typing.Optional[str]:
-            if '.' not in url:
+            if '.' not in url and '[' not in url:
                 # if we found a URL like e.g. http://afafasasfasfas; that makes no
-                # sense, thus skip it
+                # sense, thus skip it. Include http://[2001:db8::1]
                 return
 
             try:
+                url = url.lstrip('"\'\t \r\n').replace('\r', '').replace('\n', '')
                 url = urllib.parse.urlparse(url).geturl()
+                if psl_tld_only and psl is not None:
+                    scheme_url = url
+                    if ':/' not in scheme_url:
+                        scheme_url = 'noscheme://' + url
+                    if psl.publicsuffix(urllib.parse.urlparse(scheme_url).hostname.rstrip('.'), accept_unknown=False) is None:
+                        return
             except ValueError:
                 logger.warning('Unable to parse URL - %s', url)
                 return
@@ -700,16 +716,21 @@ class EmlParser:
             if url.endswith('://'):
                 return
 
+            if '&' in url:
+                url = unescape(url)
+
             return url
 
         for found_url in eml_parser.regexes.url_regex_simple.findall(body):
-            if clean_found_uri(found_url) is not None:
-                list_observed_urls[found_url] = 1
+            clean_uri = clean_found_uri(found_url)
+            if clean_uri is not None:
+                list_observed_urls[clean_uri] = 1
 
         if include_href:
             for found_url in eml_parser.regexes.url_regex_href.findall(body):
-                if clean_found_uri(found_url) is not None:
-                    list_observed_urls[found_url] = 1
+                clean_uri = clean_found_uri(found_url)
+                if clean_uri is not None:
+                    list_observed_urls[clean_uri] = 1
 
         return list(list_observed_urls)
 
