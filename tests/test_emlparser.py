@@ -116,15 +116,29 @@ class TestEMLParser:
     def test_get_uri_href_ondata(self):
         test_urls = '''<html><body>Lorem ipsum dolor sit amet, consectetur adipiscing elit.
         Mauris consectetur mi tortor, <a href="example.com">consectetur iaculis</a> orci ultricies sit amet.
+        <center><img src="http://47fee4f03182a2437d6d-359a8ec3a1ca7be00e972dc7374155\r\n16.r50.cf3.example.com/img1.jpg" />Play a cool game!
         Mauris <a href="example.com/test1?bla"><img src=image.example.com/test.jpg></a> ex nec dictum. Aliquam blandit arcu ac lorem iaculis aliquet.
         Praesent a tempus dui, eu feugiat diam. Interdum <a href="example.com/a/b/c/d/">et malesuada</a> fames ac ante ipsum primis in faucibus.
         Suspendisse ac rutrum leo, non vehicula purus. Quisque <a href="http://www.example.com?t1=v1&amp;t2=v2">quis</a> sapien lorem. Nunc velit enim,
         placerat quis vestibulum at, <a href="example2.com">condimentum </a> non velit.</html></body>'''
 
-        expected_result = ['http://www.example.com?t1=v1&amp;t2=v2', 'example.com', 'example.com/test1?bla',
-                           'image.example.com/test.jpg', 'example.com/a/b/c/d/', 'example2.com']
+        expected_result = ['http://www.example.com?t1=v1&t2=v2', 'example.com', 'http://47fee4f03182a2437d6d-359a8ec3a1ca7be00e972dc737415516.r50.cf3.example.com/img1.jpg',
+                           'example.com/test1?bla', 'image.example.com/test.jpg', 'example.com/a/b/c/d/', 'example2.com']
 
-        assert eml_parser.eml_parser.EmlParser.get_uri_ondata(test_urls, include_href=True) == expected_result
+        assert eml_parser.eml_parser.EmlParser.get_uri_ondata(test_urls, include_href=True, psl_tld_only=True) == expected_result
+
+    def test_get_valid_tld_uri_href_ondata(self):
+        test_urls = '''<html><body>Lorem ipsum dolor sit amet, consectetur adipiscing elit.
+        Mauris consectetur mi tortor, <a href="example.com">consectetur iaculis</a> orci ultricies sit amet.
+        Mauris <a href="example.com/test1?bla"><img src=image.example.jpg/test.jpg></a> ex nec dictum. Aliquam blandit arcu ac lorem iaculis aliquet.
+        Praesent a tempus dui, eu feugiat diam. Interdum <a href="example.com/a/b/c/d/">et malesuada</a> fames ac ante ipsum primis in faucibus.
+        Suspendisse ac rutrum leo, non vehicula purus. Quisque <a href="http://www.example.com?t1=v1&amp;t2=v2">quis</a> sapien lorem. Nunc velit enim,
+        placerat quis vestibulum at, <a href="example2.com">condimentum </a> non velit.</html></body>'''
+
+        expected_result = ['http://www.example.com?t1=v1&t2=v2', 'example.com', 'example.com/test1?bla',
+                           'example.com/a/b/c/d/', 'example2.com']
+
+        assert eml_parser.eml_parser.EmlParser.get_uri_ondata(test_urls, include_href=True, psl_tld_only=True) == expected_result
 
     def test_headeremail2list_1(self):
         msg = EmailMessage()
