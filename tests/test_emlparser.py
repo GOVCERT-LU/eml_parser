@@ -111,7 +111,7 @@ class TestEMLParser:
         expected_result = ['http://www.example.com', 'http://www.example.com/test1?bla',
                            'http://www.example.com/a/b/c/d/', 'https://www.example2.com']
 
-        assert eml_parser.eml_parser.EmlParser.get_uri_ondata(test_urls, include_href=False) == expected_result
+        assert eml_parser.eml_parser.EmlParser(include_href=False).get_uri_ondata(test_urls) == expected_result
 
     def test_get_uri_href_ondata(self):
         test_urls = '''<html><body>Lorem ipsum dolor sit amet, consectetur adipiscing elit.
@@ -125,7 +125,7 @@ class TestEMLParser:
         expected_result = ['http://www.example.com?t1=v1&t2=v2', 'example.com', 'http://47fee4f03182a2437d6d-359a8ec3a1ca7be00e972dc737415516.r50.cf3.example.com/img1.jpg',
                            'example.com/test1?bla', 'image.example.com/test.jpg', 'example.com/a/b/c/d/', 'example2.com']
 
-        assert eml_parser.eml_parser.EmlParser.get_uri_ondata(test_urls, include_href=True, email_force_tld=True) == expected_result
+        assert eml_parser.eml_parser.EmlParser(include_href=True, email_force_tld=True).get_uri_ondata(test_urls) == expected_result
 
     def test_get_valid_tld_uri_href_ondata(self):
         test_urls = '''<html><body>Lorem ipsum dolor sit amet, consectetur adipiscing elit.
@@ -133,12 +133,13 @@ class TestEMLParser:
         Mauris <a href="example.com/test1?bla"><img src=image.example.jpg/test.jpg></a> ex nec dictum. Aliquam blandit arcu ac lorem iaculis aliquet.
         Praesent a tempus dui, eu feugiat diam. Interdum <a href="example.com/a/b/c/d/">et malesuada</a> fames ac ante ipsum primis in faucibus.
         Suspendisse ac rutrum leo, non vehicula purus. Quisque <a href="http://www.example.com?t1=v1&amp;t2=v2">quis</a> sapien lorem. Nunc velit enim,
-        placerat quis vestibulum at, <a href="example2.com">condimentum </a> non velit.</html></body>'''
+        placerat quis vestibulum at, <a href="example2.com">condimentum </a> non velit.</html></body>
+        '''
 
         expected_result = ['http://www.example.com?t1=v1&t2=v2', 'example.com', 'example.com/test1?bla',
                            'example.com/a/b/c/d/', 'example2.com']
 
-        assert eml_parser.eml_parser.EmlParser.get_uri_ondata(test_urls, include_href=True, email_force_tld=True) == expected_result
+        assert eml_parser.eml_parser.EmlParser(include_href=True, email_force_tld=True, valid_domain_or_ip=True).get_uri_ondata(test_urls) == expected_result
 
     def test_get_uri_re_backtracking(self):
         """Ensure url_regex_simple does not cause catastrophic backtracking (Issue 63), test with re instead of re2 or regex"""
@@ -148,18 +149,20 @@ class TestEMLParser:
 
         expected_result = ['http://xxxxxxxxxx.example.com������������������������������������������������������������������������������������������������������������������������������������������������']
 
-        assert eml_parser.eml_parser.EmlParser.get_uri_ondata(test_urls) == expected_result
+        assert eml_parser.eml_parser.EmlParser(valid_domain_or_ip=False).get_uri_ondata(test_urls) == expected_result
 
     def test_get_uri_unicode_ondata(self):
+        """Ensure url_regex includes Unicode in domains and paths"""
         test_urls = '''
-        Lorem ipsum dolor sit amet http://💌.example.คอม, http://💌.example.คอม/📮/📧/📬.png consectetur adipiscing elit.
+        Lorem ipsum dolor sit amet http://💌.example.คอม, http://💌.example.คอม/📮/📧/📬.png consectetur https://💩.la adipiscing elit.
         '''
 
-        expected_result = ['http://💌.example.คอม', 'http://💌.example.คอม/📮/📧/📬.png']
+        expected_result = ['http://💌.example.คอม', 'http://💌.example.คอม/📮/📧/📬.png', 'https://💩.la']
 
-        assert eml_parser.eml_parser.EmlParser.get_uri_ondata(test_urls) == expected_result
+        assert eml_parser.eml_parser.EmlParser(include_href=True, valid_domain_or_ip=True).get_uri_ondata(test_urls) == expected_result
 
     def test_get_uri_ipv6_ondata(self):
+        """Ensure url_regex includes URLs with IPv6 hosts, including zone Indexes"""
         test_urls = '''
         Lorem ipsum dolor sit amet http://[2001:0db8:85a3:0000:0000:8a2e:0370:7334]
         http://[fe80::1ff:fe23:4567:890a%25eth0]/6️⃣ consectetur adipiscing elit.
@@ -167,36 +170,7 @@ class TestEMLParser:
 
         expected_result = ['http://[2001:0db8:85a3:0000:0000:8a2e:0370:7334]', 'http://[fe80::1ff:fe23:4567:890a%25eth0]/6️⃣']
 
-        assert eml_parser.eml_parser.EmlParser.get_uri_ondata(test_urls) == expected_result
-
-    def test_get_uri_re_backtracking(self):
-        """Ensure url_regex_simple does not cause catastrophic backtracking (Issue 63), test with re instead of re2 or regex"""
-        test_urls = '''
-        Lorem ipsum dolor sit amet, http://xxxxxxxxxx.example.com������������������������������������������������������������������������������������������������������������������������������������������������ consectetur adipiscing elit.
-        '''
-
-        expected_result = ['http://xxxxxxxxxx.example.com������������������������������������������������������������������������������������������������������������������������������������������������']
-
-        assert eml_parser.eml_parser.EmlParser.get_uri_ondata(test_urls) == expected_result
-
-    def test_get_uri_unicode_ondata(self):
-        test_urls = '''
-        Lorem ipsum dolor sit amet http://💌.example.คอม, http://💌.example.คอม/📮/📧/📬.png consectetur adipiscing elit.
-        '''
-
-        expected_result = ['http://💌.example.คอม', 'http://💌.example.คอม/📮/📧/📬.png']
-
-        assert eml_parser.eml_parser.EmlParser.get_uri_ondata(test_urls) == expected_result
-
-    def test_get_uri_ipv6_ondata(self):
-        test_urls = '''
-        Lorem ipsum dolor sit amet http://[2001:0db8:85a3:0000:0000:8a2e:0370:7334]
-        http://[fe80::1ff:fe23:4567:890a%25eth0]/6️⃣ consectetur adipiscing elit.
-        '''
-
-        expected_result = ['http://[2001:0db8:85a3:0000:0000:8a2e:0370:7334]', 'http://[fe80::1ff:fe23:4567:890a%25eth0]/6️⃣']
-
-        assert eml_parser.eml_parser.EmlParser.get_uri_ondata(test_urls) == expected_result
+        assert eml_parser.eml_parser.EmlParser(valid_domain_or_ip=True, email_force_tld=False).get_uri_ondata(test_urls) == expected_result
 
     def test_headeremail2list_1(self):
         msg = EmailMessage()
