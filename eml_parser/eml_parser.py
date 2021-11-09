@@ -32,13 +32,6 @@ import eml_parser.decode
 import eml_parser.regexes
 import eml_parser.routing
 
-try:
-    import publicsuffixlist
-    psl = publicsuffixlist.PublicSuffixList()
-except ImportError:
-    publicsuffixlist = None
-    psl = None
-
 #
 # Georges Toth (c) 2013-2014 <georges@trypill.org>
 # GOVCERT.LU (c) 2013-present <info@govcert.etat.lu>
@@ -677,13 +670,13 @@ class EmlParser:
                 ptr_start = ptr_end
 
     @staticmethod
-    def get_uri_ondata(body: str, include_href: bool = True, psl_tld_only: bool = False) -> typing.List[str]:
+    def get_uri_ondata(body: str, include_href: bool = True, email_force_tld: bool = False) -> typing.List[str]:
         """Function for extracting URLs from the input string.
 
         Args:
             body (str): Text input which should be searched for URLs.
             include_href (bool): Include potential URLs in HREFs matching non-simple regular expressions
-            psl_tld_only (bool): Only return URLs with hostnames that end in a public suffix
+            email_force_tld (bool): Exclude common file extensions that are not valid TLDs
 
         Returns:
             list: Returns a list of URLs found in the input string.
@@ -699,11 +692,12 @@ class EmlParser:
             try:
                 url = url.lstrip('"\'\t \r\n').replace('\r', '').replace('\n', '')
                 url = urllib.parse.urlparse(url).geturl()
-                if psl_tld_only and psl is not None:
+                if email_force_tld:
                     scheme_url = url
                     if ':/' not in scheme_url:
                         scheme_url = 'noscheme://' + url
-                    if psl.publicsuffix(urllib.parse.urlparse(scheme_url).hostname.rstrip('.'), accept_unknown=False) is None:
+                    tld = urllib.parse.urlparse(scheme_url).hostname.rstrip('.').rsplit('.', 1)[-1].lower()
+                    if tld in ('aspx', 'htm', 'html', 'js', 'jpg', 'jpeg', 'php',):
                         return
             except ValueError:
                 logger.warning('Unable to parse URL - %s', url)
