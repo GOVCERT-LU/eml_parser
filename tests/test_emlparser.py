@@ -125,7 +125,7 @@ class TestEMLParser:
         expected_result = ['http://www.example.com?t1=v1&t2=v2', 'example.com', 'http://47fee4f03182a2437d6d-359a8ec3a1ca7be00e972dc737415516.r50.cf3.example.com/img1.jpg',
                            'example.com/test1?bla', 'image.example.com/test.jpg', 'example.com/a/b/c/d/', 'example2.com']
 
-        assert eml_parser.eml_parser.EmlParser.get_uri_ondata(test_urls, include_href=True, psl_tld_only=True) == expected_result
+        assert eml_parser.eml_parser.EmlParser.get_uri_ondata(test_urls, include_href=True, email_force_tld=True) == expected_result
 
     def test_get_valid_tld_uri_href_ondata(self):
         test_urls = '''<html><body>Lorem ipsum dolor sit amet, consectetur adipiscing elit.
@@ -138,7 +138,7 @@ class TestEMLParser:
         expected_result = ['http://www.example.com?t1=v1&t2=v2', 'example.com', 'example.com/test1?bla',
                            'example.com/a/b/c/d/', 'example2.com']
 
-        assert eml_parser.eml_parser.EmlParser.get_uri_ondata(test_urls, include_href=True, psl_tld_only=True) == expected_result
+        assert eml_parser.eml_parser.EmlParser.get_uri_ondata(test_urls, include_href=True, email_force_tld=True) == expected_result
 
     def test_headeremail2list_1(self):
         msg = EmailMessage()
