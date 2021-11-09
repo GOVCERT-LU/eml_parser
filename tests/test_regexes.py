@@ -17,8 +17,9 @@ class TestRegularExpressions:
 
         url_match_list = []
         for line in url_text_list:
-            if url_regex_simple.search(line):
-                url_match_list.append(line)
+            match = url_regex_simple.search(line)
+            if match:
+                url_match_list.append(match.group())
 
         with pathlib.Path(samples_dir, 'regexes_url_matches.txt').open('r', encoding='utf8') as fhdl:
             url_check_list = [li for li in fhdl.read().splitlines() if len(li) > 3 and not li.startswith('#')]
