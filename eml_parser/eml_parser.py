@@ -691,9 +691,7 @@ class EmlParser:
             addr, _, _ = host.partition('%')
             valid_ip = ipaddress.ip_address(addr)
             if self.email_force_tld:
-                print(valid_ip, valid_ip.is_global)
                 if valid_ip.is_global:
-                    print(valid_ip.is_global)
                     return str(valid_ip)
             else:
                 return str(valid_ip)
