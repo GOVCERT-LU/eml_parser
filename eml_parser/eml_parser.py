@@ -676,7 +676,7 @@ class EmlParser:
         Args:
             body (str): Text input which should be searched for URLs.
             include_href (bool): Include potential URLs in HREFs matching non-simple regular expressions
-            email_force_tld (bool): Exclude common file extensions that are not valid TLDs
+            email_force_tld (bool): For potential URLs, filter out domains with invalid TLDs using common file extensions
 
         Returns:
             list: Returns a list of URLs found in the input string.
@@ -693,11 +693,12 @@ class EmlParser:
                 url = url.lstrip('"\'\t \r\n').replace('\r', '').replace('\n', '')
                 url = urllib.parse.urlparse(url).geturl()
                 if email_force_tld:
-                    scheme_url = url
-                    if ':/' not in scheme_url:
+                    if ':/' in url[:10]:
+                        scheme_url = re.sub(r':/{1,3}', '://', url, count=1)
+                    else:
                         scheme_url = 'noscheme://' + url
                     tld = urllib.parse.urlparse(scheme_url).hostname.rstrip('.').rsplit('.', 1)[-1].lower()
-                    if tld in ('aspx', 'htm', 'html', 'js', 'jpg', 'jpeg', 'php',):
+                    if tld in ('aspx', 'css', 'gif', 'htm', 'html', 'js', 'jpg', 'jpeg', 'php', 'png',):
                         return
             except ValueError:
                 logger.warning('Unable to parse URL - %s', url)
