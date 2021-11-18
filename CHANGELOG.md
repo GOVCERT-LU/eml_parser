@@ -3,6 +3,13 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.16.0]
+### Fixes
+- Fix catastrophic backtracking on url regex, add related tests for backtracking, unicode, and IPv6. (thanks @malvidin)
+- Add Unicode character ranges for re2. (thanks @malvidin)
+- Add tests for url_regex_simple, change where parens are matched in url_regex_simple, specify which re engine needs which expression. (thanks @malvidin)
+- Match URLs with trailing ? with url_regex_simple. (thanks @malvidin)
+
 ## [v1.15.0]
 ### Added
 - As has been reported in #62 and #63 there can be issues with certain regular expressions (in this case URL regex) where the regex engine just runs forever (commonly referred to "catastrophic backtracking").

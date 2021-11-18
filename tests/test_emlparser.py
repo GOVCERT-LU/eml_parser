@@ -140,6 +140,35 @@ class TestEMLParser:
 
         assert eml_parser.eml_parser.EmlParser.get_uri_ondata(test_urls, include_href=True, email_force_tld=True) == expected_result
 
+    def test_get_uri_re_backtracking(self):
+        """Ensure url_regex_simple does not cause catastrophic backtracking (Issue 63), test with re instead of re2 or regex"""
+        test_urls = '''
+        Lorem ipsum dolor sit amet, http://xxxxxxxxxx.example.com������������������������������������������������������������������������������������������������������������������������������������������������ consectetur adipiscing elit.
+        '''
+
+        expected_result = ['http://xxxxxxxxxx.example.com������������������������������������������������������������������������������������������������������������������������������������������������']
+
+        assert eml_parser.eml_parser.EmlParser.get_uri_ondata(test_urls) == expected_result
+
+    def test_get_uri_unicode_ondata(self):
+        test_urls = '''
+        Lorem ipsum dolor sit amet http://💌.example.คอม, http://💌.example.คอม/📮/📧/📬.png consectetur adipiscing elit.
+        '''
+
+        expected_result = ['http://💌.example.คอม', 'http://💌.example.คอม/📮/📧/📬.png']
+
+        assert eml_parser.eml_parser.EmlParser.get_uri_ondata(test_urls) == expected_result
+
+    def test_get_uri_ipv6_ondata(self):
+        test_urls = '''
+        Lorem ipsum dolor sit amet http://[2001:0db8:85a3:0000:0000:8a2e:0370:7334]
+        http://[fe80::1ff:fe23:4567:890a%25eth0]/6️⃣ consectetur adipiscing elit.
+        '''
+
+        expected_result = ['http://[2001:0db8:85a3:0000:0000:8a2e:0370:7334]', 'http://[fe80::1ff:fe23:4567:890a%25eth0]/6️⃣']
+
+        assert eml_parser.eml_parser.EmlParser.get_uri_ondata(test_urls) == expected_result
+
     def test_headeremail2list_1(self):
         msg = EmailMessage()
         msg['Subject'] = 'Test subject éèàöüä${}'
