@@ -3,6 +3,10 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [unreleased]
+### Added
+- Add optional matching for HTML SRC and HREF. (thanks @malvidin)
+
 ## [v1.16.0]
 ### Fixes
 - Fix catastrophic backtracking on url regex, add related tests for backtracking, unicode, and IPv6. (thanks @malvidin)
