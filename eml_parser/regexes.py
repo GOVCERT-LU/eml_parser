@@ -63,6 +63,15 @@ else:
     (?:[\w\-._~%!$&'()*+,;=:/?#\[\]@\U00001000-\U0010FFFF]*[^\x00-\x20\s`!\[\]{};:'".,<>«»“”‘’])?
     ''', flags=re.IGNORECASE | re.VERBOSE)
 
+# Search for URLs in HTML IMG or A tags
+# regex overlaps with url_regex_simple, so simple URL content that starts with "<a " or "<img " still matches.
+url_regex_href = re.compile(r'''
+<(?:a[\s\/]+[^>]*?href
+ |img[\s\/]+[^>]*?src)
+[\s\/]*=[\s\/]*
+((?:[\"][^\"]+)|[\'][^\']+|[^\s>]+)
+''', flags=re.IGNORECASE | re.VERBOSE)
+
 date_regex = re.compile(r''';[ \w\s:,+\-()]+$''')
 noparenthesis_regex = re.compile(r'''\([^()]*\)''')
 cleanline_regex = re.compile(r'''(^[;\s]{0,}|[;\s]{0,}$)''')

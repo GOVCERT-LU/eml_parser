@@ -24,6 +24,7 @@ import urllib.parse
 import uuid
 import warnings
 from collections import Counter
+from html import unescape
 
 import dateutil.parser
 
@@ -669,37 +670,62 @@ class EmlParser:
                 ptr_start = ptr_end
 
     @staticmethod
-    def get_uri_ondata(body: str) -> typing.List[str]:
+    def get_uri_ondata(body: str, include_href: bool = True, email_force_tld: bool = False) -> typing.List[str]:
         """Function for extracting URLs from the input string.
 
         Args:
             body (str): Text input which should be searched for URLs.
+            include_href (bool): Include potential URLs in HREFs matching non-simple regular expressions
+            email_force_tld (bool): For potential URLs, filter out domains with invalid TLDs using common file extensions
 
         Returns:
             list: Returns a list of URLs found in the input string.
         """
         list_observed_urls: typing.Counter[str] = Counter()
 
-        for found_url in eml_parser.regexes.url_regex_simple.findall(body):
-            if '.' not in found_url and ':' not in found_url:
+        def clean_found_uri(url: str) -> typing.Optional[str]:
+            if '.' not in url and '[' not in url:
                 # if we found a URL like e.g. http://afafasasfasfas; that makes no
-                # sense, thus skip it
-                continue
+                # sense, thus skip it. Include http://[2001:db8::1]
+                return
 
             try:
-                found_url = urllib.parse.urlparse(found_url).geturl()
+                url = url.lstrip('"\'\t \r\n').replace('\r', '').replace('\n', '')
+                url = urllib.parse.urlparse(url).geturl()
+                if email_force_tld:
+                    if ':/' in url[:10]:
+                        scheme_url = re.sub(r':/{1,3}', '://', url, count=1)
+                    else:
+                        scheme_url = 'noscheme://' + url
+                    tld = urllib.parse.urlparse(scheme_url).hostname.rstrip('.').rsplit('.', 1)[-1].lower()
+                    if tld in ('aspx', 'css', 'gif', 'htm', 'html', 'js', 'jpg', 'jpeg', 'php', 'png',):
+                        return
             except ValueError:
-                logger.warning('Unable to parse URL - %s', found_url)
-                continue
+                logger.warning('Unable to parse URL - %s', url)
+                return
 
             # let's try to be smart by stripping of noisy bogus parts
-            found_url = re.split(r'''[', ")}\\]''', found_url, 1)[0]
+            url = re.split(r'''[', ")}\\]''', url, 1)[0]
 
             # filter bogus URLs
-            if found_url.endswith('://'):
-                continue
+            if url.endswith('://'):
+                return
 
-            list_observed_urls[found_url] = 1
+            if '&' in url:
+                url = unescape(url)
+
+            return url
+
+        for found_url in eml_parser.regexes.url_regex_simple.findall(body):
+            clean_uri = clean_found_uri(found_url)
+            if clean_uri is not None:
+                list_observed_urls[clean_uri] = 1
+
+        if include_href:
+            for found_url in eml_parser.regexes.url_regex_href.findall(body):
+                clean_uri = clean_found_uri(found_url)
+                if clean_uri is not None:
+                    list_observed_urls[clean_uri] = 1
 
         return list(list_observed_urls)
 
