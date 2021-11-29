@@ -92,6 +92,7 @@ class EmlParser:
                  ignore_bad_start: bool = False,
                  email_force_tld: bool = False,
                  parse_attachments: bool = True,
+                 include_www: bool = False,
                  include_href: bool = True,
                  valid_domain_or_ip: bool = True
                  ) -> None:
@@ -115,6 +116,7 @@ class EmlParser:
             parse_attachments (bool, optional): Set this to false if you want to disable the parsing of attachments.
                                                 Please note that HTML attachments as well as other text data marked to be
                                                 in-lined, will always be parsed.
+            include_www (bool, optional): Include potential URLs starting with www
             include_href (bool, optional): Include potential URLs in HREFs matching non-simple regular expressions
             valid_domain_or_ip (bool, optional): Only include URLs, Domains, or Email Addresses with valid TLD or a valid IP address
 
@@ -127,6 +129,7 @@ class EmlParser:
         self.ignore_bad_start = ignore_bad_start
         self.email_force_tld = email_force_tld
         self.parse_attachments = parse_attachments
+        self.include_www = include_www
         self.include_href = include_href
         self.valid_domain_or_ip = valid_domain_or_ip
         self._psl = publicsuffixlist.PublicSuffixList(accept_unknown=not self.email_force_tld)
@@ -691,7 +694,8 @@ class EmlParser:
             addr, _, _ = host.partition('%')
             valid_ip = ipaddress.ip_address(addr)
             if self.email_force_tld:
-                if valid_ip.is_global:
+                # Not a precise filter for IPv4/IPv6 addresses. Can be enhanced with pconf whiteip ranges
+                if valid_ip.is_global and not valid_ip.is_reserved:
                     return str(valid_ip)
             else:
                 return str(valid_ip)
@@ -752,10 +756,16 @@ class EmlParser:
         """
         list_observed_urls: typing.Counter[str] = Counter()
 
-        for found_url in eml_parser.regexes.url_regex_simple.findall(body):
-            clean_uri = self.clean_found_uri(found_url)
-            if clean_uri is not None:
-                list_observed_urls[clean_uri] = 1
+        if self.include_www:
+            for found_url in eml_parser.regexes.url_regex_www.findall(body):
+                clean_uri = self.clean_found_uri(found_url)
+                if clean_uri is not None:
+                    list_observed_urls[clean_uri] = 1
+        else:
+            for found_url in eml_parser.regexes.url_regex_simple.findall(body):
+                clean_uri = self.clean_found_uri(found_url)
+                if clean_uri is not None:
+                    list_observed_urls[clean_uri] = 1
 
         if self.include_href:
             for found_url in eml_parser.regexes.url_regex_href.findall(body):

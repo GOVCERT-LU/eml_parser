@@ -172,6 +172,36 @@ class TestEMLParser:
 
         assert eml_parser.eml_parser.EmlParser(valid_domain_or_ip=True, email_force_tld=False).get_uri_ondata(test_urls) == expected_result
 
+    def test_get_uri_ipv6_routable_ondata(self):
+        """Ensure url_regex can exclude private and other unallocated IPv6 hosts in URLs."""
+        test_urls = '''
+        Curabitur vel neque lacinia, consequat erat id http://[2001:0db8:85a3:0000:0000:8a2e:0370:7334], 
+        venenatis sem. Etiam dignissim ullamcorper http://[2606:2800:220:1:248:1893:25c8:1946] risus non pulvinar. 
+        Etiam dui tortor http://[fe80::1ff:fe23:4567:890a%25eth0]/6️⃣, posuere et iaculis sed, accumsan a erat.
+        '''
+
+        expected_result = ['http://[2606:2800:220:1:248:1893:25c8:1946]']
+
+        assert eml_parser.eml_parser.EmlParser(valid_domain_or_ip=True, email_force_tld=True).get_uri_ondata(test_urls) == expected_result
+
+    def test_get_uri_www_ondata(self):
+        test_urls = '''
+        www91.example.com@www92.example.com  www93.example.com@example.com  
+        www94......example.com/path  not.www95.example.com:443/path
+        www2.example.com:443/path 'www3.example.com/path' ‘www4.example.com#abc’  www5.example.com:443?def   \nwww6.example.com.../path
+        www7.example.com/?# www8.example.com?/#  www9.example.com#?/  www10.example.com/?
+        https://www01.example.com/path  https://www02.example.com..../path  https://www03.example.com/  
+        http://www04.example.com/?# http://www05.example.com?/#  http://www06.example.com#?/  http://www07.example.com/?
+        '''
+
+        expected_result = ['www2.example.com:443/path', 'www3.example.com/path', 'www4.example.com#abc',
+                           'www5.example.com:443?def', 'www6.example.com.../path', 'www7.example.com/', 'www8.example.com?/',
+                           'www9.example.com#?/', 'www10.example.com/',
+                           'https://www01.example.com/path', 'https://www02.example.com..../path', 'https://www03.example.com/',
+                           'http://www04.example.com/', 'http://www05.example.com?/', 'http://www06.example.com#?/', 'http://www07.example.com/']
+
+        assert eml_parser.eml_parser.EmlParser(include_www=True).get_uri_ondata(test_urls) == expected_result
+
     def test_headeremail2list_1(self):
         msg = EmailMessage()
         msg['Subject'] = 'Test subject éèàöüä${}'
