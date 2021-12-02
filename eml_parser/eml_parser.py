@@ -91,10 +91,11 @@ class EmlParser:
                  policy: email.policy.Policy = email.policy.default,
                  ignore_bad_start: bool = False,
                  email_force_tld: bool = False,
+                 domain_force_tld: bool = False,
+                 ip_force_routable: bool = False,
                  parse_attachments: bool = True,
-                 include_www: bool = False,
+                 include_www: bool = True,
                  include_href: bool = True,
-                 valid_domain_or_ip: bool = True
                  ) -> None:
         """Initialisation.
 
@@ -110,15 +111,18 @@ class EmlParser:
             policy (email.policy.Policy, optional): Policy to use when parsing e-mails.
                                                     Default = email.policy.default.
             ignore_bad_start (bool, optional): Ignore invalid file start. This has a considerable performance impact.
-            email_force_tld (bool, optional): Only match e-mail addresses with a TLD. I.e exclude something like
-                                              john@doe. For IP and domain validation, requires global IP or a valid TLD.
-                                              By default this is disabled.
+            email_force_tld (bool, optional): Only match e-mail addresses with a TLD, i.e. exclude something like
+                                              john@doe. If enabled, it uses domain_force_tld and ip_force_routable settings
+                                              to validate the host portion of the address. By default this is disabled.
+            domain_force_tld (bool, optional): For domain validation, requires global IP or a valid TLD.
+                                               By default this is disabled.
+            ip_force_routable (bool, optional): For IP validation, requires globally routable IP.
+                                               By default this is disabled.
             parse_attachments (bool, optional): Set this to false if you want to disable the parsing of attachments.
                                                 Please note that HTML attachments as well as other text data marked to be
                                                 in-lined, will always be parsed.
             include_www (bool, optional): Include potential URLs starting with www
             include_href (bool, optional): Include potential URLs in HREFs matching non-simple regular expressions
-            valid_domain_or_ip (bool, optional): Only include URLs, Domains, or Email Addresses with valid TLD or a valid IP address
 
         """
         self.include_raw_body = include_raw_body
@@ -128,11 +132,12 @@ class EmlParser:
         self.policy = policy
         self.ignore_bad_start = ignore_bad_start
         self.email_force_tld = email_force_tld
+        self.domain_force_tld = domain_force_tld
+        self.ip_force_routable = ip_force_routable
         self.parse_attachments = parse_attachments
         self.include_www = include_www
         self.include_href = include_href
-        self.valid_domain_or_ip = valid_domain_or_ip
-        self._psl = publicsuffixlist.PublicSuffixList(accept_unknown=not self.email_force_tld)
+        self._psl = publicsuffixlist.PublicSuffixList(accept_unknown=not self.domain_force_tld)
 
         if self.email_force_tld:
             eml_parser.regexes.email_regex = eml_parser.regexes.email_force_tld_regex
@@ -385,7 +390,9 @@ class EmlParser:
 
                 # search for e-mail addresses
                 for mail_candidate in eml_parser.regexes.email_regex.findall(received_line_flat):
-                    if mail_candidate not in parsed_routing.get('for', []):
+                    if self.email_force_tld:
+                        mail_candidate = self.get_valid_domain_or_ip(mail_candidate)
+                    if mail_candidate is not None and mail_candidate not in parsed_routing.get('for', []):
                         headers_struc['received_email'] += [mail_candidate]
 
         except TypeError:  # Ready to parse email without received headers.
@@ -441,6 +448,7 @@ class EmlParser:
             _, body, body_multhead, boundary = body_tup
             # Parse any URLs and mail found in the body
             list_observed_urls: typing.List[str] = []
+            list_observed_urls_noscheme: typing.List[str] = []
             list_observed_email: typing.Counter[str] = Counter()
             list_observed_dom: typing.Counter[str] = Counter()
             list_observed_ip: typing.Counter[str] = Counter()
@@ -449,10 +457,12 @@ class EmlParser:
             # if more than 4K.. lets cheat, we will cut around the thing we search "://, @, ."
             # in order to reduce regex complexity.
             for body_slice in self.string_sliding_window_loop(body):
-                _list_observed_urls = self.get_uri_ondata(body_slice)
 
-                if _list_observed_urls:
-                    list_observed_urls.extend(_list_observed_urls)
+                for url_match in self.get_uri_ondata(body_slice):
+                    if ':/' in url_match[:10]:
+                        list_observed_urls.append(url_match)
+                    else:
+                        list_observed_urls_noscheme.append(url_match)
 
                 for match in eml_parser.regexes.email_regex.findall(body_slice):
                     valid_email = self.get_valid_domain_or_ip(match.lower())
@@ -476,6 +486,9 @@ class EmlParser:
             if self.include_raw_body:
                 if list_observed_urls:
                     bodie['uri'] = list(set(list_observed_urls))
+
+                if list_observed_urls_noscheme:
+                    bodie['uri_noscheme'] = list(set(list_observed_urls_noscheme))
 
                 if list_observed_email:
                     bodie['email'] = list(list_observed_email)
@@ -693,13 +706,14 @@ class EmlParser:
             # Zone index support was added to ipaddress in Python 3.9
             addr, _, _ = host.partition('%')
             valid_ip = ipaddress.ip_address(addr)
-            if self.email_force_tld:
+            if self.ip_force_routable:
                 # Not a precise filter for IPv4/IPv6 addresses. Can be enhanced with pconf whiteip ranges
                 if valid_ip.is_global and not valid_ip.is_reserved:
                     return str(valid_ip)
             else:
                 return str(valid_ip)
         except ValueError:
+            # _psl uses self.domain_force_tld
             valid_domain = self._psl.publicsuffix(host)
             if valid_domain:
                 return host
@@ -722,13 +736,12 @@ class EmlParser:
             # Remove leading spaces and quote characters
             url = url.lstrip(' \t\n\r\f\v\'\"«»“”‘’').replace('\r', '').replace('\n', '')
             url = urllib.parse.urlparse(url).geturl()
-            if self.valid_domain_or_ip:
-                scheme_url = url
-                if ':/' not in scheme_url:
-                    scheme_url = 'noscheme://' + url
-                host = urllib.parse.urlparse(scheme_url).hostname.rstrip('.')
-                if self.get_valid_domain_or_ip(host) is None:
-                    return
+            scheme_url = url
+            if ':/' not in scheme_url:
+                scheme_url = 'noscheme://' + url
+            host = urllib.parse.urlparse(scheme_url).hostname.rstrip('.')
+            if self.get_valid_domain_or_ip(host) is None:
+                return
         except ValueError:
             logger.warning('Unable to parse URL - %s', url)
             return
