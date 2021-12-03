@@ -38,6 +38,9 @@ ipv6_regex = re.compile(r'''((?:[0-9a-f]{1,4}:){6}(?:[0-9a-f]{1,4}:[0-9a-f]{1,4}
 #   - only check for URLs with scheme
 #   - modify the end marker to allow any acceptable char according to the RFC3986
 
+url_regex_comma = re.compile(r',(?=https?|ftps?)', flags=re.IGNORECASE)
+url_regex_www_comma = re.compile(r',(?=https?|ftps?|www\d{0,3})', flags=re.IGNORECASE)
+
 if re.__name__ == 're2':
     url_regex_simple = re.compile(r'''
     \b

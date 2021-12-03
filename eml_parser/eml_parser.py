@@ -771,14 +771,16 @@ class EmlParser:
 
         if self.include_www:
             for found_url in eml_parser.regexes.url_regex_www.findall(body):
-                clean_uri = self.clean_found_uri(found_url)
-                if clean_uri is not None:
-                    list_observed_urls[clean_uri] = 1
+                for found_url_split in eml_parser.regexes.url_regex_www_comma.split(found_url):
+                    clean_uri = self.clean_found_uri(found_url_split)
+                    if clean_uri is not None:
+                        list_observed_urls[clean_uri] = 1
         else:
             for found_url in eml_parser.regexes.url_regex_simple.findall(body):
-                clean_uri = self.clean_found_uri(found_url)
-                if clean_uri is not None:
-                    list_observed_urls[clean_uri] = 1
+                for found_url_split in eml_parser.regexes.url_regex_comma.split(found_url):
+                    clean_uri = self.clean_found_uri(found_url_split)
+                    if clean_uri is not None:
+                        list_observed_urls[clean_uri] = 1
 
         if self.include_href:
             for found_url in eml_parser.regexes.url_regex_href.findall(body):
