@@ -385,6 +385,17 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
 
         assert test['body'][0]['hash'] == '4c8b6a63156885b0ca0855b1d36816c54984e1eb6f68277b46b55b4777cfac89'
 
+    def test_parse_email_9(self):
+        """Parses an email and verifies that www URLs with no scheme are extracted, and that URLs at the end of a message body are extracted"""
+        with pathlib.Path(samples_dir, 'sample_body_noscheme_url.eml').open('rb') as fhdl:
+            raw_email = fhdl.read()
+
+        ep = eml_parser.eml_parser.EmlParser(include_raw_body=True)
+        test = ep.decode_email_bytes(raw_email)
+
+        assert sorted(test['body'][0]['uri_noscheme']) == ['www.example.com/a/b/c/d/', 'www.example.com/test1?bla']
+        assert sorted(test['body'][0]['uri']) == ['http://www.example.com/', 'https://www.example2.com']
+
     def test_parse_email_from_email_email(self):
         """Parses a generated sample e-mail and tests it against a known good result. In this test
         we want to specifically test for correct from address parsing where the from field contains two e-mail addresses."""

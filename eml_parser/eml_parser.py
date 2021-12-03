@@ -642,7 +642,7 @@ class EmlParser:
         length, until which we give up and return the sliced body part. This is done in order to return a maximum possible
         correct URLs.
 
-        The choice for 8 character is because *https://* is 8 characters, which is be the maximum size we accept for schemes.
+        The choice for 8 character is because *https://* is 8 characters, which is the maximum size we accept for schemes.
 
         Args:
             body: Body to slice into smaller pieces.
@@ -661,7 +661,7 @@ class EmlParser:
         else:
             ptr_start = 0
 
-            for ptr_end in range(slice_step, body_length, slice_step):
+            for ptr_end in range(slice_step, body_length + slice_step, slice_step):
                 if ' ' in body[ptr_end - 1:ptr_end]:
                     while not (eml_parser.regexes.window_slice_regex.match(body[ptr_end - 1:ptr_end]) or ptr_end > body_length):
                         if ptr_end > body_length:
