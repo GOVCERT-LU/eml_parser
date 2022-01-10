@@ -226,7 +226,7 @@ def robust_string2date(line: str) -> datetime.datetime:
     try:
         date_ = email.utils.parsedate_to_datetime(line)
     except (TypeError, ValueError, LookupError):
-        logger.debug('Exception parsing date "{}"'.format(line), exc_info=True)
+        logger.debug('Exception parsing date "%s"', line, exc_info=True)
 
         try:
             date_ = dateutil.parser.parse(line)
@@ -250,7 +250,7 @@ def json_serial(obj: typing.Any) -> typing.Optional[str]:
 
         return serial
 
-    raise TypeError('Type not serializable - {}'.format(str(type(obj))))
+    raise TypeError(f'Type not serializable - {str(type(obj))}')
 
 
 def export_to_json(parsed_msg: dict, sort_keys: bool = False) -> str:

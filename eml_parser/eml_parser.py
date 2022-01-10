@@ -376,12 +376,12 @@ class EmlParser:
                     if valid_ip:
                         headers_struc['received_ip'].append(valid_ip)
                     else:
-                        logger.debug('Invalid IP in received line - "{}"'.format(ip))
+                        logger.debug('Invalid IP in received line - "%s"', ip)
 
                 # search for domain
                 for m in eml_parser.regexes.recv_dom_regex.findall(received_line_flat):
                     try:
-                        ip_obj = ipaddress.ip_address(m)  # type of findall is list[str], so this is correct
+                        _ = ipaddress.ip_address(m)  # type of findall is list[str], so this is correct
                     except ValueError:
                         # we find IPs using the previous IP crawler, hence we ignore them
                         # here.
@@ -619,8 +619,8 @@ class EmlParser:
                 report_struc['attachment'] = newattach
 
         newbody = []
-        for body in bodys_struc:
-            newbody.append(bodys_struc[body])
+        for _, body in bodys_struc.items():
+            newbody.append(body)
         report_struc['body'] = newbody
         # End of dirty hack
 
@@ -718,6 +718,8 @@ class EmlParser:
             if valid_domain:
                 return host
 
+        return None
+
     def clean_found_uri(self, url: str) -> typing.Optional[str]:
         """Function for validating URLs from the input string.
 
@@ -730,7 +732,7 @@ class EmlParser:
         if '.' not in url and '[' not in url:
             # if we found a URL like e.g. http://afafasasfasfas; that makes no
             # sense, thus skip it, but include http://[2001:db8::1]
-            return
+            return None
 
         try:
             # Remove leading spaces and quote characters
@@ -741,17 +743,17 @@ class EmlParser:
                 scheme_url = 'noscheme://' + url
             host = urllib.parse.urlparse(scheme_url).hostname.rstrip('.')
             if self.get_valid_domain_or_ip(host) is None:
-                return
+                return None
         except ValueError:
             logger.warning('Unable to parse URL - %s', url)
-            return
+            return None
 
         # let's try to be smart by stripping of noisy bogus parts
         url = re.split(r'''[', ")}\\]''', url, 1)[0]
 
         # filter bogus URLs
         if url.endswith('://'):
-            return
+            return None
 
         if '&' in url:
             url = unescape(url)
@@ -1008,7 +1010,7 @@ class EmlParser:
 
             filename = msg.get_filename('')
             if filename == '':
-                filename = 'part-{0:03d}'.format(counter)
+                filename = f'part-{counter:03d}'
             else:
                 filename = eml_parser.decode.decode_field(filename)
 
@@ -1034,7 +1036,7 @@ class EmlParser:
                 attachment[file_id]['mime_type_short'] = mime_type_short
             else:
                 if magic is not None:
-                    logger.warning('Error determining attachment mime-type - "{}"'.format(file_id))
+                    logger.warning('Error determining attachment mime-type - "%s"', str(file_id))
 
             if self.include_attachment_data:
                 attachment[file_id]['raw'] = base64.b64encode(data)
