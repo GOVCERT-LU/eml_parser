@@ -741,7 +741,14 @@ class EmlParser:
             scheme_url = url
             if ':/' not in scheme_url:
                 scheme_url = 'noscheme://' + url
-            host = urllib.parse.urlparse(scheme_url).hostname.rstrip('.')
+
+            _hostname = urllib.parse.urlparse(scheme_url).hostname
+
+            if _hostname is None:
+                return None
+
+            host = _hostname.rstrip('.')
+
             if self.get_valid_domain_or_ip(host) is None:
                 return None
         except ValueError:
@@ -894,10 +901,10 @@ class EmlParser:
                 try:
                     raw_body.append((encoding, raw_body_str, msg.items(), boundary))
                 except (AttributeError, TypeError):
-                    former_policy: email.policy.Policy = msg.policy  # type: ignore
-                    msg.policy = email.policy.compat32  # type: ignore
+                    former_policy: email.policy.Policy = msg.policy
+                    msg.policy = email.policy.compat32
                     raw_body.append((encoding, raw_body_str, msg.items(), boundary))
-                    msg.policy = former_policy  # type: ignore
+                    msg.policy = former_policy
 
         return raw_body
 
@@ -983,10 +990,10 @@ class EmlParser:
         try:
             lower_keys = [k.lower() for k in msg.keys()]
         except AttributeError:
-            former_policy: email.policy.Policy = msg.policy  # type: ignore
-            msg.policy = email.policy.compat32  # type: ignore
+            former_policy: email.policy.Policy = msg.policy
+            msg.policy = email.policy.compat32
             lower_keys = [k.lower() for k in msg.keys()]
-            msg.policy = former_policy  # type: ignore
+            msg.policy = former_policy
 
         if ('content-disposition' in lower_keys and msg.get_content_disposition() != 'inline') \
             or msg.get_content_maintype() != 'text':

@@ -182,12 +182,12 @@ def workaround_field_value_parsing_errors(msg: email.message.Message, header: st
     Returns:
         list: Return an extracted list of strings.
     """
-    if msg.policy == email.policy.compat32:  # type: ignore
+    if msg.policy == email.policy.compat32:
         new_policy = None
     else:
-        new_policy = msg.policy  # type: ignore
+        new_policy = msg.policy
 
-    msg.policy = email.policy.compat32  # type: ignore
+    msg.policy = email.policy.compat32
     return_value = []
 
     for value in msg.get_all(header, []):
@@ -195,7 +195,7 @@ def workaround_field_value_parsing_errors(msg: email.message.Message, header: st
             return_value.append(value)
 
     if new_policy is not None:
-        msg.policy = new_policy  # type: ignore
+        msg.policy = new_policy
 
     return return_value
 
