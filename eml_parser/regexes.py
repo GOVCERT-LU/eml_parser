@@ -54,7 +54,7 @@ if re.__name__ == 're2':
     (?:[\w\-._~%!$&'()*+,;=:/?#\[\]@\x{00001000}-\x{0010FFFF}]*[^\x00-\x20\s`!\[\]{};:'".,<>«»“”‘’])?
     ''', flags=re.IGNORECASE | re.VERBOSE)
     url_regex_www = re.compile(r'''
-    (?:  
+    (?:
     # http/ftp schemes
         \b
         (?:https?|ftps?):
@@ -66,7 +66,7 @@ if re.__name__ == 're2':
         )
         (?:[\w\-._~%!$&'()*+,;=:/?#\[\]@\x{00001000}-\x{0010FFFF}]*[^\x00-\x20\s`!\[\]{};:'".,<>«»“”‘’])?
     |
-    # www address  (any preceding matched character needs to be removed afterward) 
+    # www address  (any preceding matched character needs to be removed afterward)
         (?:^|[ \t\n\r\f\v\'\"«»“”‘’])
         www\d{0,3}[.][-\w\x{0900}-\x{2017}\x{2020}-\x{0010FFFF}.]+  # Host
         (?::[0]*[1-9][0-9]{0,4})?  # Port
@@ -98,8 +98,8 @@ else:
         )
         (?:[\w\-._~%!$&'()*+,;=:/?#\[\]@\U00001000-\U0010FFFF]*[^\x00-\x20\s`!\[\]{};:'".,<>«»“”‘’])?
     |
-    # www address  (any preceding matched character needs to be removed afterward) 
-        (?: 
+    # www address  (any preceding matched character needs to be removed afterward)
+        (?:
         ^|[ \t\n\r\f\v\'\"«»“”‘’])
         www\d{0,3}[.](?:[-\w\u0900-\u2017\u2020-\U0010FFFF]{1,250}[.]){1,250}[-0-9a-z\w\u0900-\u0DFF]{2,30}[.]*  # Host Simple TLD regex
         (?::[0]*[1-9][0-9]{0,4})?  # Port

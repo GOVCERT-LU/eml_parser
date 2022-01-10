@@ -212,7 +212,7 @@ class EmlParser:
         return self.parse_email()
 
     def parse_email(self) -> dict:
-        """Parse an e-mail and return a dictionary containing the various parts of
+        """Parse an e-mail and return a dictionary containing the various parts of\
         the e-mail broken down into key-value pairs.
 
         Args:
@@ -693,7 +693,7 @@ class EmlParser:
                 ptr_start = ptr_end
 
     def get_valid_domain_or_ip(self, data: str) -> typing.Optional[str]:
-        """Function to determine if an IP address, Email address, or Domain is valid
+        """Function to determine if an IP address, Email address, or Domain is valid.
 
         Args:
             data (str): Text input which should be validated.
