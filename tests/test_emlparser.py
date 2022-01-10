@@ -111,7 +111,7 @@ class TestEMLParser:
         expected_result = ['http://www.example.com', 'http://www.example.com/test1?bla',
                            'http://www.example.com/a/b/c/d/', 'https://www.example2.com']
 
-        assert eml_parser.eml_parser.EmlParser.get_uri_ondata(test_urls, include_href=False) == expected_result
+        assert eml_parser.eml_parser.EmlParser(include_href=False).get_uri_ondata(test_urls) == expected_result
 
     def test_get_uri_href_ondata(self):
         test_urls = '''<html><body>Lorem ipsum dolor sit amet, consectetur adipiscing elit.
@@ -125,7 +125,19 @@ class TestEMLParser:
         expected_result = ['http://www.example.com?t1=v1&t2=v2', 'example.com', 'http://47fee4f03182a2437d6d-359a8ec3a1ca7be00e972dc737415516.r50.cf3.example.com/img1.jpg',
                            'example.com/test1?bla', 'image.example.com/test.jpg', 'example.com/a/b/c/d/', 'example2.com']
 
-        assert eml_parser.eml_parser.EmlParser.get_uri_ondata(test_urls, include_href=True, email_force_tld=True) == expected_result
+        assert eml_parser.eml_parser.EmlParser(include_href=True, email_force_tld=True).get_uri_ondata(test_urls) == expected_result
+
+    def test_get_uri_href_commas_ondata(self):
+        test_urls = '''
+        http://www.example.com?t1=v1&t2=v2,https://www.example.com, http://www1.example.com?t1=v1&t2=v2, https://www1.example.com, 
+        http://www2.example.com,https://www3.example.com
+        '''
+
+        expected_result = ['http://www.example.com?t1=v1&t2=v2', 'https://www.example.com',
+                           'http://www1.example.com?t1=v1&t2=v2', 'https://www1.example.com',
+                           'http://www2.example.com', 'https://www3.example.com']
+
+        assert eml_parser.eml_parser.EmlParser(include_www=True).get_uri_ondata(test_urls) == expected_result
 
     def test_get_valid_tld_uri_href_ondata(self):
         test_urls = '''<html><body>Lorem ipsum dolor sit amet, consectetur adipiscing elit.
@@ -133,12 +145,13 @@ class TestEMLParser:
         Mauris <a href="example.com/test1?bla"><img src=image.example.jpg/test.jpg></a> ex nec dictum. Aliquam blandit arcu ac lorem iaculis aliquet.
         Praesent a tempus dui, eu feugiat diam. Interdum <a href="example.com/a/b/c/d/">et malesuada</a> fames ac ante ipsum primis in faucibus.
         Suspendisse ac rutrum leo, non vehicula purus. Quisque <a href="http://www.example.com?t1=v1&amp;t2=v2">quis</a> sapien lorem. Nunc velit enim,
-        placerat quis vestibulum at, <a href="example2.com">condimentum </a> non velit.</html></body>'''
+        placerat quis vestibulum at, <a href="example2.com">condimentum </a> non velit.</html></body>
+        '''
 
         expected_result = ['http://www.example.com?t1=v1&t2=v2', 'example.com', 'example.com/test1?bla',
                            'example.com/a/b/c/d/', 'example2.com']
 
-        assert eml_parser.eml_parser.EmlParser.get_uri_ondata(test_urls, include_href=True, email_force_tld=True) == expected_result
+        assert eml_parser.eml_parser.EmlParser(include_href=True, domain_force_tld=True).get_uri_ondata(test_urls) == expected_result
 
     def test_get_uri_re_backtracking(self):
         """Ensure url_regex_simple does not cause catastrophic backtracking (Issue 63), test with re instead of re2 or regex"""
@@ -148,18 +161,20 @@ class TestEMLParser:
 
         expected_result = ['http://xxxxxxxxxx.example.com������������������������������������������������������������������������������������������������������������������������������������������������']
 
-        assert eml_parser.eml_parser.EmlParser.get_uri_ondata(test_urls) == expected_result
+        assert eml_parser.eml_parser.EmlParser(domain_force_tld=False).get_uri_ondata(test_urls) == expected_result
 
     def test_get_uri_unicode_ondata(self):
+        """Ensure url_regex includes Unicode in domains and paths"""
         test_urls = '''
-        Lorem ipsum dolor sit amet http://💌.example.คอม, http://💌.example.คอม/📮/📧/📬.png consectetur adipiscing elit.
+        Lorem ipsum dolor sit amet http://💌.example.คอม , http://💌.example.คอม/📮/📧/📬.png consectetur https://💩.la adipiscing elit.
         '''
 
-        expected_result = ['http://💌.example.คอม', 'http://💌.example.คอม/📮/📧/📬.png']
+        expected_result = ['http://💌.example.คอม', 'http://💌.example.คอม/📮/📧/📬.png', 'https://💩.la']
 
-        assert eml_parser.eml_parser.EmlParser.get_uri_ondata(test_urls) == expected_result
+        assert eml_parser.eml_parser.EmlParser(include_www=False, domain_force_tld=True).get_uri_ondata(test_urls) == expected_result
 
     def test_get_uri_ipv6_ondata(self):
+        """Ensure url_regex includes URLs with IPv6 hosts, including zone Indexes"""
         test_urls = '''
         Lorem ipsum dolor sit amet http://[2001:0db8:85a3:0000:0000:8a2e:0370:7334]
         http://[fe80::1ff:fe23:4567:890a%25eth0]/6️⃣ consectetur adipiscing elit.
@@ -167,7 +182,37 @@ class TestEMLParser:
 
         expected_result = ['http://[2001:0db8:85a3:0000:0000:8a2e:0370:7334]', 'http://[fe80::1ff:fe23:4567:890a%25eth0]/6️⃣']
 
-        assert eml_parser.eml_parser.EmlParser.get_uri_ondata(test_urls) == expected_result
+        assert eml_parser.eml_parser.EmlParser(ip_force_routable=False).get_uri_ondata(test_urls) == expected_result
+
+    def test_get_uri_ipv6_routable_ondata(self):
+        """Ensure url_regex can exclude private and other unallocated IPv6 hosts in URLs."""
+        test_urls = '''
+        Curabitur vel neque lacinia, consequat erat id http://[2001:0db8:85a3:0000:0000:8a2e:0370:7334], 
+        venenatis sem. Etiam dignissim ullamcorper http://[2606:2800:220:1:248:1893:25c8:1946] risus non pulvinar. 
+        Etiam dui tortor http://[fe80::1ff:fe23:4567:890a%25eth0]/6️⃣, posuere et iaculis sed, accumsan a erat.
+        '''
+
+        expected_result = ['http://[2606:2800:220:1:248:1893:25c8:1946]']
+
+        assert eml_parser.eml_parser.EmlParser(ip_force_routable=True).get_uri_ondata(test_urls) == expected_result
+
+    def test_get_uri_www_ondata(self):
+        test_urls = '''
+        www91.example.com@www92.example.com  www93.example.com@example.com  
+        www94......example.com/path  not.www95.example.com:443/path
+        www2.example.com:443/path 'www3.example.com/path' ‘www4.example.com#abc’  www5.example.com:443?def   \nwww6.example.com.../path
+        www7.example.com/?# www8.example.com?/#  www9.example.com#?/  www10.example.com/?
+        https://www01.example.com/path  https://www02.example.com..../path  https://www03.example.com/  
+        http://www04.example.com/?# http://www05.example.com?/#  http://www06.example.com#?/  http://www07.example.com/?
+        '''
+
+        expected_result = ['www2.example.com:443/path', 'www3.example.com/path', 'www4.example.com#abc',
+                           'www5.example.com:443?def', 'www6.example.com.../path', 'www7.example.com/', 'www8.example.com?/',
+                           'www9.example.com#?/', 'www10.example.com/',
+                           'https://www01.example.com/path', 'https://www02.example.com..../path', 'https://www03.example.com/',
+                           'http://www04.example.com/', 'http://www05.example.com?/', 'http://www06.example.com#?/', 'http://www07.example.com/']
+
+        assert eml_parser.eml_parser.EmlParser(include_www=True).get_uri_ondata(test_urls) == expected_result
 
     def test_headeremail2list_1(self):
         msg = EmailMessage()
@@ -231,24 +276,28 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
         ep = eml_parser.eml_parser.EmlParser()
 
         for k in samples_dir.iterdir():
-            test = ep.decode_email(k)
+            if k.suffix == ".eml":
+                _ = ep.decode_email(k)
 
         for k in samples_dir.iterdir():
-            with k.open('rb') as fhdl:
-                raw_email = fhdl.read()
-                test = ep.decode_email_bytes(raw_email)
+            if k.suffix == ".eml":
+                with k.open('rb') as fhdl:
+                    raw_email = fhdl.read()
+                    _ = ep.decode_email_bytes(raw_email)
 
     def test_parse_email_3(self):
         """Parses the e-mails from the samples folder while keeping raw data"""
         ep = eml_parser.eml_parser.EmlParser(include_raw_body=True, include_attachment_data=True)
 
         for k in samples_dir.iterdir():
-            test = ep.decode_email(k)
+            if k.suffix == ".eml":
+                _ = ep.decode_email(k)
 
         for k in samples_dir.iterdir():
-            with k.open('rb') as fhdl:
-                raw_email = fhdl.read()
-                test = ep.decode_email_bytes(raw_email)
+            if k.suffix == ".eml":
+                with k.open('rb') as fhdl:
+                    raw_email = fhdl.read()
+                    _ = ep.decode_email_bytes(raw_email)
 
     def test_parse_email_4(self):
         """Parses the e-mails from the samples folder while keeping raw data and passing
@@ -260,12 +309,14 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
         ep = eml_parser.eml_parser.EmlParser(include_raw_body=True, include_attachment_data=True, pconf=pconf)
 
         for k in samples_dir.iterdir():
-            test = ep.decode_email(k)
+            if k.suffix == ".eml":
+                _ = ep.decode_email(k)
 
         for k in samples_dir.iterdir():
-            with k.open('rb') as fhdl:
-                raw_email = fhdl.read()
-                test = ep.decode_email_bytes(raw_email)
+            if k.suffix == ".eml":
+                with k.open('rb') as fhdl:
+                    raw_email = fhdl.read()
+                    _ = ep.decode_email_bytes(raw_email)
 
     def test_parse_email_5(self):
         """Parses a generated sample e-mail and tests it against a known good result. In this test
@@ -333,6 +384,17 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
         test = ep.decode_email_bytes(raw_email)
 
         assert test['body'][0]['hash'] == '4c8b6a63156885b0ca0855b1d36816c54984e1eb6f68277b46b55b4777cfac89'
+
+    def test_parse_email_9(self):
+        """Parses an email and verifies that www URLs with no scheme are extracted, and that URLs at the end of a message body are extracted"""
+        with pathlib.Path(samples_dir, 'sample_body_noscheme_url.eml').open('rb') as fhdl:
+            raw_email = fhdl.read()
+
+        ep = eml_parser.eml_parser.EmlParser(include_raw_body=True)
+        test = ep.decode_email_bytes(raw_email)
+
+        assert sorted(test['body'][0]['uri_noscheme']) == ['www.example.com/a/b/c/d/', 'www.example.com/test1?bla']
+        assert sorted(test['body'][0]['uri']) == ['http://www.example.com/', 'https://www.example2.com']
 
     def test_parse_email_from_email_email(self):
         """Parses a generated sample e-mail and tests it against a known good result. In this test

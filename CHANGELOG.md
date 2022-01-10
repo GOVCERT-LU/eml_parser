@@ -3,9 +3,22 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [unreleased]
+## [v1.17.0]
 ### Added
-- Add optional matching for HTML SRC and HREF. (thanks @malvidin)
+- Add Public Suffix List validation options for URLs and email addresses. (@malvidin)
+- Add ip_force_routable option to filter out non-routable IPs. (@malvidin)
+- Add domain_force_tld option to filter out domains with invalid TLDs. (@malvidin)
+- Add include_www option to include potential URLs without a scheme. (@malvidin)
+- Add IP, domain, and Public Suffix List filtering tests. (@malvidin)
+- Add www_regex and dom_regex tests. (@malvidin)
+- Add optional matching for HTML SRC and HREF. (@malvidin)
+
+### Changes
+- Moved URL parsing options to EmlParser from get_uri_ondata. (@malvidin)
+
+### Fixes
+- Ensure string_sliding_window_loop includes the last slice of the body. (@malvidin)
+- Keep subsequent URLs if URLs are comma separated. (@malvidin)
 
 ## [v1.16.0]
 ### Fixes
