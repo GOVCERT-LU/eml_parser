@@ -27,6 +27,7 @@ from collections import Counter
 from html import unescape
 
 import dateutil.parser
+import publicsuffixlist
 
 import eml_parser.decode
 import eml_parser.regexes
@@ -90,7 +91,11 @@ class EmlParser:
                  policy: email.policy.Policy = email.policy.default,
                  ignore_bad_start: bool = False,
                  email_force_tld: bool = False,
-                 parse_attachments: bool = True
+                 domain_force_tld: bool = False,
+                 ip_force_routable: bool = False,
+                 parse_attachments: bool = True,
+                 include_www: bool = True,
+                 include_href: bool = True,
                  ) -> None:
         """Initialisation.
 
@@ -106,11 +111,19 @@ class EmlParser:
             policy (email.policy.Policy, optional): Policy to use when parsing e-mails.
                                                     Default = email.policy.default.
             ignore_bad_start (bool, optional): Ignore invalid file start. This has a considerable performance impact.
-            email_force_tld (bool, optional): Only match e-mail addresses with a TLD. I.e exclude something like
-                                              john@doe. By default this is disabled.
+            email_force_tld (bool, optional): Only match e-mail addresses with a TLD, i.e. exclude something like
+                                              john@doe. If enabled, it uses domain_force_tld and ip_force_routable settings
+                                              to validate the host portion of the address. By default this is disabled.
+            domain_force_tld (bool, optional): For domain validation, requires global IP or a valid TLD.
+                                               By default this is disabled.
+            ip_force_routable (bool, optional): For IP validation, requires globally routable IP.
+                                               By default this is disabled.
             parse_attachments (bool, optional): Set this to false if you want to disable the parsing of attachments.
                                                 Please note that HTML attachments as well as other text data marked to be
                                                 in-lined, will always be parsed.
+            include_www (bool, optional): Include potential URLs starting with www
+            include_href (bool, optional): Include potential URLs in HREFs matching non-simple regular expressions
+
         """
         self.include_raw_body = include_raw_body
         self.include_attachment_data = include_attachment_data
@@ -119,7 +132,12 @@ class EmlParser:
         self.policy = policy
         self.ignore_bad_start = ignore_bad_start
         self.email_force_tld = email_force_tld
+        self.domain_force_tld = domain_force_tld
+        self.ip_force_routable = ip_force_routable
         self.parse_attachments = parse_attachments
+        self.include_www = include_www
+        self.include_href = include_href
+        self._psl = publicsuffixlist.PublicSuffixList(accept_unknown=not self.domain_force_tld)
 
         if self.email_force_tld:
             eml_parser.regexes.email_regex = eml_parser.regexes.email_force_tld_regex
@@ -194,7 +212,7 @@ class EmlParser:
         return self.parse_email()
 
     def parse_email(self) -> dict:
-        """Parse an e-mail and return a dictionary containing the various parts of\
+        """Parse an e-mail and return a dictionary containing the various parts of
         the e-mail broken down into key-value pairs.
 
         Args:
@@ -352,13 +370,13 @@ class EmlParser:
                 ips_in_received_line = eml_parser.regexes.ipv6_regex.findall(received_line_flat) + \
                                        eml_parser.regexes.ipv4_regex.findall(received_line_flat)
                 for ip in ips_in_received_line:
-                    try:
-                        ip_obj = ipaddress.ip_address(ip)  # type of findall is list[str], so this is correct
-                    except ValueError:
-                        logger.debug('Invalid IP in received line - "{}"'.format(ip))
+                    if ip in self.pconf['whiteip']:
+                        continue
+                    valid_ip = self.get_valid_domain_or_ip(ip)
+                    if valid_ip:
+                        headers_struc['received_ip'].append(valid_ip)
                     else:
-                        if not (ip_obj.is_private or str(ip_obj) in self.pconf['whiteip']):
-                            headers_struc['received_ip'].append(str(ip_obj))
+                        logger.debug('Invalid IP in received line - "{}"'.format(ip))
 
                 # search for domain
                 for m in eml_parser.regexes.recv_dom_regex.findall(received_line_flat):
@@ -372,7 +390,9 @@ class EmlParser:
 
                 # search for e-mail addresses
                 for mail_candidate in eml_parser.regexes.email_regex.findall(received_line_flat):
-                    if mail_candidate not in parsed_routing.get('for', []):
+                    if self.email_force_tld:
+                        mail_candidate = self.get_valid_domain_or_ip(mail_candidate)
+                    if mail_candidate is not None and mail_candidate not in parsed_routing.get('for', []):
                         headers_struc['received_email'] += [mail_candidate]
 
         except TypeError:  # Ready to parse email without received headers.
@@ -428,6 +448,7 @@ class EmlParser:
             _, body, body_multhead, boundary = body_tup
             # Parse any URLs and mail found in the body
             list_observed_urls: typing.List[str] = []
+            list_observed_urls_noscheme: typing.List[str] = []
             list_observed_email: typing.Counter[str] = Counter()
             list_observed_dom: typing.Counter[str] = Counter()
             list_observed_ip: typing.Counter[str] = Counter()
@@ -436,36 +457,38 @@ class EmlParser:
             # if more than 4K.. lets cheat, we will cut around the thing we search "://, @, ."
             # in order to reduce regex complexity.
             for body_slice in self.string_sliding_window_loop(body):
-                _list_observed_urls = self.get_uri_ondata(body_slice)
 
-                if _list_observed_urls:
-                    list_observed_urls.extend(_list_observed_urls)
+                for url_match in self.get_uri_ondata(body_slice):
+                    if ':/' in url_match[:10]:
+                        list_observed_urls.append(url_match)
+                    else:
+                        list_observed_urls_noscheme.append(url_match)
 
                 for match in eml_parser.regexes.email_regex.findall(body_slice):
-                    list_observed_email[match.lower()] = 1
+                    valid_email = self.get_valid_domain_or_ip(match.lower())
+                    if valid_email:
+                        list_observed_email[match.lower()] = 1
+
                 for match in eml_parser.regexes.dom_regex.findall(body_slice):
-                    list_observed_dom[match.lower()] = 1
-                for match in eml_parser.regexes.ipv4_regex.findall(body_slice):
-                    try:
-                        ipaddress_match = ipaddress.ip_address(match)
-                    except ValueError:
-                        continue
-                    else:
-                        if not (ipaddress_match.is_private or match in self.pconf['whiteip']):
-                            list_observed_ip[match] = 1
-                for match in eml_parser.regexes.ipv6_regex.findall(body_slice):
-                    try:
-                        ipaddress_match = ipaddress.ip_address(match)
-                    except ValueError:
-                        continue
-                    else:
-                        if not (ipaddress_match.is_private or match in self.pconf['whiteip']):
-                            list_observed_ip[match] = 1
+                    valid_domain = self.get_valid_domain_or_ip(match.lower())
+                    if valid_domain:
+                        list_observed_dom[match.lower()] = 1
+
+                for ip_regex in (eml_parser.regexes.ipv4_regex, eml_parser.regexes.ipv6_regex):
+                    for match in ip_regex.findall(body_slice):
+                        valid_ip = self.get_valid_domain_or_ip(match.lower())
+                        if valid_ip in self.pconf['whiteip']:
+                            continue
+                        if valid_ip:
+                            list_observed_ip[valid_ip] = 1
 
             # Report uri,email and observed domain or hash if no raw body
             if self.include_raw_body:
                 if list_observed_urls:
                     bodie['uri'] = list(set(list_observed_urls))
+
+                if list_observed_urls_noscheme:
+                    bodie['uri_noscheme'] = list(set(list_observed_urls_noscheme))
 
                 if list_observed_email:
                     bodie['email'] = list(list_observed_email)
@@ -510,7 +533,7 @@ class EmlParser:
 
                 # We are using replace . to : for avoiding issue in mongo
                 k = k.lower().replace('.', ':')  # Lot of lowers, pre-compute :) .
-                # print v
+                # print(v)
                 if multipart:
                     if k in ch:
                         ch[k].append(v)
@@ -619,7 +642,7 @@ class EmlParser:
         length, until which we give up and return the sliced body part. This is done in order to return a maximum possible
         correct URLs.
 
-        The choice for 8 character is because *https://* is 8 characters, which is be the maximum size we accept for schemes.
+        The choice for 8 character is because *https://* is 8 characters, which is the maximum size we accept for schemes.
 
         Args:
             body: Body to slice into smaller pieces.
@@ -638,7 +661,7 @@ class EmlParser:
         else:
             ptr_start = 0
 
-            for ptr_end in range(slice_step, body_length, slice_step):
+            for ptr_end in range(slice_step, body_length + slice_step, slice_step):
                 if ' ' in body[ptr_end - 1:ptr_end]:
                     while not (eml_parser.regexes.window_slice_regex.match(body[ptr_end - 1:ptr_end]) or ptr_end > body_length):
                         if ptr_end > body_length:
@@ -669,61 +692,99 @@ class EmlParser:
 
                 ptr_start = ptr_end
 
-    @staticmethod
-    def get_uri_ondata(body: str, include_href: bool = True, email_force_tld: bool = False) -> typing.List[str]:
+    def get_valid_domain_or_ip(self, data: str) -> typing.Optional[str]:
+        """Function to determine if an IP address, Email address, or Domain is valid
+
+        Args:
+            data (str): Text input which should be validated.
+
+        Returns:
+            str: Returns a string of the validated IP address or the host.
+        """
+        host = data.rpartition('@')[-1].strip(' \r\n\t[]')
+        try:
+            # Zone index support was added to ipaddress in Python 3.9
+            addr, _, _ = host.partition('%')
+            valid_ip = ipaddress.ip_address(addr)
+            if self.ip_force_routable:
+                # Not a precise filter for IPv4/IPv6 addresses. Can be enhanced with pconf whiteip ranges
+                if valid_ip.is_global and not valid_ip.is_reserved:
+                    return str(valid_ip)
+            else:
+                return str(valid_ip)
+        except ValueError:
+            # _psl uses self.domain_force_tld
+            valid_domain = self._psl.publicsuffix(host)
+            if valid_domain:
+                return host
+
+    def clean_found_uri(self, url: str) -> typing.Optional[str]:
+        """Function for validating URLs from the input string.
+
+        Args:
+            url (str): Text input which should have a single URL validated.
+
+        Returns:
+            str: Returns a valid URL, if found in the input string.
+        """
+        if '.' not in url and '[' not in url:
+            # if we found a URL like e.g. http://afafasasfasfas; that makes no
+            # sense, thus skip it, but include http://[2001:db8::1]
+            return
+
+        try:
+            # Remove leading spaces and quote characters
+            url = url.lstrip(' \t\n\r\f\v\'\"«»“”‘’').replace('\r', '').replace('\n', '')
+            url = urllib.parse.urlparse(url).geturl()
+            scheme_url = url
+            if ':/' not in scheme_url:
+                scheme_url = 'noscheme://' + url
+            host = urllib.parse.urlparse(scheme_url).hostname.rstrip('.')
+            if self.get_valid_domain_or_ip(host) is None:
+                return
+        except ValueError:
+            logger.warning('Unable to parse URL - %s', url)
+            return
+
+        # let's try to be smart by stripping of noisy bogus parts
+        url = re.split(r'''[', ")}\\]''', url, 1)[0]
+
+        # filter bogus URLs
+        if url.endswith('://'):
+            return
+
+        if '&' in url:
+            url = unescape(url)
+
+        return url
+
+    def get_uri_ondata(self, body: str) -> typing.List[str]:
         """Function for extracting URLs from the input string.
 
         Args:
             body (str): Text input which should be searched for URLs.
-            include_href (bool): Include potential URLs in HREFs matching non-simple regular expressions
-            email_force_tld (bool): For potential URLs, filter out domains with invalid TLDs using common file extensions
 
         Returns:
             list: Returns a list of URLs found in the input string.
         """
         list_observed_urls: typing.Counter[str] = Counter()
 
-        def clean_found_uri(url: str) -> typing.Optional[str]:
-            if '.' not in url and '[' not in url:
-                # if we found a URL like e.g. http://afafasasfasfas; that makes no
-                # sense, thus skip it. Include http://[2001:db8::1]
-                return
+        if self.include_www:
+            for found_url in eml_parser.regexes.url_regex_www.findall(body):
+                for found_url_split in eml_parser.regexes.url_regex_www_comma.split(found_url):
+                    clean_uri = self.clean_found_uri(found_url_split)
+                    if clean_uri is not None:
+                        list_observed_urls[clean_uri] = 1
+        else:
+            for found_url in eml_parser.regexes.url_regex_simple.findall(body):
+                for found_url_split in eml_parser.regexes.url_regex_comma.split(found_url):
+                    clean_uri = self.clean_found_uri(found_url_split)
+                    if clean_uri is not None:
+                        list_observed_urls[clean_uri] = 1
 
-            try:
-                url = url.lstrip('"\'\t \r\n').replace('\r', '').replace('\n', '')
-                url = urllib.parse.urlparse(url).geturl()
-                if email_force_tld:
-                    if ':/' in url[:10]:
-                        scheme_url = re.sub(r':/{1,3}', '://', url, count=1)
-                    else:
-                        scheme_url = 'noscheme://' + url
-                    tld = urllib.parse.urlparse(scheme_url).hostname.rstrip('.').rsplit('.', 1)[-1].lower()
-                    if tld in ('aspx', 'css', 'gif', 'htm', 'html', 'js', 'jpg', 'jpeg', 'php', 'png',):
-                        return
-            except ValueError:
-                logger.warning('Unable to parse URL - %s', url)
-                return
-
-            # let's try to be smart by stripping of noisy bogus parts
-            url = re.split(r'''[', ")}\\]''', url, 1)[0]
-
-            # filter bogus URLs
-            if url.endswith('://'):
-                return
-
-            if '&' in url:
-                url = unescape(url)
-
-            return url
-
-        for found_url in eml_parser.regexes.url_regex_simple.findall(body):
-            clean_uri = clean_found_uri(found_url)
-            if clean_uri is not None:
-                list_observed_urls[clean_uri] = 1
-
-        if include_href:
+        if self.include_href:
             for found_url in eml_parser.regexes.url_regex_href.findall(body):
-                clean_uri = clean_found_uri(found_url)
+                clean_uri = self.clean_found_uri(found_url)
                 if clean_uri is not None:
                     list_observed_urls[clean_uri] = 1
 

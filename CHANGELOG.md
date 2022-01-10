@@ -3,6 +3,22 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.17.0]
+### Added
+- Add Public Suffix List validation options for URLs and email addresses
+- Add ip_force_routable option to filter out non-routable IPs
+- Add domain_force_tld option to filter out domains with invalid TLDs
+- Add include_www option to include potential URLs without a scheme
+- Add IP, domain, and Public Suffix List filtering tests
+- Add www_regex and dom_regex tests
+
+### Changes
+- Moved URL parsing options to EmlParser from get_uri_ondata
+
+### Fixes
+- Ensure string_sliding_window_loop includes the last slice of the body
+- Keep subsequent URLs if URLs are comma separated
+
 ## [v1.16.0]
 ### Fixes
 - Fix catastrophic backtracking on url regex, add related tests for backtracking, unicode, and IPv6. (thanks @malvidin)
