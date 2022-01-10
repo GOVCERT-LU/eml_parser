@@ -19,6 +19,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Fixes
 - Ensure string_sliding_window_loop includes the last slice of the body. (@malvidin)
 - Keep subsequent URLs if URLs are comma separated. (@malvidin)
+- Fix linter warnings.
+- Add typing dev dependencies.
 
 ## [v1.16.0]
 ### Fixes
