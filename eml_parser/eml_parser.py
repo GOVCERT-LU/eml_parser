@@ -451,6 +451,7 @@ class EmlParser:
             list_observed_urls_noscheme: typing.List[str] = []
             list_observed_email: typing.Counter[str] = Counter()
             list_observed_dom: typing.Counter[str] = Counter()
+            list_observed_rdom: typing.Counter[str] = Counter()
             list_observed_ip: typing.Counter[str] = Counter()
 
             # If we start directly a findall on 500K+ body we got time and memory issues...
@@ -473,6 +474,7 @@ class EmlParser:
                     valid_domain = self.get_valid_domain_or_ip(match.lower())
                     if valid_domain:
                         list_observed_dom[match.lower()] = 1
+                        list_observed_rdom[self._psl.privatesuffix(match.lower())] = 1
 
                 for ip_regex in (eml_parser.regexes.ipv4_regex, eml_parser.regexes.ipv6_regex):
                     for match in ip_regex.findall(body_slice):
@@ -495,6 +497,7 @@ class EmlParser:
 
                 if list_observed_dom:
                     bodie['domain'] = list(list_observed_dom)
+                    bodie['domain_registered'] = list(list_observed_rdom)
 
                 if list_observed_ip:
                     bodie['ip'] = list(list_observed_ip)
