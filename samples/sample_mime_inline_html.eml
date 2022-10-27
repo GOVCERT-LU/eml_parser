@@ -1,0 +1,59 @@
+Return-Path: <malware@example.com>
+Delivered-To: <quarantine@example.com>
+Received: from badmta.example.com
+	by mta.example.com (Postfix) with ESMTPS id uTn4FG1na1GiIgAAmwIFfA
+	for <quarantine@example.com>; Mon, 15 Apr 2013 04:35:25 +0200
+Received-SPF: pass (example.com: 1.1.1.1 is authorized to use 'malware@example.com' in 'mfrom' identity (mechanism 'a' matched)) receiver=mta.example.com; identity=mailfrom; envelope-from="malware@example.com"; helo=blabla.local; client-ip=1.1.1.1
+X-Greylist: delayed 1601 seconds by slowness-4.2 at example.com; Mon, 15 Apr 2013 04:35:25 CEST
+Message-ID: <976D1B4855624790A33E97B473A5546C@ujyhlu>
+From: "John" <john@example.com>
+To: "Jane" <jane@example.com>
+Subject: Hello!
+Date: Sun, 14 Apr 2013 21:08:35 -0500
+MIME-Version: 1.0
+Content-Type: multipart/mixed;
+	boundary="----=_NextPart_000_00F5_01CE3954.3A5E55A0"
+X-Priority: 3
+X-MSMail-Priority: Normal
+X-Mailer: Microsoft Windows Mail 6.0.6001.18416
+X-MimeOLE: Produced By Microsoft MimeOLE V6.0.6001.18645
+
+This is a multi-part message in MIME format.
+
+------=_NextPart_000_00F5_01CE3954.3A5E55A0
+Content-Type: multipart/alternative;
+	boundary="----=_NextPart_001_00F6_01CE3954.3A5E55A0"
+
+
+------=_NextPart_001_00F6_01CE3954.3A5E55A0
+Content-Type: text/plain;
+	charset="windows-1251"
+Content-Transfer-Encoding: quoted-printable
+
+Hi
+how is your day today?
+I want to meet you
+here is my photo
+kiss=20
+
+------=_NextPart_001_00F6_01CE3954.3A5E55A0
+Content-Type: text/html;
+	charset="windows-1251"
+Content-Transfer-Encoding: quoted-printable
+Content-Disposition: inline
+
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<HTML><HEAD>
+<META content=3D"text/html; charset=3Dwindows-1251" http-equiv=3DContent-=
+Type>
+<META name=3DGENERATOR content=3D"MSHTML 8.00.6001.19088">
+<STYLE></STYLE>
+</HEAD>
+<BODY bgColor=3D#ffffff><FONT size=3D2 face=3DArial>Hi<BR>how is your day=
+ today?<BR>I=20
+want to meet you<BR>here is my photo<BR>kiss</FONT>=20
+<DIV align=3Dleft><FONT size=3D2 face=3DArial></FONT></DIV></BODY></HTML>
+
+------=_NextPart_001_00F6_01CE3954.3A5E55A0--
+
+

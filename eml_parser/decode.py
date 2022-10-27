@@ -172,7 +172,7 @@ def workaround_bug_27257(msg: email.message.Message, header: str) -> typing.List
 
 
 def workaround_field_value_parsing_errors(msg: email.message.Message, header: str) -> typing.List[str]:
-    """Function to work around field value parsing errors by trying a best effor parsing using \
+    """Function to work around field value parsing errors by trying a best effort parsing using \
     the compat32 policy to extract any meaningful information.
 
     Args:
@@ -269,6 +269,17 @@ def export_to_json(parsed_msg: dict, sort_keys: bool = False) -> str:
 
 
 def rfc2047_decode(value: str) -> str:
+    """Use the standard library decode_header function for decoding RFC2047 encoded values.
+
+    Args:
+        value: The value to be decoded
+
+    Returns:
+        str: Decoded string
+    """
+    if not value:
+        return value
+
     parsed = ''
 
     for k, v in email.header.decode_header(value):
