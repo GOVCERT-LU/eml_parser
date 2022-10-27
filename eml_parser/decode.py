@@ -272,15 +272,18 @@ def export_to_json(parsed_msg: dict, sort_keys: bool = False) -> str:
 
 # Snippet from 'Decoding Example' from https://dmorgan.info/posts/encoded-word-syntax/
 def encoded_words_to_text(encoded_words):
-    encoded_word_regex = r'=\?{1}(.+)\?{1}([B|Q|b|q])\?{1}(.+)\?{1}='
-    encoded_match = re.match(encoded_word_regex, encoded_words)
-    if not encoded_match:
+    encoded_format = '=?{charset}?{encoding}?{encoded_text}?='
+    encoded_word_regex = r'=\?{1}([\w\S]+)\?{1}([B|Q|b|q])\?{1}([\w\S]+)\?{1}='
+    encoded_matches = re.findall(encoded_word_regex, encoded_words)
+    if not encoded_matches:
         return encoded_words
-    start_pos, end_pos = encoded_match.regs[0]
-    charset, encoding, encoded_text = encoded_match.groups()
-    if encoding.upper() == 'B':
-        byte_string = base64.b64decode(encoded_text)
-    elif encoding.upper() == 'Q':
-        byte_string = quopri.decodestring(encoded_text)
-    encoded_words = encoded_words.replace(encoded_words[start_pos:end_pos], byte_string.decode(charset)).strip()
+    for encoded_match in encoded_matches:
+        charset, encoding, encoded_text = encoded_match
+        if encoding.upper() == 'B':
+            byte_string = base64.b64decode(encoded_text)
+        elif encoding.upper() == 'Q':
+            byte_string = quopri.decodestring(encoded_text)
+        encoded_words = encoded_words.replace(
+            encoded_format.format(charset=charset, encoding=encoding, encoded_text=encoded_text),
+            byte_string.decode(charset)).strip()
     return encoded_words
