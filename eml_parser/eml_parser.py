@@ -11,6 +11,7 @@ import binascii
 import collections
 import collections.abc
 import email
+import email.headerregistry
 import email.message
 import email.policy
 import email.utils
@@ -589,6 +590,9 @@ class EmlParser:
                 # Parsing might not give meaningful results in this case!
                 logger.error('ERROR: Field value parsing error, trying to work around this!')
                 decoded_values = eml_parser.decode.workaround_field_value_parsing_errors(self.msg, k)
+            except ValueError:
+                _field = eml_parser.decode.workaround_field_value_parsing_errors(self.msg, k)
+                field = [eml_parser.decode.rfc2047_decode(v) for v in _field]
 
             if decoded_values:
                 if k in header:
@@ -815,6 +819,18 @@ class EmlParser:
             field = email.utils.getaddresses(self.msg.get_all(header, []))
         except (IndexError, AttributeError):
             field = email.utils.getaddresses(eml_parser.decode.workaround_bug_27257(self.msg, header))
+        except ValueError:
+            _field = eml_parser.decode.workaround_field_value_parsing_errors(self.msg, header)
+            field = []
+
+            for v in _field:
+                v = eml_parser.decode.rfc2047_decode(v).replace('\n', '')
+
+                kwds = {}
+                email.headerregistry.UniqueAddressHeader.parse(v, kwds)
+                for _group in kwds['groups']:
+                    for _address in _group.addresses:
+                        field.append((_address.display_name, _address.addr_spec))
 
         return_field = []
 
@@ -900,7 +916,7 @@ class EmlParser:
                 # In case we hit bug 27257 or any other parsing error, try to downgrade the used policy
                 try:
                     raw_body.append((encoding, raw_body_str, msg.items(), boundary))
-                except (AttributeError, TypeError):
+                except (AttributeError, TypeError, ValueError):
                     former_policy: email.policy.Policy = msg.policy
                     msg.policy = email.policy.compat32
                     raw_body.append((encoding, raw_body_str, msg.items(), boundary))

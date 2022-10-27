@@ -266,3 +266,16 @@ def export_to_json(parsed_msg: dict, sort_keys: bool = False) -> str:
         str: Returns the JSON string.
     """
     return json.dumps(parsed_msg, default=json_serial, sort_keys=sort_keys, indent=2)
+
+
+def rfc2047_decode(value: str) -> str:
+    parsed = ''
+
+    for k, v in email.header.decode_header(value):
+        if v is None:
+            parsed += k.decode('ascii', errors='ignore')
+
+        else:
+            parsed += k.decode(v, errors='replace')
+
+    return parsed
