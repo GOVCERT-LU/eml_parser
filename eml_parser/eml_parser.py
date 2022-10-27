@@ -233,9 +233,18 @@ class EmlParser:
           dict: A dictionary with the content of the EML parsed and broken down into
                 key-value pairs.
         """
-        # Scan headers for encoded words, decode, and tidy up before continuing processing
-        # Ref: https://dmorgan.info/posts/encoded-word-syntax/
-        self.msg._headers = [(h_type, eml_parser.decode.encoded_words_to_text(h_value))for h_type, h_value in self.msg._headers]
+        # Inspect headers to minimize exceptions during processing
+        headers = []
+        for h_type, h_value in self.msg._headers:
+            # Scan headers for encoded words, decode, and tidy up before continuing processing
+            # Ref: https://dmorgan.info/posts/encoded-word-syntax/
+            h_value = eml_parser.decode.encoded_words_to_text(h_value)
+
+            if h_type.lower() == 'message-id':
+                # Ensure Message-ID is in the proper format for parsing
+                h_value = h_value.replace('[', '').replace(']', '')
+            headers.append((h_type, h_value))
+        self.msg._headers = headers
 
         header: typing.Dict[str, typing.Any] = {}
         report_struc: typing.Dict[str, typing.Any] = {}  # Final structure
