@@ -441,3 +441,18 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
         test_output = json.loads(test_output_json)
 
         recursive_compare(good_output, test_output)
+
+    def test_parse_email_newline_quopri(self):
+        """Make sure we can parse RFC2047 encoded header fields with CR/LF embedded (which is invalid)."""
+        ep = eml_parser.eml_parser.EmlParser()
+        sample = samples_dir / 'sample_gh_issue_76.eml'
+
+        with sample.open('rb') as fhdl:
+            output = ep.decode_email_bytes(fhdl.read())
+
+        assert output['header']['from'] == 'badname@example.com'
+        assert output['header']['to'] == ['badname@example.com']
+        assert output['header']['cc'] == ['badname@example.com']
+        assert output['header']['header']['from'] == ['\n <badname@example.com>']
+        assert output['header']['header']['to'] == ['\n <badname@example.com>']
+        assert output['header']['header']['cc'] == ['\r <badname@example.com>']

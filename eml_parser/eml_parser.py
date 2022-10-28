@@ -11,6 +11,7 @@ import binascii
 import collections
 import collections.abc
 import email
+import email.headerregistry
 import email.message
 import email.policy
 import email.utils
@@ -273,6 +274,9 @@ class EmlParser:
                 __from = ''
 
             msg_header_field = __from
+        except ValueError:
+            _field = eml_parser.decode.workaround_field_value_parsing_errors(self.msg, 'from')
+            msg_header_field = eml_parser.decode.rfc2047_decode(_field[0]).lower()
 
         if msg_header_field != '':
             from_ = email.utils.parseaddr(msg_header_field)
@@ -575,7 +579,6 @@ class EmlParser:
         # "c","truc"
         #
         for k in set(self.msg.keys()):
-            # We are using replace . to : for avoiding issue in mongo
             k = k.lower()  # Lot of lower, pre-compute...
             decoded_values = []
 
@@ -589,6 +592,16 @@ class EmlParser:
                 # Parsing might not give meaningful results in this case!
                 logger.error('ERROR: Field value parsing error, trying to work around this!')
                 decoded_values = eml_parser.decode.workaround_field_value_parsing_errors(self.msg, k)
+            except ValueError:
+                # extract values using a relaxed policy
+                _fields = eml_parser.decode.workaround_field_value_parsing_errors(self.msg, k)
+
+                for _field in _fields:
+                    # check if this is a RFC2047 encoded field
+                    if eml_parser.regexes.email_regex_rfc2047.search(_field):
+                        decoded_values.append(eml_parser.decode.rfc2047_decode(_field))
+                    else:
+                        logger.error('ERROR: Field value parsing error, trying to work around this! - %s', _field)
 
             if decoded_values:
                 if k in header:
@@ -815,6 +828,19 @@ class EmlParser:
             field = email.utils.getaddresses(self.msg.get_all(header, []))
         except (IndexError, AttributeError):
             field = email.utils.getaddresses(eml_parser.decode.workaround_bug_27257(self.msg, header))
+        except ValueError:
+            _field = eml_parser.decode.workaround_field_value_parsing_errors(self.msg, header)
+            field = []
+
+            for v in _field:
+                v = eml_parser.decode.rfc2047_decode(v).replace('\n', '').replace('\r', '')
+
+                parsing_result = {}
+                parser_cls = email.headerregistry.HeaderRegistry()[header]
+                parser_cls.parse(v, parsing_result)
+                for _group in parsing_result['groups']:
+                    for _address in _group.addresses:
+                        field.append((_address.display_name, _address.addr_spec))
 
         return_field = []
 
@@ -900,7 +926,7 @@ class EmlParser:
                 # In case we hit bug 27257 or any other parsing error, try to downgrade the used policy
                 try:
                     raw_body.append((encoding, raw_body_str, msg.items(), boundary))
-                except (AttributeError, TypeError):
+                except (AttributeError, TypeError, ValueError):
                     former_policy: email.policy.Policy = msg.policy
                     msg.policy = email.policy.compat32
                     raw_body.append((encoding, raw_body_str, msg.items(), boundary))
