@@ -12,7 +12,7 @@ pipeline {
     gitlabBuilds(builds: ['Lint', 'Linters', 'Test results', 'Coverage'])
   }
   environment {
-     Python = "3.7"
+     Python = "3.9"
   }
 
   stages {
@@ -38,7 +38,7 @@ pipeline {
         gitlabCommitStatus('Lint') {
             script {
               try {
-                docker.image('python:${Python}').inside("--tmpfs /.local --tmpfs /.cache") {
+                docker.image('python:' + Python).inside("--tmpfs /.local --tmpfs /.cache") {
                   sh '''
                         export
                         export HTTP_PROXY="${PROXY}"
@@ -120,50 +120,29 @@ pipeline {
     stage('Build package') {
       when {
         allOf {
-          tag pattern: "v\\d+\\.\\d+\\.\\d+", comparator: "REGEXP"
-
+          tag pattern: "v\\d+\\.\\d+\\.\\d+.*", comparator: "REGEXP"
           expression {
             currentBuild.result == null || currentBuild.result == 'SUCCESS'
           }
         }
       }
       steps {
-        script {
-          try {
-            docker.image('python:${Python}').inside("--tmpfs /.local --tmpfs /.cache") {
-              sh '''
-                    export
-                    export HTTP_PROXY="${PROXY}"
-                    export HTTPS_PROXY="${PROXY}"
-                    export NO_PROXY=localhost,127.0.0.1,.govcert.etat.lu
-                    export HOME=${PWD}
-                    export PYTHONUSERBASE=.py_${Python}
-
-                    mkdir -p dist
-                    pip wheel --no-deps -w dist/ .
-                  '''
-            }
-          } catch (err) {
-          }
-        }
-      }
-      post {
-        always {
           withCredentials([usernamePassword(credentialsId: 'apps1-pypiserver-jenkins', usernameVariable: 'TWINE_USERNAME', passwordVariable: 'TWINE_PASSWORD')]) {
             script {
               try {
-                docker.image('python:${Python}').inside("--tmpfs /.local --tmpfs /.cache") {
+                docker.image('python:' + Python).inside("--tmpfs /.local --tmpfs /.cache") {
                   sh '''cat govcertCA.pem /etc/ssl/certs/ca-certificates.crt > ssl_cas.pem
                         export
-                        export HTTP_PROXY="${PROXY}"
-                        export HTTPS_PROXY="${PROXY}"
+                        export HTTP_PROXY="http://proxy.int.govcert.etat.lu:8080"
+                        export HTTPS_PROXY="http://proxy.int.govcert.etat.lu:8080"
                         export NO_PROXY=localhost,127.0.0.1,.govcert.etat.lu
                         export HOME=${PWD}
                         export PIP_CERT=${PWD}/ssl_cas.pem
                         export PATH=${PATH}:${PWD}/.local/bin
                         export TWINE_CERT=${PWD}/ssl_cas.pem
 
-                        pip install -U twine
+                        python3 -m pip install --upgrade build twine
+                        python3 -m build -o dist/ .
                         twine upload dist/*.whl
                       '''
                 }
@@ -176,7 +155,6 @@ pipeline {
             updateGitlabCommitStatus name: 'Test results', state: 'canceled'
             updateGitlabCommitStatus name: 'Coverage', state: 'canceled'
           }
-        }
       }
     }
   }
