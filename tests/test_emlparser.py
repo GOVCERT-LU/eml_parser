@@ -452,5 +452,7 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
 
         assert output['header']['from'] == 'badname@example.com'
         assert output['header']['to'] == ['badname@example.com']
-        assert output['header']['header']['from'] == ['  <badname@example.com>']
+        assert output['header']['cc'] == ['badname@example.com']
+        assert output['header']['header']['from'] == ['\n <badname@example.com>']
         assert output['header']['header']['to'] == ['\n <badname@example.com>']
+        assert output['header']['header']['cc'] == ['\r <badname@example.com>']
