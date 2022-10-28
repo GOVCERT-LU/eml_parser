@@ -247,7 +247,8 @@ class EmlParser:
             # workaround for bad message-id formats
             if k.lower() == 'message-id' and not eml_parser.regexes.email_regex.match(v):
                 # try workaround for bad message-id formats
-                if m := eml_parser.regexes.email_regex.search(v):
+                m = eml_parser.regexes.email_regex.search(v)
+                if m:
                     try:
                         self.msg.replace_header(k, m.group(1))
                     except KeyError:
