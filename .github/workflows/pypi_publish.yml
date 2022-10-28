@@ -21,7 +21,7 @@ jobs:
     - name: Build and publish
       env:
         TWINE_USERNAME: __token__
-        TWINE_PASSWORD: ${{ secrets.EML_PARSER_GITHUB_DEPLOY }}
+        TWINE_PASSWORD: ${{ secrets.eml_parser_github_deploy }}
       run: |
         python3 -m build -o dist/ .
         twine upload dist/*
