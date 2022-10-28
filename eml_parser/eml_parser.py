@@ -242,6 +242,21 @@ class EmlParser:
         if self.msg is None:
             raise ValueError('msg is not set.')
 
+        # Loop over raw header values in order to fix them and prevent the parser from failing
+        for k, v in self.msg._headers:  # pylint: disable=protected-access
+            # workaround for bad message-id formats
+            if k.lower() == 'message-id' and not eml_parser.regexes.email_regex.match(v):
+                # try workaround for bad message-id formats
+                if m := eml_parser.regexes.email_regex.search(v):
+                    try:
+                        self.msg.replace_header(k, m.group(1))
+                    except KeyError:
+                        # header found multiple times and previously removed
+                        self.msg.add_header(k, m.group(1))
+                else:
+                    del self.msg[k]
+                    logger.warning('Header field "message-id" is in an invalid format and cannot be fixed, it will be dropped.')
+
         # parse and decode subject
         subject = self.msg.get('subject', '')
         headers_struc['subject'] = eml_parser.decode.decode_field(subject)
@@ -264,7 +279,7 @@ class EmlParser:
             logger.exception('We hit bug 27257!')
 
             _from = eml_parser.decode.workaround_bug_27257(self.msg, 'from')
-            self.msg.__delitem__('from')
+            del self.msg['from']
 
             if _from:
                 self.msg.add_header('from', _from[0])
