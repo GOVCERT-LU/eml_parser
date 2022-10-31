@@ -2,4 +2,90 @@
 requires = ["setuptools>=61.2", "setuptools_scm[toml]>=6.2"]
 build-backend = "setuptools.build_meta"
 
+[project]
+name = "eml_parser"
+description = "Python EML parser library"
+license = { text = "AGPLv3+" }
+authors = [{ name = "Georges Toth", email = "georges.toth@govcert.etat.lu" }]
+keywords = ["email"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Topic :: Communications :: Email",
+]
+requires-python = ">= 3.7"
+dependencies = [
+    "python-dateutil",
+    "charset-normalizer",
+    "publicsuffixlist",
+]
+dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://github.com/GOVCERT-LU/eml_parser"
+Documentation = "https://eml-parser.readthedocs.io/"
+Source = "https://github.com/GOVCERT-LU/eml_parser"
+Tracker = "https://github.com/GOVCERT-LU/eml_parser/issues"
+Changelog = "https://github.com/GOVCERT-LU/eml_parser/blob/master/CHANGELOG.md"
+
+[project.readme]
+file = "README.md"
+content-type = "text/markdown"
+
+[project.optional-dependencies]
+filemagic = ["file-magic >= 0.4.0"]
+regex = ["regex"]
+pyre2 = ["pyre2"]
+docs = [
+    "mkdocs-material",
+    "mkdocstrings[crystal,python]",
+]
+dev = [
+    "pylint",
+    "mypy",
+    "flake8",
+    "flake8-comprehensions",
+    "flake8-docstrings",
+    "pep8-naming",
+    "types-python-dateutil",
+    "types-chardet",
+]
+test = [
+    "pytest",
+    "coverage",
+]
+
 [tool.setuptools_scm]
+
+[tool.setuptools]
+include-package-data = true
+license-files = ["LICENSE"]
+
+[tool.setuptools.packages.find]
+exclude = [
+    "e2e",
+    "tests",
+]
+namespaces = false
+
+[tool.setuptools.package-data]
+eml_parser = ["py.typed"]
+
+[tool.mypy]
+show_error_context = true
+show_column_numbers = false
+ignore_missing_imports = true
+disallow_incomplete_defs = true
+disallow_untyped_defs = true
+disallow_untyped_calls = false
+warn_no_return = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+strict_optional = true
+check_untyped_defs = false

@@ -1,0 +1,5 @@
+[flake8]
+max-line-length = 240
+docstring-convention = google
+
+ignore = E111,E114,E121,E123,E125,E126,S101,E131,E122,E501,E127,W503,W504

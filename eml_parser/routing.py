@@ -145,7 +145,7 @@ def parserouting(line: str) -> typing.Dict[str, typing.Any]:
 
     # structure is list[list[int, str]]
     # we sort based on the first element of the sub list, i.e. int
-    tout = sorted(tout, key=lambda x: x[0])
+    tout = sorted(tout, key=lambda x: typing.cast(int, x[0]))
 
     # build regex.
     reg = ''
@@ -176,7 +176,7 @@ def parserouting(line: str) -> typing.Dict[str, typing.Any]:
         if ' from ' in out.get('for', ''):
             temp = re.split(' from ', out['for'])
             out['for'] = temp[0]
-            out['from'] = '{} {}'.format(out['from'], ' '.join(temp[1:]))
+            out['from'] = f'''{out['from']} {' '.join(temp[1:])}'''
 
         m = eml_parser.regexes.email_regex.findall(out['for'])
         if m:

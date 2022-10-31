@@ -85,6 +85,7 @@ __license__ = 'AGPL v3+'
 class EmlParser:
     """eml-parser class."""
 
+    # pylint: disable=too-many-arguments
     def __init__(self,
                  include_raw_body: bool = False,
                  include_attachment_data: bool = False,
@@ -243,7 +244,7 @@ class EmlParser:
             raise ValueError('msg is not set.')
 
         # Loop over raw header values in order to fix them and prevent the parser from failing
-        for k, v in self.msg._headers:  # pylint: disable=protected-access
+        for k, v in self.msg._headers:  # type: ignore # pylint: disable=protected-access
             # workaround for bad message-id formats
             if k.lower() == 'message-id' and not eml_parser.regexes.email_regex.match(v):
                 # try workaround for bad message-id formats
@@ -291,8 +292,8 @@ class EmlParser:
 
             msg_header_field = __from
         except ValueError:
-            _field = eml_parser.decode.workaround_field_value_parsing_errors(self.msg, 'from')
-            msg_header_field = eml_parser.decode.rfc2047_decode(_field[0]).lower()
+            _field_item = eml_parser.decode.workaround_field_value_parsing_errors(self.msg, 'from')
+            msg_header_field = eml_parser.decode.rfc2047_decode(_field_item[0]).lower()
 
         if msg_header_field != '':
             from_ = email.utils.parseaddr(msg_header_field)
@@ -306,7 +307,7 @@ class EmlParser:
                     headers_struc['from'] = msg_header_field
 
             else:
-                headers_struc['from'] = from_[1]
+                headers_struc['from'] = typing.cast(typing.Tuple[str, str], from_)[1]
 
         # parse and decode "to"
         headers_struc['to'] = self.headeremail2list('to')
@@ -610,9 +611,7 @@ class EmlParser:
                 decoded_values = eml_parser.decode.workaround_field_value_parsing_errors(self.msg, k)
             except ValueError:
                 # extract values using a relaxed policy
-                _fields = eml_parser.decode.workaround_field_value_parsing_errors(self.msg, k)
-
-                for _field in _fields:
+                for _field in eml_parser.decode.workaround_field_value_parsing_errors(self.msg, k):
                     # check if this is a RFC2047 encoded field
                     if eml_parser.regexes.email_regex_rfc2047.search(_field):
                         decoded_values.append(eml_parser.decode.rfc2047_decode(_field))
@@ -851,8 +850,8 @@ class EmlParser:
             for v in _field:
                 v = eml_parser.decode.rfc2047_decode(v).replace('\n', '').replace('\r', '')
 
-                parsing_result = {}
-                parser_cls = email.headerregistry.HeaderRegistry()[header]
+                parsing_result: typing.Dict[str, typing.Any] = {}
+                parser_cls = typing.cast(email.headerregistry.AddressHeader, email.headerregistry.HeaderRegistry()[header])
                 parser_cls.parse(v, parsing_result)
                 for _group in parsing_result['groups']:
                     for _address in _group.addresses:

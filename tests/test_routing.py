@@ -1,7 +1,7 @@
 import datetime
 import os.path
 
-import eml_parser.eml_parser
+import eml_parser.parser
 import eml_parser.routing
 
 my_execution_dir = os.path.dirname(os.path.realpath(__file__))
