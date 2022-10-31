@@ -10,11 +10,6 @@ theme:
 plugins:
 - search
 - mkdocstrings:
-    default_handler: python
-    handlers:
-      python:
-        rendering:
-          show_source: true
     watch:
       - eml_parser
 
