@@ -456,3 +456,25 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
         assert output['header']['header']['from'] == ['\n <badname@example.com>']
         assert output['header']['header']['to'] == ['\n <badname@example.com>']
         assert output['header']['header']['cc'] == ['\r <badname@example.com>']
+
+    def test_parse_email_bad_message_id(self):
+        """Parse bad message-id format."""
+        ep = eml_parser.eml_parser.EmlParser()
+        sample_1 = samples_dir / 'sample_gh_issue_79_1.eml'
+        sample_2 = samples_dir / 'sample_gh_issue_79_2.eml'
+        sample_3 = samples_dir / 'sample_gh_issue_79_3.eml'
+
+        with sample_1.open('rb') as fhdl:
+            output_1 = ep.decode_email_bytes(fhdl.read())
+
+        assert output_1['header']['header']['message-id'] == ['id@domain.com']
+
+        with sample_2.open('rb') as fhdl:
+            output_2 = ep.decode_email_bytes(fhdl.read())
+
+        assert output_2['header']['header']['message-id'] == ['id@domain.com']
+
+        with sample_3.open('rb') as fhdl:
+            output_3 = ep.decode_email_bytes(fhdl.read())
+
+        assert 'message-id' not in output_3['header']['header']

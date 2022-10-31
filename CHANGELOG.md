@@ -3,6 +3,10 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.17.3]
+### Fixes
+- Fix parsing bad message-id formats #79.
+
 ## [v1.17.2]
 ### Fixes
 - When serialising RFC822 payloads, use a custom policy which has no limits on line-lenthgs as this breaks badly encoded messages.
