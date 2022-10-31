@@ -15,6 +15,7 @@ import json
 import logging
 import typing
 
+import charset_normalizer
 import dateutil.parser
 
 import eml_parser.regexes
@@ -48,14 +49,6 @@ import eml_parser.regexes
 #  - searching for IPs in the e-mail header sometimes leads to false positives
 #    if a mail-server (e.g. exchange) uses an ID which looks like a valid IP
 #
-
-try:
-    try:
-        import cchardet as chardet
-    except ImportError:
-        import chardet
-except ImportError:
-    chardet = None
 
 logger = logging.getLogger(__name__)
 
@@ -92,11 +85,11 @@ def decode_field(field: str) -> str:
     return string
 
 
-def decode_string(string: bytes, encoding: typing.Optional[str]) -> str:
+def decode_string(string: bytes, encoding: typing.Optional[str] = None) -> str:
     """Try anything possible to parse an encoded bytes string and return the result.
 
     We do this using the encoding hint, if this fails, we try to detect the correct
-    encoding using the chardet module, if that failed we try latin-1, utf-8 and
+    encoding using the charset-normalizer module, if that failed we try latin-1, utf-8 and
     as a last resort ascii.
     In any case we always return something.
 
@@ -116,20 +109,9 @@ def decode_string(string: bytes, encoding: typing.Optional[str]) -> str:
         except (UnicodeDecodeError, LookupError):
             pass
 
-    if chardet:
-        enc = chardet.detect(string)
-        if enc['encoding'] and enc['encoding'].lower() == 'viscii':
-            # chardet may detect the encoding as VISCII but Python doesn't support it
-            value = string.decode('ascii', 'replace')
-        elif not (enc['confidence'] is None or enc['encoding'] is None) and not (enc['confidence'] == 1 and enc['encoding'] == 'ascii'):
-            try:
-                value = string.decode(enc['encoding'], 'replace')
-            except LookupError:
-                value = string.decode('ascii', 'replace')
+    value = str(charset_normalizer.from_bytes(string).best())
 
-        else:
-            value = string.decode('ascii', 'replace')
-    else:
+    if value is None:
         text = ''
 
         for e in ('latin1', 'utf-8'):
