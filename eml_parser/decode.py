@@ -76,7 +76,7 @@ def decode_field(field: str) -> str:
         if charset:
             string += decode_string(_text, charset)
         else:
-            # @TODO might be an idea to check with chardet here
+            # @TODO might be an idea to check with charset-normalizer here
             if isinstance(_text, bytes):
                 string += _text.decode('utf-8', 'ignore')
             else:
