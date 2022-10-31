@@ -9,7 +9,7 @@ except ImportError:
     try:
         import re2 as re
     except ImportError:
-        import re
+        import re  # type: ignore
 
 __author__ = 'Toth Georges, Jung Paul'
 __email__ = 'georges@trypill.org, georges.toth@govcert.etat.lu'

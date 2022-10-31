@@ -13,7 +13,7 @@ from email.message import EmailMessage
 
 import pytest
 
-import eml_parser.eml_parser
+import eml_parser.parser
 
 my_execution_dir = pathlib.Path(__file__).resolve().parent
 parent_dir = my_execution_dir.parent
@@ -94,10 +94,10 @@ class TestEMLParser:
                                'sha1': 'effbc0f4702f8d8d1d4911a6f0228013919c2cdc'
                                }
 
-        assert eml_parser.eml_parser.EmlParser.get_file_hash(raw_email) == pre_computed_hashes
+        assert eml_parser.EmlParser.get_file_hash(raw_email) == pre_computed_hashes
 
     def test_wrap_hash_sha256(self):
-        assert eml_parser.eml_parser.EmlParser.wrap_hash_sha256(
+        assert eml_parser.EmlParser.wrap_hash_sha256(
             'www.example.com') == '80fc0fb9266db7b83f85850fa0e6548b6d70ee68c8b5b412f1deea6ebdef0404'
 
     def test_get_uri_ondata(self):
@@ -111,7 +111,7 @@ class TestEMLParser:
         expected_result = ['http://www.example.com', 'http://www.example.com/test1?bla',
                            'http://www.example.com/a/b/c/d/', 'https://www.example2.com']
 
-        assert eml_parser.eml_parser.EmlParser(include_href=False).get_uri_ondata(test_urls) == expected_result
+        assert eml_parser.EmlParser(include_href=False).get_uri_ondata(test_urls) == expected_result
 
     def test_get_uri_href_ondata(self):
         test_urls = '''<html><body>Lorem ipsum dolor sit amet, consectetur adipiscing elit.
@@ -125,7 +125,7 @@ class TestEMLParser:
         expected_result = ['http://www.example.com?t1=v1&t2=v2', 'example.com', 'http://47fee4f03182a2437d6d-359a8ec3a1ca7be00e972dc737415516.r50.cf3.example.com/img1.jpg',
                            'example.com/test1?bla', 'image.example.com/test.jpg', 'example.com/a/b/c/d/', 'example2.com']
 
-        assert eml_parser.eml_parser.EmlParser(include_href=True, email_force_tld=True).get_uri_ondata(test_urls) == expected_result
+        assert eml_parser.EmlParser(include_href=True, email_force_tld=True).get_uri_ondata(test_urls) == expected_result
 
     def test_get_uri_href_commas_ondata(self):
         test_urls = '''
@@ -137,7 +137,7 @@ class TestEMLParser:
                            'http://www1.example.com?t1=v1&t2=v2', 'https://www1.example.com',
                            'http://www2.example.com', 'https://www3.example.com']
 
-        assert eml_parser.eml_parser.EmlParser(include_www=True).get_uri_ondata(test_urls) == expected_result
+        assert eml_parser.EmlParser(include_www=True).get_uri_ondata(test_urls) == expected_result
 
     def test_get_valid_tld_uri_href_ondata(self):
         test_urls = '''<html><body>Lorem ipsum dolor sit amet, consectetur adipiscing elit.
@@ -151,7 +151,7 @@ class TestEMLParser:
         expected_result = ['http://www.example.com?t1=v1&t2=v2', 'example.com', 'example.com/test1?bla',
                            'example.com/a/b/c/d/', 'example2.com']
 
-        assert eml_parser.eml_parser.EmlParser(include_href=True, domain_force_tld=True).get_uri_ondata(test_urls) == expected_result
+        assert eml_parser.EmlParser(include_href=True, domain_force_tld=True).get_uri_ondata(test_urls) == expected_result
 
     def test_get_uri_re_backtracking(self):
         """Ensure url_regex_simple does not cause catastrophic backtracking (Issue 63), test with re instead of re2 or regex"""
@@ -161,7 +161,7 @@ class TestEMLParser:
 
         expected_result = ['http://xxxxxxxxxx.example.com������������������������������������������������������������������������������������������������������������������������������������������������']
 
-        assert eml_parser.eml_parser.EmlParser(domain_force_tld=False).get_uri_ondata(test_urls) == expected_result
+        assert eml_parser.EmlParser(domain_force_tld=False).get_uri_ondata(test_urls) == expected_result
 
     def test_get_uri_unicode_ondata(self):
         """Ensure url_regex includes Unicode in domains and paths"""
@@ -171,7 +171,7 @@ class TestEMLParser:
 
         expected_result = ['http://💌.example.คอม', 'http://💌.example.คอม/📮/📧/📬.png', 'https://💩.la']
 
-        assert eml_parser.eml_parser.EmlParser(include_www=False, domain_force_tld=True).get_uri_ondata(test_urls) == expected_result
+        assert eml_parser.EmlParser(include_www=False, domain_force_tld=True).get_uri_ondata(test_urls) == expected_result
 
     def test_get_uri_ipv6_ondata(self):
         """Ensure url_regex includes URLs with IPv6 hosts, including zone Indexes"""
@@ -182,7 +182,7 @@ class TestEMLParser:
 
         expected_result = ['http://[2001:0db8:85a3:0000:0000:8a2e:0370:7334]', 'http://[fe80::1ff:fe23:4567:890a%25eth0]/6️⃣']
 
-        assert eml_parser.eml_parser.EmlParser(ip_force_routable=False).get_uri_ondata(test_urls) == expected_result
+        assert eml_parser.EmlParser(ip_force_routable=False).get_uri_ondata(test_urls) == expected_result
 
     def test_get_uri_ipv6_routable_ondata(self):
         """Ensure url_regex can exclude private and other unallocated IPv6 hosts in URLs."""
@@ -194,7 +194,7 @@ class TestEMLParser:
 
         expected_result = ['http://[2606:2800:220:1:248:1893:25c8:1946]']
 
-        assert eml_parser.eml_parser.EmlParser(ip_force_routable=True).get_uri_ondata(test_urls) == expected_result
+        assert eml_parser.EmlParser(ip_force_routable=True).get_uri_ondata(test_urls) == expected_result
 
     def test_get_uri_www_ondata(self):
         test_urls = '''
@@ -212,7 +212,7 @@ class TestEMLParser:
                            'https://www01.example.com/path', 'https://www02.example.com..../path', 'https://www03.example.com/',
                            'http://www04.example.com/', 'http://www05.example.com?/', 'http://www06.example.com#?/', 'http://www07.example.com/']
 
-        assert eml_parser.eml_parser.EmlParser(include_www=True).get_uri_ondata(test_urls) == expected_result
+        assert eml_parser.EmlParser(include_www=True).get_uri_ondata(test_urls) == expected_result
 
     def test_headeremail2list_1(self):
         msg = EmailMessage()
@@ -223,7 +223,7 @@ class TestEMLParser:
         msg.set_content('''Hi,
 Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent feugiat vitae tellus et molestie. Duis est ipsum, tristique eu pulvinar vel, aliquet a nibh. Vestibulum ultricies semper euismod. Maecenas non sagittis elit. Mauris non feugiat leo. Cras vitae quam est. Donec dapibus justo ut dictum viverra. Aliquam eleifend tortor mollis, vulputate ante sit amet, sodales elit. Fusce scelerisque congue risus mollis pellentesque. Sed malesuada erat sit amet nisl laoreet mollis. Suspendisse potenti. Fusce cursus, tortor sit amet euismod molestie, sem enim semper quam, eu ultricies leo est vel turpis.
 ''')
-        ep = eml_parser.eml_parser.EmlParser()
+        ep = eml_parser.EmlParser()
         ep.msg = msg
 
         assert sorted(ep.headeremail2list(header='to')) == ['james.doe@example.com',
@@ -242,7 +242,7 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
         with pytest.raises(AttributeError):
             msg.items()
 
-        ep = eml_parser.eml_parser.EmlParser()
+        ep = eml_parser.EmlParser()
         ep.msg = msg
 
         # our parsing function should trigger an exception leading to the parsing
@@ -263,7 +263,7 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
         good_output_json = r'''{"header": {"header": {"content-transfer-encoding": ["quoted-printable"], "content-type": ["text/plain; charset=\"utf-8\""], "from": ["John Doe <john.doe@example.com>"], "subject": ["Test subject \u00e9\u00e8\u00e0\u00f6\u00fc\u00e4${}"], "to": ["Jan\u00e9 Doe <jane.doe@example.com>, James Doe <james.doe@example.com>"], "mime-version": ["1.0"]}, "from": "john.doe@example.com", "subject": "Test subject \u00e9\u00e8\u00e0\u00f6\u00fc\u00e4${}", "received": [], "date": "1970-01-01T00:00:00+00:00", "to": ["jane.doe@example.com", "james.doe@example.com"]}, "body": [{"content_header": {"content-transfer-encoding": ["quoted-printable"], "content-type": ["text/plain; charset=\"utf-8\""]}, "hash": "f765993eba20df87927f5bf6e947696d48bdf936e75508b9d126bbe8aa1a1497", "content_type": "text/plain"}]}'''
         good_output = json.loads(good_output_json)
 
-        ep = eml_parser.eml_parser.EmlParser()
+        ep = eml_parser.EmlParser()
         ep.msg = msg
 
         test_output_json = json.dumps(ep.parse_email(), default=json_serial)
@@ -273,7 +273,7 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
 
     def test_parse_email_2(self):
         """Parses the e-mails from the samples folder"""
-        ep = eml_parser.eml_parser.EmlParser()
+        ep = eml_parser.EmlParser()
 
         for k in samples_dir.iterdir():
             if k.suffix == ".eml":
@@ -287,7 +287,7 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
 
     def test_parse_email_3(self):
         """Parses the e-mails from the samples folder while keeping raw data"""
-        ep = eml_parser.eml_parser.EmlParser(include_raw_body=True, include_attachment_data=True)
+        ep = eml_parser.EmlParser(include_raw_body=True, include_attachment_data=True)
 
         for k in samples_dir.iterdir():
             if k.suffix == ".eml":
@@ -306,7 +306,7 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
                  'whitefor': ['a@example.com'],
                  'byhostentry': ['example.com']
                  }
-        ep = eml_parser.eml_parser.EmlParser(include_raw_body=True, include_attachment_data=True, pconf=pconf)
+        ep = eml_parser.EmlParser(include_raw_body=True, include_attachment_data=True, pconf=pconf)
 
         for k in samples_dir.iterdir():
             if k.suffix == ".eml":
@@ -333,7 +333,7 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
       You should subscribe by replying to test-reply@example.
       ''')
 
-        ep = eml_parser.eml_parser.EmlParser(email_force_tld=True)
+        ep = eml_parser.EmlParser(email_force_tld=True)
 
         good_output_json = r'''{"body": [{"content_header": {"content-type": ["text/plain; charset=\"utf-8\""], "content-transfer-encoding": ["quoted-printable"]}, "content_type": "text/plain", "hash": "07de6840458e398906e73b2cd188d0da813a80ee0337cc349228d983b5ec1c7e"}], "header": {"subject": "Test subject \u00e9\u00e8\u00e0\u00f6\u00fc\u00e4${}", "from": "john.doe@example", "to": ["jane.doe@example.com", "james.doe@example.com"], "date": "1970-01-01T00:00:00+00:00", "received": [], "header": {"cc": ["Jan\u00e9 Doe <jane.doe@example>, James Doe <james.doe@example>"], "from": ["John Doe <john.doe@example>"], "content-type": ["text/plain; charset=\"utf-8\""], "mime-version": ["1.0"], "subject": ["Test subject \u00e9\u00e8\u00e0\u00f6\u00fc\u00e4${}"], "to": ["Jan\u00e9 Doe <jane.doe@example.com>, James Doe <james.doe@example.com>"], "content-transfer-encoding": ["quoted-printable"]}}}'''
         good_output = json.loads(good_output_json)
@@ -347,7 +347,7 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
         with pathlib.Path(samples_dir, 'sample_attachments.eml').open('rb') as fhdl:
             raw_email = fhdl.read()
 
-        ep = eml_parser.eml_parser.EmlParser(include_attachment_data=True)
+        ep = eml_parser.EmlParser(include_attachment_data=True)
         test = ep.decode_email_bytes(raw_email)
 
         attachment_filenames = ['test.csv', 'document.pdf', 'text.txt']
@@ -367,7 +367,7 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
         with pathlib.Path(samples_dir, 'sample_date_parsing.eml').open('rb') as fhdl:
             raw_email = fhdl.read()
 
-        ep = eml_parser.eml_parser.EmlParser()
+        ep = eml_parser.EmlParser()
         test = ep.decode_email_bytes(raw_email)
 
         assert test['header']['header']['orig-date'][0] == 'Wed Jul 2020 23:11:43 +0100'
@@ -380,7 +380,7 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
         with pathlib.Path(samples_dir, 'github_issue_48.eml').open('rb') as fhdl:
             raw_email = fhdl.read()
 
-        ep = eml_parser.eml_parser.EmlParser()
+        ep = eml_parser.EmlParser()
         test = ep.decode_email_bytes(raw_email)
 
         assert test['body'][0]['hash'] == '4c8b6a63156885b0ca0855b1d36816c54984e1eb6f68277b46b55b4777cfac89'
@@ -390,7 +390,7 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
         with pathlib.Path(samples_dir, 'sample_body_noscheme_url.eml').open('rb') as fhdl:
             raw_email = fhdl.read()
 
-        ep = eml_parser.eml_parser.EmlParser(include_raw_body=True)
+        ep = eml_parser.EmlParser(include_raw_body=True)
         test = ep.decode_email_bytes(raw_email)
 
         assert sorted(test['body'][0]['uri_noscheme']) == ['www.example.com/a/b/c/d/', 'www.example.com/test1?bla']
@@ -409,7 +409,7 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
       You should subscribe by replying to test-reply@example.
       ''')
 
-        ep = eml_parser.eml_parser.EmlParser()
+        ep = eml_parser.EmlParser()
 
         good_output_json = r'''{"body": [{"content_header": {"content-type": ["text/plain; charset=\"utf-8\""], "content-transfer-encoding": ["quoted-printable"]}, "content_type": "text/plain", "hash": "07de6840458e398906e73b2cd188d0da813a80ee0337cc349228d983b5ec1c7e"}], "header": {"subject": "Test subject \u00e9\u00e8\u00e0\u00f6\u00fc\u00e4${}", "from": "john@example.com", "to": ["jane.doe@example.com", "james.doe@example.com"], "date": "1970-01-01T00:00:00+00:00", "received": [], "header":{"content-transfer-encoding": ["quoted-printable"], "from": ["\"john@fake-example.com\" <john@example.com>"], "content-type": ["text/plain; charset=\"utf-8\""], "to": ["Jan\u00e9 Doe <jane.doe@example.com>, James Doe <james.doe@example.com>"], "subject": ["Test subject \u00e9\u00e8\u00e0\u00f6\u00fc\u00e4${}"], "mime-version": ["1.0"]}}}'''
         good_output = json.loads(good_output_json)
@@ -432,7 +432,7 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
       You should subscribe by replying to test-reply@example.
       ''')
 
-        ep = eml_parser.eml_parser.EmlParser()
+        ep = eml_parser.EmlParser()
 
         good_output_json = r'''{"body": [{"content_header": {"content-type": ["text/plain; charset=\"utf-8\""], "content-transfer-encoding": ["quoted-printable"]}, "content_type": "text/plain", "hash": "07de6840458e398906e73b2cd188d0da813a80ee0337cc349228d983b5ec1c7e"}], "header": {"subject": "Test subject \u00e9\u00e8\u00e0\u00f6\u00fc\u00e4${}", "from": "john@example.com", "to": ["jane.doe@example.com", "james.doe@example.com"], "date": "1970-01-01T00:00:00+00:00", "received": [], "header":{"content-transfer-encoding": ["quoted-printable"], "from": ["\"john@fake-example.com\" <john@example.com>"], "content-type": ["text/plain; charset=\"utf-8\""], "to": ["\"jane@fake-example.com\" <jane.doe@example.com>, James Doe <james.doe@example.com>"], "subject": ["Test subject \u00e9\u00e8\u00e0\u00f6\u00fc\u00e4${}"], "mime-version": ["1.0"]}}}'''
         good_output = json.loads(good_output_json)
@@ -444,7 +444,7 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
 
     def test_parse_email_newline_quopri(self):
         """Make sure we can parse RFC2047 encoded header fields with CR/LF embedded (which is invalid)."""
-        ep = eml_parser.eml_parser.EmlParser()
+        ep = eml_parser.EmlParser()
         sample = samples_dir / 'sample_gh_issue_76.eml'
 
         with sample.open('rb') as fhdl:
@@ -459,7 +459,7 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
 
     def test_parse_email_bad_message_id(self):
         """Parse bad message-id format."""
-        ep = eml_parser.eml_parser.EmlParser()
+        ep = eml_parser.EmlParser()
         sample_1 = samples_dir / 'sample_gh_issue_79_1.eml'
         sample_2 = samples_dir / 'sample_gh_issue_79_2.eml'
         sample_3 = samples_dir / 'sample_gh_issue_79_3.eml'

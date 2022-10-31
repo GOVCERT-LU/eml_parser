@@ -3,7 +3,7 @@ import os.path
 import dateutil.parser
 
 import eml_parser.decode
-import eml_parser.eml_parser
+import eml_parser.parser
 
 my_execution_dir = os.path.dirname(os.path.realpath(__file__))
 parent_dir = os.path.split(my_execution_dir)[0]

@@ -3,6 +3,17 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.17.4]
+### Changes
+- Renamed eml_parser.eml_parser to eml_parser.parser to make imports safer. This should not break any usage but nonetheless
+  make sure to verify that you are not importing eml_parser.eml_parser.
+- While adding tests for Python 3.11, cchardet fails to install. Turns out it seems to be abandoned and as such it has been
+  replaced with [charset-normalizer](https://github.com/Ousret/charset_normalizer).
+- Migrate setup.cfg to pyproject.toml
+
+### Fixes
+- Fix typing and linter issues.
+
 ## [v1.17.3]
 ### Fixes
 - Fix parsing bad message-id formats #79.
