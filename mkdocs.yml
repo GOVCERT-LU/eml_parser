@@ -9,9 +9,9 @@ theme:
 
 plugins:
 - search
-- mkdocstrings:
-    watch:
-      - eml_parser
+
+watch:
+  - eml_parser
 
 markdown_extensions:
   - pymdownx.highlight:
