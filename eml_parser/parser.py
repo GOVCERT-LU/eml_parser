@@ -217,20 +217,6 @@ class EmlParser:
         """Parse an e-mail and return a dictionary containing the various parts of\
         the e-mail broken down into key-value pairs.
 
-        Args:
-          msg (str): Raw EML e-mail string.
-          include_raw_body (bool, optional): If True, includes the raw body in the resulting
-                                   dictionary. Defaults to False.
-          include_attachment_data (bool, optional): If True, includes the full attachment
-                                                    data in the resulting dictionary.
-                                                    Defaults to False.
-          pconf (dict, optional): A dict with various optional configuration parameters,
-                                  e.g. whitelist IPs, whitelist e-mail addresses, etc.
-
-          parse_attachments (bool, optional): Set this to false if you want to disable the parsing of attachments.
-                                              Please note that HTML attachments as well as other text data marked to be
-                                              in-lined, will always be parsed.
-
         Returns:
           dict: A dictionary with the content of the EML parsed and broken down into
                 key-value pairs.
