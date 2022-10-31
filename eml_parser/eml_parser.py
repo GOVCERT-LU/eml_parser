@@ -1032,9 +1032,11 @@ class EmlParser:
                         'More than one payload for "message/rfc822" part detected. This is not supported, please report!')
 
                 try:
-                    data = payload[0].as_bytes()
+                    custom_policy = email.policy.default.clone(max_line_length=0)
+                    data = payload[0].as_bytes(policy=custom_policy)
                 except UnicodeEncodeError:
-                    data = payload[0].as_bytes(policy=email.policy.compat32)
+                    custom_policy = email.policy.compat32.clone(max_line_length=0)
+                    data = payload[0].as_bytes(policy=custom_policy)
 
                 file_size = len(data)
             else:

@@ -3,6 +3,10 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.17.2]
+### Fixes
+- When serialising RFC822 payloads, use a custom policy which has no limits on line-lenthgs as this breaks badly encoded messages.
+
 ## [v1.17.1]
 ### Fixes
 - Fix issue #76 "If a CR or LF is found in a malformed email address header fields (From/To/etc.), the ValueError breaks the parsing." (@malvidin, @cccs-rs)
