@@ -52,6 +52,8 @@ import eml_parser.regexes
 
 logger = logging.getLogger(__name__)
 
+default_date = '1970-01-01T00:00:00+00:00'
+
 
 def decode_field(field: str) -> str:
     """Try to get the specified field using the Header module.
@@ -199,11 +201,10 @@ def robust_string2date(line: str) -> datetime.datetime:
         datetime.datetime: Returns a datetime.datetime object.
     """
     # "." -> ":" replacement is for fixing bad clients (e.g. outlook express)
-    default_date = '1970-01-01T00:00:00+0000'
 
     # if the input is empty, we return a default date
     if line == '':
-        return dateutil.parser.parse(default_date)
+        return datetime.datetime.fromisoformat(default_date)
 
     try:
         date_ = email.utils.parsedate_to_datetime(line)
@@ -214,7 +215,7 @@ def robust_string2date(line: str) -> datetime.datetime:
             date_ = dateutil.parser.parse(line)
         except (AttributeError, ValueError, OverflowError):
             # Now we are facing an invalid date.
-            return dateutil.parser.parse(default_date)
+            return datetime.datetime.fromisoformat(default_date)
 
     if date_.tzname() is None:
         return date_.replace(tzinfo=datetime.timezone.utc)
