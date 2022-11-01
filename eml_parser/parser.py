@@ -98,7 +98,7 @@ class CustomPolicy(email.policy.EmailPolicy):
                 # try workaround for bad message-id formats
                 m = eml_parser.regexes.email_regex.search(value)
                 if m:
-                    value = f'<{m.group(1)}'
+                    value = f'<{m.group(1)}>'
                 else:
                     value = ''
                     logger.warning('Header field "message-id" is in an invalid format and cannot be fixed, it will be dropped.')
