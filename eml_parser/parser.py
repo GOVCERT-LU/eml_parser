@@ -10,6 +10,7 @@ import base64
 import binascii
 import collections
 import collections.abc
+import datetime
 import email
 import email.headerregistry
 import email.message
@@ -27,7 +28,6 @@ import warnings
 from collections import Counter
 from html import unescape
 
-import dateutil.parser
 import publicsuffixlist
 
 import eml_parser.decode
@@ -82,6 +82,38 @@ __copyright__ = 'Copyright 2013-2014 Georges Toth, Copyright 2013-present GOVCER
 __license__ = 'AGPL v3+'
 
 
+class CustomPolicy(email.policy.EmailPolicy):
+    """Custom parsing policy based on the default policy but relaxing some checks and early fixing invalid values."""
+
+    def __init__(self) -> None:
+        """Constructor."""
+        super().__init__(max_line_length=0, refold_source='none')
+
+    def header_fetch_parse(self, name: str, value: str) -> str:
+        """Early fix parsing issues and pass the name/value to the parent header_fetch_parse method for proper parsing."""
+        header = name.lower()
+
+        if header == 'message-id':
+            if '[' in value and not eml_parser.regexes.email_regex.match(value):
+                # try workaround for bad message-id formats
+                m = eml_parser.regexes.email_regex.search(value)
+                if m:
+                    value = f'<{m.group(1)}'
+                else:
+                    value = ''
+                    logger.warning('Header field "message-id" is in an invalid format and cannot be fixed, it will be dropped.')
+        elif header == 'date':
+            try:
+                value = super().header_fetch_parse(name, value)
+            except TypeError:
+                logger.warning('Error parsing date.', exc_info=True)
+                return eml_parser.decode.default_date
+
+            return eml_parser.decode.robust_string2date(value).isoformat()
+
+        return super().header_fetch_parse(name, value)
+
+
 class EmlParser:
     """eml-parser class."""
 
@@ -90,7 +122,7 @@ class EmlParser:
                  include_raw_body: bool = False,
                  include_attachment_data: bool = False,
                  pconf: typing.Optional[dict] = None,
-                 policy: email.policy.Policy = email.policy.default,
+                 policy: typing.Optional[email.policy.Policy] = None,
                  ignore_bad_start: bool = False,
                  email_force_tld: bool = False,
                  domain_force_tld: bool = False,
@@ -110,8 +142,8 @@ class EmlParser:
                                                       returned structure. Default is False.
             pconf (dict, optional): A dict with various optional configuration parameters,
                                     e.g. whitelist IPs, whitelist e-mail addresses, etc.
-            policy (email.policy.Policy, optional): Policy to use when parsing e-mails.
-                                                    Default = email.policy.default.
+            policy (CustomPolicy, optional): Policy to use when parsing e-mails.
+                                                    Default = CustomPolicy.
             ignore_bad_start (bool, optional): Ignore invalid file start. This has a considerable performance impact.
             email_force_tld (bool, optional): Only match e-mail addresses with a TLD, i.e. exclude something like
                                               john@doe. If enabled, it uses domain_force_tld and ip_force_routable settings
@@ -131,7 +163,7 @@ class EmlParser:
         self.include_attachment_data = include_attachment_data
         # If no pconf was specified, default to empty dict
         self.pconf = pconf or {}
-        self.policy = policy
+        self.policy = policy or CustomPolicy()
         self.ignore_bad_start = ignore_bad_start
         self.email_force_tld = email_force_tld
         self.domain_force_tld = domain_force_tld
@@ -229,22 +261,6 @@ class EmlParser:
         if self.msg is None:
             raise ValueError('msg is not set.')
 
-        # Loop over raw header values in order to fix them and prevent the parser from failing
-        for k, v in self.msg._headers:  # type: ignore # pylint: disable=protected-access
-            # workaround for bad message-id formats
-            if k.lower() == 'message-id' and not eml_parser.regexes.email_regex.match(v):
-                # try workaround for bad message-id formats
-                m = eml_parser.regexes.email_regex.search(v)
-                if m:
-                    try:
-                        self.msg.replace_header(k, m.group(1))
-                    except KeyError:
-                        # header found multiple times and previously removed
-                        self.msg.add_header(k, m.group(1))
-                else:
-                    del self.msg[k]
-                    logger.warning('Header field "message-id" is in an invalid format and cannot be fixed, it will be dropped.')
-
         # parse and decode subject
         subject = self.msg.get('subject', '')
         headers_struc['subject'] = eml_parser.decode.decode_field(subject)
@@ -310,18 +326,11 @@ class EmlParser:
         # parse and decode Date
         # If date field is present
         if 'date' in self.msg:
-            try:
-                msg_date = self.msg.get('date')
-            except TypeError:
-                logger.warning('Error parsing date.', exc_info=True)
-                headers_struc['date'] = dateutil.parser.parse('1970-01-01T00:00:00+0000')
-                self.msg.replace_header('date', headers_struc['date'])
-            else:
-                headers_struc['date'] = eml_parser.decode.robust_string2date(msg_date)
-
+            msg_date = self.msg.get('date')
+            headers_struc['date'] = datetime.datetime.fromisoformat(msg_date)
         else:
             # If date field is absent...
-            headers_struc['date'] = dateutil.parser.parse('1970-01-01T00:00:00+0000')
+            headers_struc['date'] = datetime.datetime.fromisoformat(eml_parser.decode.default_date)
 
         # mail receiver path / parse any domain, e-mail
         # @TODO parse case where domain is specified but in parentheses only an IP
@@ -510,22 +519,22 @@ class EmlParser:
                 if list_observed_urls:
                     bodie['uri_hash'] = []
                     for element in list_observed_urls:
-                        bodie['uri_hash'].append(self.wrap_hash_sha256(element.lower()))
+                        bodie['uri_hash'].append(self.get_hash(element.lower(), 'sha256'))
                 if list_observed_email:
                     bodie['email_hash'] = []
                     for element in list_observed_email:
                         # Email already lowered
-                        bodie['email_hash'].append(self.wrap_hash_sha256(element))
+                        bodie['email_hash'].append(self.get_hash(element, 'sha256'))
                 if list_observed_dom:
                     bodie['domain_hash'] = []
                     # for uri in list(set(list_observed_dom)):
                     for element in list_observed_dom:
-                        bodie['domain_hash'].append(self.wrap_hash_sha256(element))
+                        bodie['domain_hash'].append(self.get_hash(element, 'sha256'))
                 if list_observed_ip:
                     bodie['ip_hash'] = []
                     for element in list_observed_ip:
                         # IP (v6) already lowered
-                        bodie['ip_hash'].append(self.wrap_hash_sha256(element))
+                        bodie['ip_hash'].append(self.get_hash(element, 'sha256'))
 
             # For mail without multipart we will only get the "content....something" headers
             # all other headers are in "header"
@@ -855,29 +864,6 @@ class EmlParser:
 
         return return_field
 
-    # Iterator that give all position of a given pattern (no regex)
-    # @FIXME: Is this still required
-    # Error may occur when using unicode-literals or python 3 on dirty emails
-    # Need to check if buffer is a clean one
-    # may be tested with this byte code:
-    # -> 00000b70  61 6c 20 32 39 b0 20 6c  75 67 6c 69 6f 20 32 30  |al 29. luglio 20|
-    # Should crash on "B0".
-    @staticmethod
-    def findall(pat: str, data: str) -> typing.Iterator[int]:
-        """Iterator that give all position of a given pattern (no regex).
-
-        Args:
-            pat (str): Pattern to seek
-            data (str): buffer
-
-        Yields:
-            int: Yields the next position
-        """
-        i = data.find(pat)
-        while i != -1:
-            yield i
-            i = data.find(pat, i + 1)
-
     def get_raw_body_text(self, msg: email.message.Message, boundary: typing.Optional[str] = None) -> typing.List[typing.Tuple[typing.Any, typing.Any, typing.Any, typing.Optional[str]]]:
         """This method recursively retrieves all e-mail body parts and returns them as a list.
 
@@ -947,29 +933,30 @@ class EmlParser:
           dict: Returns a dict with as key the hash-type and value the calculated hash.
         """
         hashalgo = ['md5', 'sha1', 'sha256', 'sha512']
-        hash_ = {}
-
-        for k in hashalgo:
-            ha = getattr(hashlib, k)
-            h = ha()
-            h.update(data)
-            hash_[k] = h.hexdigest()
-
-        return hash_
+        return {k: EmlParser.get_hash(data, k) for k in hashalgo}
 
     @staticmethod
-    def wrap_hash_sha256(string: str) -> str:
-        """Generate a SHA256 hash for a given string.
+    def get_hash(value: typing.Union[str, bytes], hash_type: str) -> str:
+        """Generate a hash of type *hash_type* for a given value.
 
         Args:
-            string (str): String to calculate the hash on.
+            value: String or bytes object to calculate the hash on.
+            hash_type: Hash type to use, can be any of 'md5', 'sha1', 'sha256', 'sha512'.
 
         Returns:
             str: Returns the calculated hash as a string.
         """
-        _string = string.encode('utf-8')
+        if hash_type not in ('md5', 'sha1', 'sha256', 'sha512'):
+            raise ValueError(f'Invalid hash type requested - "{hash_type}"')
 
-        return hashlib.sha256(_string).hexdigest()
+        if isinstance(value, str):
+            _value = value.encode('utf-8')
+        else:
+            _value = value
+
+        hash_algo = getattr(hashlib, hash_type)
+
+        return hash_algo(_value).hexdigest()
 
     def traverse_multipart(self, msg: email.message.Message, counter: int = 0) -> typing.Dict[str, typing.Any]:
         """Recursively traverses all e-mail message multi-part elements and returns in a parsed form as a dict.

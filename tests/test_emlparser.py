@@ -97,8 +97,8 @@ class TestEMLParser:
         assert eml_parser.EmlParser.get_file_hash(raw_email) == pre_computed_hashes
 
     def test_wrap_hash_sha256(self):
-        assert eml_parser.EmlParser.wrap_hash_sha256(
-            'www.example.com') == '80fc0fb9266db7b83f85850fa0e6548b6d70ee68c8b5b412f1deea6ebdef0404'
+        assert eml_parser.EmlParser.get_hash(
+            'www.example.com', 'sha256') == '80fc0fb9266db7b83f85850fa0e6548b6d70ee68c8b5b412f1deea6ebdef0404'
 
     def test_get_uri_ondata(self):
         test_urls = '''Lorem ipsum dolor sit amet, consectetur adipiscing elit.
@@ -467,12 +467,12 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
         with sample_1.open('rb') as fhdl:
             output_1 = ep.decode_email_bytes(fhdl.read())
 
-        assert output_1['header']['header']['message-id'] == ['id@domain.com']
+        assert output_1['header']['header']['message-id'] == ['<id@domain.com>']
 
         with sample_2.open('rb') as fhdl:
             output_2 = ep.decode_email_bytes(fhdl.read())
 
-        assert output_2['header']['header']['message-id'] == ['id@domain.com']
+        assert output_2['header']['header']['message-id'] == ['<id@domain.com>']
 
         with sample_3.open('rb') as fhdl:
             output_3 = ep.decode_email_bytes(fhdl.read())

@@ -3,6 +3,15 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.17.5]
+### Changes
+- Remove obsolete methods.
+- Rework hashing wrapper methods.
+
+### Added
+- Add a custom e-mail parsing policy for fixhing invalid values as soon as possible.
+  - Currently implemented for invalid message-id and date parsing.
+
 ## [v1.17.4]
 ### Changes
 - Renamed eml_parser.eml_parser to eml_parser.parser to make imports safer. This should not break any usage but nonetheless
