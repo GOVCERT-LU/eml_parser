@@ -325,9 +325,8 @@ class EmlParser:
 
         # parse and decode Date
         # If date field is present
-        if 'date' in self.msg:
-            msg_date = self.msg.get('date')
-            headers_struc['date'] = datetime.datetime.fromisoformat(msg_date)
+        if 'date' in self.msg and self.msg.get('date') is not None:
+            headers_struc['date'] = datetime.datetime.fromisoformat(typing.cast(str, self.msg.get('date')))
         else:
             # If date field is absent...
             headers_struc['date'] = datetime.datetime.fromisoformat(eml_parser.decode.default_date)

@@ -91,3 +91,9 @@ warn_redundant_casts = true
 warn_unused_ignores = true
 strict_optional = true
 check_untyped_defs = false
+
+[tool.ruff]
+line-length = 240
+extend-select = ['Q', 'RUF100', 'C90', 'I']
+flake8-quotes = { inline-quotes = 'single', multiline-quotes = 'single' }
+mccabe = { max-complexity = 100 }
