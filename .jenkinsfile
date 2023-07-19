@@ -12,7 +12,7 @@ pipeline {
     gitlabBuilds(builds: ['Lint', 'Linters', 'Test results', 'Coverage'])
   }
   environment {
-     Python = "3.9"
+     Python = "3.11"
   }
 
   stages {
