@@ -1201,7 +1201,7 @@ def decode_email_b(eml_file: bytes, include_raw_body: bool = False, include_atta
                    policy=policy,
                    ignore_bad_start=ignore_bad_start,
                    email_force_tld=email_force_tld,
-                   parse_attachments=parse_attachments
+                   parse_attachments=parse_attachments,
                    )
 
     return ep.decode_email_bytes(eml_file)
