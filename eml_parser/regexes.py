@@ -17,20 +17,23 @@ __license__ = 'AGPL v3+'
 
 # regex compilation
 # W3C HTML5 standard recommended regex for e-mail validation
-email_regex = re.compile(r'''([a-zA-Z0-9.!#$%&'*+-/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*)''', re.MULTILINE)
-email_force_tld_regex = re.compile(r'''([a-zA-Z0-9.!#$%&'*+-/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)+)''', re.MULTILINE)
+email_regex = re.compile(r"""([a-zA-Z0-9.!#$%&'*+-/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*)""", re.MULTILINE)
+email_force_tld_regex = re.compile(r"""([a-zA-Z0-9.!#$%&'*+-/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)+)""", re.MULTILINE)
 
 # regex for detecting RFC2047 encodings - used from https://dmorgan.info/posts/encoded-word-syntax/
-email_regex_rfc2047 = re.compile(r'''=\?{1}([\w\S]+)\?{1}([B|Q|b|q])\?{1}([\w\S]+)\?{1}=''')
+email_regex_rfc2047 = re.compile(r"""=\?{1}([\w\S]+)\?{1}([B|Q|b|q])\?{1}([\w\S]+)\?{1}=""")
 
-recv_dom_regex = re.compile(r'''(?:(?:from|by)\s+)([a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]{2,})+)''', re.MULTILINE)
+recv_dom_regex = re.compile(r"""(?:(?:from|by)\s+)([a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]{2,})+)""", re.MULTILINE)
 
-dom_regex = re.compile(r'''(?:^|[\s(/<>|@'=])([a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]{2,})+)(?=$|[\?\s#&/<>')])''', re.MULTILINE)
+dom_regex = re.compile(r"""(?:^|[\s(/<>|@'=])([a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]{2,})+)(?=$|[\?\s#&/<>')])""", re.MULTILINE)
 
-ipv4_regex = re.compile(r'''(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})''')
+ipv4_regex = re.compile(r"""(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})""")
 
 # From https://gist.github.com/mnordhoff/2213179 : IPv6 with zone ID (RFC 6874)
-ipv6_regex = re.compile(r'''((?:[0-9a-f]{1,4}:){6}(?:[0-9a-f]{1,4}:[0-9a-f]{1,4}|(?:(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))|::(?:[0-9a-f]{1,4}:){5}(?:[0-9a-f]{1,4}:[0-9a-f]{1,4}|(?:(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))|(?:[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){4}(?:[0-9a-f]{1,4}:[0-9a-f]{1,4}|(?:(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))|(?:[0-9a-f]{1,4}:[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){3}(?:[0-9a-f]{1,4}:[0-9a-f]{1,4}|(?:(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))|(?:(?:[0-9a-f]{1,4}:){,2}[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){2}(?:[0-9a-f]{1,4}:[0-9a-f]{1,4}|(?:(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))|(?:(?:[0-9a-f]{1,4}:){,3}[0-9a-f]{1,4})?::[0-9a-f]{1,4}:(?:[0-9a-f]{1,4}:[0-9a-f]{1,4}|(?:(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))|(?:(?:[0-9a-f]{1,4}:){,4}[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:[0-9a-f]{1,4}|(?:(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))|(?:(?:[0-9a-f]{1,4}:){,5}[0-9a-f]{1,4})?::[0-9a-f]{1,4}|(?:(?:[0-9a-f]{1,4}:){,6}[0-9a-f]{1,4})?::)''', flags=re.IGNORECASE)
+ipv6_regex = re.compile(
+    r"""((?:[0-9a-f]{1,4}:){6}(?:[0-9a-f]{1,4}:[0-9a-f]{1,4}|(?:(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))|::(?:[0-9a-f]{1,4}:){5}(?:[0-9a-f]{1,4}:[0-9a-f]{1,4}|(?:(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))|(?:[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){4}(?:[0-9a-f]{1,4}:[0-9a-f]{1,4}|(?:(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))|(?:[0-9a-f]{1,4}:[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){3}(?:[0-9a-f]{1,4}:[0-9a-f]{1,4}|(?:(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))|(?:(?:[0-9a-f]{1,4}:){,2}[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){2}(?:[0-9a-f]{1,4}:[0-9a-f]{1,4}|(?:(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))|(?:(?:[0-9a-f]{1,4}:){,3}[0-9a-f]{1,4})?::[0-9a-f]{1,4}:(?:[0-9a-f]{1,4}:[0-9a-f]{1,4}|(?:(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))|(?:(?:[0-9a-f]{1,4}:){,4}[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:[0-9a-f]{1,4}|(?:(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))|(?:(?:[0-9a-f]{1,4}:){,5}[0-9a-f]{1,4})?::[0-9a-f]{1,4}|(?:(?:[0-9a-f]{1,4}:){,6}[0-9a-f]{1,4})?::)""",
+    flags=re.IGNORECASE,
+)
 
 # simple version for searching for URLs
 # character set based on http://tools.ietf.org/html/rfc3986
@@ -44,7 +47,8 @@ url_regex_comma = re.compile(r',(?=https?|ftps?)', flags=re.IGNORECASE)
 url_regex_www_comma = re.compile(r',(?=https?|ftps?|www\d{0,3})', flags=re.IGNORECASE)
 
 if re.__name__ == 're2':
-    url_regex_simple = re.compile(r'''
+    url_regex_simple = re.compile(
+        r"""
     \b
     (?:https?|ftps?):
     (?:/{1,3}|[a-z0-9%])
@@ -54,8 +58,11 @@ if re.__name__ == 're2':
       [^\x00-\x20\s`()<>{}\[\]\/'"«»“”‘’]+
     )
     (?:[\w\-._~%!$&'()*+,;=:/?#\[\]@\x{00001000}-\x{0010FFFF}]*[^\x00-\x20\s`!\[\]{};:'".,<>«»“”‘’])?
-    ''', flags=re.IGNORECASE | re.VERBOSE)
-    url_regex_www = re.compile(r'''
+    """,
+        flags=re.IGNORECASE | re.VERBOSE,
+    )
+    url_regex_www = re.compile(
+        r"""
     (?:
     # http/ftp schemes
         \b
@@ -74,9 +81,12 @@ if re.__name__ == 're2':
         (?::[0]*[1-9][0-9]{0,4})?  # Port
         [\/\\#?][\w\-._~%!$&'()*+,;=:/?#\[\]@\x{00001000}-\x{0010FFFF}]*[^\x00-\x20\s`!\[\]{};:'\".,<>«»“”‘’]  # Path, etc.
     )
-    ''', flags=re.IGNORECASE | re.VERBOSE)
+    """,
+        flags=re.IGNORECASE | re.VERBOSE,
+    )
 else:
-    url_regex_simple = re.compile(r'''
+    url_regex_simple = re.compile(
+        r"""
     \b
     (?:https?|ftps?):
     (?:/{1,3}|[a-z0-9%])
@@ -86,8 +96,11 @@ else:
       [^\x00-\x20\s`()<>{}\[\]\/'"«»“”‘’]+
     )
     (?:[\w\-._~%!$&'()*+,;=:/?#\[\]@\U00001000-\U0010FFFF]*[^\x00-\x20\s`!\[\]{};:'".,<>«»“”‘’])?
-    ''', flags=re.IGNORECASE | re.VERBOSE)
-    url_regex_www = re.compile(r'''
+    """,
+        flags=re.IGNORECASE | re.VERBOSE,
+    )
+    url_regex_www = re.compile(
+        r"""
     (?:
     # http/ftp schemes
         \b
@@ -107,22 +120,27 @@ else:
         (?::[0]*[1-9][0-9]{0,4})?  # Port
         (?:[\/#?](?:[\w\-._~%!$&'()*+,;=:/?#\[\]@\U00001000-\U0010FFFF]*[^\x00-\x20\s`!\[\]{};:'\".,<>«»“”‘’])) # Path, etc.
     )
-    ''', flags=re.IGNORECASE | re.VERBOSE)
+    """,
+        flags=re.IGNORECASE | re.VERBOSE,
+    )
 
 
 # Search for URLs in HTML IMG or A tags
 # regex overlaps with url_regex_simple, so simple URL content that starts with "<a " or "<img " still matches.
-url_regex_href = re.compile(r'''
+url_regex_href = re.compile(
+    r"""
 <(?:a[\s\/]+[^>]*?href
  |img[\s\/]+[^>]*?src)
 [\s\/]*=[\s\/]*
 ((?:[\"][^\"]+)|[\'][^\']+|[^\s>]+)
-''', flags=re.IGNORECASE | re.VERBOSE)
+""",
+    flags=re.IGNORECASE | re.VERBOSE,
+)
 
-date_regex = re.compile(r''';[ \w\s:,+\-()]+$''')
-noparenthesis_regex = re.compile(r'''\([^()]*\)''')
-cleanline_regex = re.compile(r'''(^[;\s]{0,}|[;\s]{0,}$)''')
+date_regex = re.compile(r""";[ \w\s:,+\-()]+$""")
+noparenthesis_regex = re.compile(r"""\([^()]*\)""")
+cleanline_regex = re.compile(r"""(^[;\s]{0,}|[;\s]{0,}$)""")
 
-escape_special_regex_chars = re.compile(r'''([\^$\[\]()+?.])''')
+escape_special_regex_chars = re.compile(r"""([\^$\[\]()+?.])""")
 
-window_slice_regex = re.compile(r'''\s''')
+window_slice_regex = re.compile(r"""\s""")

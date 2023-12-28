@@ -121,7 +121,7 @@ def parserouting(line: str) -> typing.Dict[str, typing.Any]:
                 loc = npline.find(word)
                 end = npline.find(endword)
                 if end < loc or end == -1:
-                    end = 0xfffffff  # Kindof MAX 31 bits
+                    end = 0xFFFFFFF  # Kindof MAX 31 bits
                 result.append({'name_in': word, 'pos': loc, 'name_out': endword, 'weight': end + loc})
                 # print({'name_in': word, 'pos': loc, 'name_out': endword, 'weight': end+loc})
 
@@ -132,7 +132,7 @@ def parserouting(line: str) -> typing.Dict[str, typing.Any]:
 
     tout = []
     for word in borders:
-        result_max = 0xffffffff
+        result_max = 0xFFFFFFFF
         line_max: typing.Dict[str, typing.Any] = {}
         for eline in result:
             if eline['name_in'] == word and eline['weight'] <= result_max:
@@ -152,7 +152,7 @@ def parserouting(line: str) -> typing.Dict[str, typing.Any]:
         reg += item[1] + '(?P<' + item[1].strip() + '>.*)'  # type: ignore
     if npdate:
         # escape special regex chars
-        reg += eml_parser.regexes.escape_special_regex_chars.sub(r'''\\\1''', npdate)
+        reg += eml_parser.regexes.escape_special_regex_chars.sub(r"""\\\1""", npdate)
 
     reparse = re.compile(reg)
     reparseg = reparse.search(line)
@@ -175,7 +175,7 @@ def parserouting(line: str) -> typing.Dict[str, typing.Any]:
         if ' from ' in out.get('for', ''):
             temp = re.split(' from ', out['for'])
             out['for'] = temp[0]
-            out['from'] = f'''{out['from']} {' '.join(temp[1:])}'''
+            out['from'] = f"""{out['from']} {' '.join(temp[1:])}"""
 
         m = eml_parser.regexes.email_regex.findall(out['for'])
         if m:

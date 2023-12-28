@@ -118,19 +118,20 @@ class EmlParser:
     """eml-parser class."""
 
     # pylint: disable=too-many-arguments
-    def __init__(self,
-                 include_raw_body: bool = False,
-                 include_attachment_data: bool = False,
-                 pconf: typing.Optional[dict] = None,
-                 policy: typing.Optional[email.policy.Policy] = None,
-                 ignore_bad_start: bool = False,
-                 email_force_tld: bool = False,
-                 domain_force_tld: bool = False,
-                 ip_force_routable: bool = False,
-                 parse_attachments: bool = True,
-                 include_www: bool = True,
-                 include_href: bool = True,
-                 ) -> None:
+    def __init__(
+        self,
+        include_raw_body: bool = False,
+        include_attachment_data: bool = False,
+        pconf: typing.Optional[dict] = None,
+        policy: typing.Optional[email.policy.Policy] = None,
+        ignore_bad_start: bool = False,
+        email_force_tld: bool = False,
+        domain_force_tld: bool = False,
+        ip_force_routable: bool = False,
+        parse_attachments: bool = True,
+        include_www: bool = True,
+        include_href: bool = True,
+    ) -> None:
         """Initialisation.
 
         Args:
@@ -382,8 +383,7 @@ class EmlParser:
                 headers_struc['received'].append(parsed_routing)
 
                 # Parse IPs in "received headers"
-                ips_in_received_line = eml_parser.regexes.ipv6_regex.findall(received_line_flat) + \
-                                       eml_parser.regexes.ipv4_regex.findall(received_line_flat)
+                ips_in_received_line = eml_parser.regexes.ipv6_regex.findall(received_line_flat) + eml_parser.regexes.ipv4_regex.findall(received_line_flat)
                 for ip in ips_in_received_line:
                     if ip in self.pconf['whiteip']:
                         continue
@@ -472,7 +472,6 @@ class EmlParser:
             # if more than 4K.. lets cheat, we will cut around the thing we search "://, @, ."
             # in order to reduce regex complexity.
             for body_slice in self.string_sliding_window_loop(body):
-
                 for url_match in self.get_uri_ondata(body_slice):
                     if ':/' in url_match[:10]:
                         list_observed_urls.append(url_match)
@@ -684,8 +683,8 @@ class EmlParser:
             ptr_start = 0
 
             for ptr_end in range(slice_step, body_length + slice_step, slice_step):
-                if ' ' in body[ptr_end - 1:ptr_end]:
-                    while not (eml_parser.regexes.window_slice_regex.match(body[ptr_end - 1:ptr_end]) or ptr_end > body_length):
+                if ' ' in body[ptr_end - 1 : ptr_end]:
+                    while not (eml_parser.regexes.window_slice_regex.match(body[ptr_end - 1 : ptr_end]) or ptr_end > body_length):
                         if ptr_end > body_length:
                             ptr_end = body_length
                             break
@@ -693,20 +692,20 @@ class EmlParser:
                         ptr_end += 1
 
                 # Found a :// near the start of the slice, rewind
-                if ptr_start > 16 and '://' in body[ptr_start - 8:ptr_start + 8]:
+                if ptr_start > 16 and '://' in body[ptr_start - 8 : ptr_start + 8]:
                     ptr_start -= 16
 
                 # Found a :// near the end of the slice, rewind from that location
-                if ptr_end < body_length and '://' in body[ptr_end - 8:ptr_end + 8]:
+                if ptr_end < body_length and '://' in body[ptr_end - 8 : ptr_end + 8]:
                     pos = body.rfind('://', ptr_end - 8, ptr_end + 8)
                     ptr_end = pos - 8
 
                 # Found a :// within the slice; try to expand the slice until we find an invalid
                 # URL character in order to avoid cutting off URLs
-                if '://' in body[ptr_start:ptr_end] and not body[ptr_end - 1:ptr_end] == ' ':
+                if '://' in body[ptr_start:ptr_end] and not body[ptr_end - 1 : ptr_end] == ' ':
                     distance = 1
 
-                    while body[ptr_end - 1:ptr_end] not in (' ', '>') and distance < max_distance and ptr_end <= body_length:
+                    while body[ptr_end - 1 : ptr_end] not in (' ', '>') and distance < max_distance and ptr_end <= body_length:
                         distance += 1
                         ptr_end += 1
 
@@ -758,7 +757,7 @@ class EmlParser:
 
         try:
             # Remove leading spaces and quote characters
-            url = url.lstrip(' \t\n\r\f\v\'\"«»“”‘’').replace('\r', '').replace('\n', '')
+            url = url.lstrip(' \t\n\r\f\v\'"«»“”‘’').replace('\r', '').replace('\n', '')
             url = urllib.parse.urlparse(url).geturl()
             scheme_url = url
             if ':/' not in scheme_url:
@@ -778,7 +777,7 @@ class EmlParser:
             return None
 
         # let's try to be smart by stripping of noisy bogus parts
-        url = re.split(r'''[', ")}\\]''', url, 1)[0]
+        url = re.split(r"""[', ")}\\]""", url, 1)[0]
 
         # filter bogus URLs
         if url.endswith('://'):
@@ -887,15 +886,15 @@ class EmlParser:
             try:
                 filename = msg.get_filename('').lower()
             except (binascii.Error, AssertionError):
-                logger.exception(
-                    'Exception occurred while trying to parse the content-disposition header. Collected data will not be complete.')
+                logger.exception('Exception occurred while trying to parse the content-disposition header. Collected data will not be complete.')
                 filename = ''
 
             # pylint: disable=too-many-boolean-expressions
-            if ('content-disposition' not in msg and msg.get_content_maintype() == 'text') \
-                or (filename.endswith('.html') or filename.endswith('.htm')) \
-                or ('content-disposition' in msg and msg.get_content_disposition() == 'inline'
-                    and msg.get_content_maintype() == 'text'):
+            if (
+                ('content-disposition' not in msg and msg.get_content_maintype() == 'text')
+                or (filename.endswith('.html') or filename.endswith('.htm'))
+                or ('content-disposition' in msg and msg.get_content_disposition() == 'inline' and msg.get_content_maintype() == 'text')
+            ):
                 encoding = msg.get('content-transfer-encoding', '').lower()
 
                 charset = msg.get_content_charset()
@@ -975,8 +974,7 @@ class EmlParser:
             if 'content-type' in msg:
                 if msg.get_content_type() == 'message/rfc822':
                     # This is an e-mail message attachment, add it to the attachment list apart from parsing it
-                    attachments.update(
-                        self.prepare_multipart_part_attachment(msg, counter))
+                    attachments.update(self.prepare_multipart_part_attachment(msg, counter))
 
             for part in msg.get_payload():
                 attachments.update(self.traverse_multipart(part, counter))
@@ -1008,15 +1006,13 @@ class EmlParser:
             lower_keys = [k.lower() for k in msg.keys()]
             msg.policy = former_policy
 
-        if ('content-disposition' in lower_keys and msg.get_content_disposition() != 'inline') \
-            or msg.get_content_maintype() != 'text':
+        if ('content-disposition' in lower_keys and msg.get_content_disposition() != 'inline') or msg.get_content_maintype() != 'text':
             # if it's an attachment-type, pull out the filename
             # and calculate the size in bytes
             if msg.get_content_type() == 'message/rfc822':
                 payload = msg.get_payload()
                 if len(payload) > 1:
-                    logger.warning(
-                        'More than one payload for "message/rfc822" part detected. This is not supported, please report!')
+                    logger.warning('More than one payload for "message/rfc822" part detected. This is not supported, please report!')
 
                 try:
                     custom_policy = email.policy.default.clone(max_line_length=0)
@@ -1097,9 +1093,16 @@ class EmlParser:
         return detected.name, detected.mime_type
 
 
-def decode_email(eml_file: str, include_raw_body: bool = False, include_attachment_data: bool = False,
-                 pconf: typing.Optional[dict] = None, policy: email.policy.Policy = email.policy.default,
-                 ignore_bad_start: bool = False, email_force_tld: bool = False, parse_attachments: bool = True) -> dict:
+def decode_email(
+    eml_file: str,
+    include_raw_body: bool = False,
+    include_attachment_data: bool = False,
+    pconf: typing.Optional[dict] = None,
+    policy: email.policy.Policy = email.policy.default,
+    ignore_bad_start: bool = False,
+    email_force_tld: bool = False,
+    parse_attachments: bool = True,
+) -> dict:
     """Function for decoding an EML file into an easily parsable structure.
 
     Some intelligence is applied while parsing the file in order to work around
@@ -1142,20 +1145,28 @@ def decode_email(eml_file: str, include_raw_body: bool = False, include_attachme
     with open(eml_file, 'rb') as fp:
         raw_email = fp.read()
 
-    return decode_email_b(eml_file=raw_email,
-                          include_raw_body=include_raw_body,
-                          include_attachment_data=include_attachment_data,
-                          pconf=pconf,
-                          policy=policy,
-                          ignore_bad_start=ignore_bad_start,
-                          email_force_tld=email_force_tld,
-                          parse_attachments=parse_attachments)
+    return decode_email_b(
+        eml_file=raw_email,
+        include_raw_body=include_raw_body,
+        include_attachment_data=include_attachment_data,
+        pconf=pconf,
+        policy=policy,
+        ignore_bad_start=ignore_bad_start,
+        email_force_tld=email_force_tld,
+        parse_attachments=parse_attachments,
+    )
 
 
-def decode_email_b(eml_file: bytes, include_raw_body: bool = False, include_attachment_data: bool = False,
-                   pconf: typing.Optional[dict] = None, policy: email.policy.Policy = email.policy.default,
-                   ignore_bad_start: bool = False, email_force_tld: bool = False,
-                   parse_attachments: bool = True) -> dict:
+def decode_email_b(
+    eml_file: bytes,
+    include_raw_body: bool = False,
+    include_attachment_data: bool = False,
+    pconf: typing.Optional[dict] = None,
+    policy: email.policy.Policy = email.policy.default,
+    ignore_bad_start: bool = False,
+    email_force_tld: bool = False,
+    parse_attachments: bool = True,
+) -> dict:
     """Function for decoding an EML file into an easily parsable structure.
 
     Some intelligence is applied while parsing the file in order to work around
@@ -1195,13 +1206,14 @@ def decode_email_b(eml_file: bytes, include_raw_body: bool = False, include_atta
     """
     warnings.warn('You are using a deprecated method, please use the EmlParser class instead.', DeprecationWarning)
 
-    ep = EmlParser(include_raw_body=include_raw_body,
-                   include_attachment_data=include_attachment_data,
-                   pconf=pconf,
-                   policy=policy,
-                   ignore_bad_start=ignore_bad_start,
-                   email_force_tld=email_force_tld,
-                   parse_attachments=parse_attachments,
-                   )
+    ep = EmlParser(
+        include_raw_body=include_raw_body,
+        include_attachment_data=include_attachment_data,
+        pconf=pconf,
+        policy=policy,
+        ignore_bad_start=ignore_bad_start,
+        email_force_tld=email_force_tld,
+        parse_attachments=parse_attachments,
+    )
 
     return ep.decode_email_bytes(eml_file)
