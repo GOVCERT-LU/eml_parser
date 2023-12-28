@@ -1,8 +1,8 @@
-# -*- coding: utf-8 -*-
 # pylint: disable=line-too-long
 
 """eml_parser serves as a python module for parsing eml files and returning various\
-information found in the e-mail as well as computed information."""
+information found in the e-mail as well as computed information.
+"""
 
 from __future__ import annotations
 
@@ -185,7 +185,7 @@ class EmlParser:
 
         self.msg: typing.Optional[email.message.Message] = None
 
-    def decode_email(self, eml_file: 'os.PathLike[str]', ignore_bad_start: bool = False) -> dict:
+    def decode_email(self, eml_file: os.PathLike[str], ignore_bad_start: bool = False) -> dict:
         """Function for decoding an EML file into an easily parsable structure.
 
         Some intelligence is applied while parsing the file in order to work around

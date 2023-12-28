@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # pylint: disable=line-too-long
 
 """This module contains various string import, check and parse methods."""
@@ -64,7 +63,7 @@ def decode_field(field: str) -> str:
     Args:
         field (str): String to decode
 
-    Returns
+    Returns:
         str: Clean encoded strings
     """
     try:
