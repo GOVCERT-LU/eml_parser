@@ -892,7 +892,7 @@ class EmlParser:
             # pylint: disable=too-many-boolean-expressions
             if (
                 ('content-disposition' not in msg and msg.get_content_maintype() == 'text')
-                or (filename.endswith('.html') or filename.endswith('.htm'))
+                or (filename.endswith(('.html', '.htm')))
                 or ('content-disposition' in msg and msg.get_content_disposition() == 'inline' and msg.get_content_maintype() == 'text')
             ):
                 encoding = msg.get('content-transfer-encoding', '').lower()
