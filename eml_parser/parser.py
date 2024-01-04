@@ -1,10 +1,7 @@
-# pylint: disable=line-too-long
-
 """eml_parser serves as a python module for parsing eml files and returning various\
 information found in the e-mail as well as computed information.
 """
 
-from __future__ import annotations
 
 import base64
 import binascii
@@ -20,6 +17,7 @@ import hashlib
 import ipaddress
 import logging
 import os.path
+import pathlib
 import re
 import typing
 import urllib.parse
@@ -186,7 +184,7 @@ class EmlParser:
 
         self.msg: typing.Optional[email.message.Message] = None
 
-    def decode_email(self, eml_file: os.PathLike[str], ignore_bad_start: bool = False) -> dict:
+    def decode_email(self, eml_file: os.PathLike, ignore_bad_start: bool = False) -> dict:
         """Function for decoding an EML file into an easily parsable structure.
 
         Some intelligence is applied while parsing the file in order to work around
@@ -367,7 +365,7 @@ class EmlParser:
                     for by_item in parsed_routing.get('by', []):
                         for byhostentry_ in self.pconf['byhostentry']:
                             byhostentry = byhostentry_.lower()
-                            # print ("%s %s" % (byhostentry, by_item))
+
                             if byhostentry in by_item:
                                 # Save the last Found.. ( most external )
                                 headers_struc['received_src'] = parsed_routing.get('from')
@@ -547,18 +545,19 @@ class EmlParser:
 
                 # We are using replace . to : for avoiding issue in mongo
                 k = k.lower().replace('.', ':')  # Lot of lowers, pre-compute :) .
-                # print(v)
+
                 if multipart:
                     if k in ch:
                         ch[k].append(v)
                     else:
                         ch[k] = [v]
-                else:  # if not multipart, store only content-xx related header with part
-                    if k.startswith('content'):  # otherwise, we got all header headers
-                        if k in ch:
-                            ch[k].append(v)
-                        else:
-                            ch[k] = [v]
+                elif k.startswith('content'):  # otherwise, we got all header headers
+                    # if not multipart, store only content-xx related header with part
+                    if k in ch:
+                        ch[k].append(v)
+                    else:
+                        ch[k] = [v]
+
             bodie['content_header'] = ch  # Store content headers dict
 
             if self.include_raw_body:
@@ -777,7 +776,7 @@ class EmlParser:
             return None
 
         # let's try to be smart by stripping of noisy bogus parts
-        url = re.split(r"""[', ")}\\]""", url, 1)[0]
+        url = re.split(r"""[', ")}\\]""", url, maxsplit=1)[0]
 
         # filter bogus URLs
         if url.endswith('://'):
@@ -1037,12 +1036,11 @@ class EmlParser:
             attachment[file_id]['filename'] = filename
             attachment[file_id]['size'] = file_size
 
-            # os.path always returns the extension as second element
-            # in case there is no extension it returns an empty string
-            extension = os.path.splitext(filename)[1].lower()
+            # in case there is no extension pathlib.Path(filename).suffix returns an empty string
+            extension = pathlib.Path(filename).suffix
             if extension:
-                # strip leading dot
-                attachment[file_id]['extension'] = extension[1:]
+                # strip leading dot and lower-case
+                attachment[file_id]['extension'] = extension[1:].lower()
 
             attachment[file_id]['hash'] = self.get_file_hash(data)
 
@@ -1052,9 +1050,8 @@ class EmlParser:
                 attachment[file_id]['mime_type'] = mime_type
                 # attachments[file_id]['mime_type_short'] = attachments[file_id]['mime_type'].split(",")[0]
                 attachment[file_id]['mime_type_short'] = mime_type_short
-            else:
-                if magic is not None:
-                    logger.warning('Error determining attachment mime-type - "%s"', str(file_id))
+            elif magic is not None:
+                logger.warning('Error determining attachment mime-type - "%s"', str(file_id))
 
             if self.include_attachment_data:
                 attachment[file_id]['raw'] = base64.b64encode(data)

@@ -1,6 +1,4 @@
-# -*- coding: utf-8 -*-
-# pylint: disable=line-too-long
-from __future__ import annotations
+
 
 import datetime
 import email.policy

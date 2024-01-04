@@ -1,8 +1,5 @@
-# pylint: disable=line-too-long
-
 """This module contains various string import, check and parse methods."""
 
-from __future__ import annotations
 
 import datetime
 import email
@@ -76,12 +73,11 @@ def decode_field(field: str) -> str:
     for _text, charset in _decoded:
         if charset:
             string += decode_string(_text, charset)
-        else:
+        elif isinstance(_text, bytes):
             # @TODO might be an idea to check with charset-normalizer here
-            if isinstance(_text, bytes):
-                string += _text.decode('utf-8', 'ignore')
-            else:
-                string += _text
+            string += _text.decode('utf-8', 'ignore')
+        else:
+            string += _text
 
     return string
 

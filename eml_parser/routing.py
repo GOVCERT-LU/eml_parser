@@ -1,8 +1,5 @@
-# pylint: disable=line-too-long
-
 """This module is used for parsing the received lines into a machine readable structure."""
 
-from __future__ import annotations
 
 import re
 import typing
