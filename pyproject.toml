@@ -88,9 +88,11 @@ strict_optional = true
 check_untyped_defs = false
 
 [tool.ruff]
-line-length = 240
+line-length = 160
 indent-width = 4
 target-version = "py38"
+
+[tool.ruff.lint]
 select = [
     "E", # pycodestyle errors
     "W", # pycodestyle warnings
@@ -136,7 +138,7 @@ select = [
     "PLE", # Error
     "PLR", # Refactor
     "PLW", # Warning
-    "TRY200", # reraise-no-cause
+    "B904", # reraise-no-cause
     "FLY", # flynt
     #    "PERF",  # Perflint
     "RUF013", # implicit-optional
@@ -158,9 +160,6 @@ ignore = [
     "PLR2004", # Magic value used in comparison
     "PLW0603", # Using the global statement
     "PLR0912", # Too many branches
-    "UP035", # deprecated-import
-    "UP006", # Use `list` instead of `typing.List` for type annotation
-    "UP007", # Use `X | Y` for type annotations
     "COM812", #	missing-trailing-comma
     "ISC001", # single-line-implicit-string-concatenation
     "Q001", # bad-quotes-multiline-string
