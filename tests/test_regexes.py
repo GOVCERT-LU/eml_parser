@@ -1,4 +1,5 @@
 import pathlib
+
 from eml_parser.regexes import *
 
 my_execution_dir = pathlib.Path(__file__).resolve().parent
@@ -7,7 +8,7 @@ samples_dir = pathlib.Path(parent_dir, 'samples')
 
 
 class TestRegularExpressions:
-    def test_url_regex_simple(self):
+    def test_url_regex_simple(self) -> None:
         """Ensure url_regex_simple matches URL samples"""
         with pathlib.Path(samples_dir, 'regexes_url_samples.txt').open('r', encoding='utf8') as fhdl:
             url_text_list = fhdl.read().splitlines()
@@ -25,7 +26,7 @@ class TestRegularExpressions:
 
         assert url_diff == set()
 
-    def test_url_regex_www(self):
+    def test_url_regex_www(self) -> None:
         """Ensure url_regex_www matches URL samples"""
         with pathlib.Path(samples_dir, 'regexes_url_samples.txt').open('r', encoding='utf8') as fhdl:
             url_text_list = fhdl.read().splitlines()
@@ -42,7 +43,7 @@ class TestRegularExpressions:
 
         assert url_diff == set()
 
-    def test_dom_regex(self):
+    def test_dom_regex(self) -> None:
         """Ensure dom_regex matches domain samples"""
 
         test_doms = """www1.example.com www2.example.com"""

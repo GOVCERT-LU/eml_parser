@@ -11,7 +11,7 @@ samples_dir = os.path.join(parent_dir, 'samples')
 
 
 class TestDecode:
-    def test_decode_field(self):
+    def test_decode_field(self) -> None:
         test_subjects = {
             'Die Bezahlung mit Ihrer Kreditkarte wurde erfolgreich durchgeführt.': '=?utf-8?B?RGllIEJlemFobHVuZyBtaXQgSWhyZXIgS3JlZGl0a2FydGUgd3VyZGUgZXJmb2xncmVpY2ggZHVyY2hnZWbDvGhydC4=?=',
             'Abmahnung Ihrer offenen Rechnung über 236,00 Euro': '=?utf-8?q?Abmahnung Ihrer offenen Rechnung =C3=BCber 236,00 Euro?=',
@@ -33,7 +33,7 @@ class TestDecode:
         for clear, encoded in test_subjects.items():
             assert eml_parser.decode.decode_field(encoded) == clear
 
-    def test_robust_string2date(self):
+    def test_robust_string2date(self) -> None:
         """Test the converter function, it should never return the default date
         on the provided input
         """

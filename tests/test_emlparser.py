@@ -80,7 +80,7 @@ def json_serial(obj: typing.Any) -> typing.Optional[str]:
 
 
 class TestEMLParser:
-    def test_get_file_hash(self):
+    def test_get_file_hash(self) -> None:
         with pathlib.Path(samples_dir, 'sample.eml').open('rb') as fhdl:
             raw_email = fhdl.read()
 
@@ -93,10 +93,10 @@ class TestEMLParser:
 
         assert eml_parser.EmlParser.get_file_hash(raw_email) == pre_computed_hashes
 
-    def test_wrap_hash_sha256(self):
+    def test_wrap_hash_sha256(self) -> None:
         assert eml_parser.EmlParser.get_hash('www.example.com', 'sha256') == '80fc0fb9266db7b83f85850fa0e6548b6d70ee68c8b5b412f1deea6ebdef0404'
 
-    def test_get_uri_ondata(self):
+    def test_get_uri_ondata(self) -> None:
         test_urls = """Lorem ipsum dolor sit amet, consectetur adipiscing elit.
         Mauris consectetur mi tortor, http://www.example.com consectetur iaculis orci ultricies sit amet.
         Mauris "http://www.example.com/test1?bla" ornare lobortis ex nec dictum. Aliquam blandit arcu ac lorem iaculis aliquet.
@@ -108,7 +108,7 @@ class TestEMLParser:
 
         assert eml_parser.EmlParser(include_href=False).get_uri_ondata(test_urls) == expected_result
 
-    def test_get_uri_href_ondata(self):
+    def test_get_uri_href_ondata(self) -> None:
         test_urls = """<html><body>Lorem ipsum dolor sit amet, consectetur adipiscing elit.
         Mauris consectetur mi tortor, <a href="example.com">consectetur iaculis</a> orci ultricies sit amet.
         <center><img src="http://47fee4f03182a2437d6d-359a8ec3a1ca7be00e972dc7374155\r\n16.r50.cf3.example.com/img1.jpg" />Play a cool game!
@@ -129,9 +129,9 @@ class TestEMLParser:
 
         assert eml_parser.EmlParser(include_href=True, email_force_tld=True).get_uri_ondata(test_urls) == expected_result
 
-    def test_get_uri_href_commas_ondata(self):
+    def test_get_uri_href_commas_ondata(self) -> None:
         test_urls = """
-        http://www.example.com?t1=v1&t2=v2,https://www.example.com, http://www1.example.com?t1=v1&t2=v2, https://www1.example.com, 
+        http://www.example.com?t1=v1&t2=v2,https://www.example.com, http://www1.example.com?t1=v1&t2=v2, https://www1.example.com,
         http://www2.example.com,https://www3.example.com
         """
 
@@ -146,7 +146,7 @@ class TestEMLParser:
 
         assert eml_parser.EmlParser(include_www=True).get_uri_ondata(test_urls) == expected_result
 
-    def test_get_valid_tld_uri_href_ondata(self):
+    def test_get_valid_tld_uri_href_ondata(self) -> None:
         test_urls = """<html><body>Lorem ipsum dolor sit amet, consectetur adipiscing elit.
         Mauris consectetur mi tortor, <a href="example.com">consectetur iaculis</a> orci ultricies sit amet.
         Mauris <a href="example.com/test1?bla"><img src=image.example.jpg/test.jpg></a> ex nec dictum. Aliquam blandit arcu ac lorem iaculis aliquet.
@@ -159,7 +159,7 @@ class TestEMLParser:
 
         assert eml_parser.EmlParser(include_href=True, domain_force_tld=True).get_uri_ondata(test_urls) == expected_result
 
-    def test_get_uri_re_backtracking(self):
+    def test_get_uri_re_backtracking(self) -> None:
         """Ensure url_regex_simple does not cause catastrophic backtracking (Issue 63), test with re instead of re2 or regex"""
         test_urls = """
         Lorem ipsum dolor sit amet, http://xxxxxxxxxx.example.com������������������������������������������������������������������������������������������������������������������������������������������������ consectetur adipiscing elit.
@@ -171,7 +171,7 @@ class TestEMLParser:
 
         assert eml_parser.EmlParser(domain_force_tld=False).get_uri_ondata(test_urls) == expected_result
 
-    def test_get_uri_unicode_ondata(self):
+    def test_get_uri_unicode_ondata(self) -> None:
         """Ensure url_regex includes Unicode in domains and paths"""
         test_urls = """
         Lorem ipsum dolor sit amet http://💌.example.คอม , http://💌.example.คอม/📮/📧/📬.png consectetur https://💩.la adipiscing elit.
@@ -181,7 +181,7 @@ class TestEMLParser:
 
         assert eml_parser.EmlParser(include_www=False, domain_force_tld=True).get_uri_ondata(test_urls) == expected_result
 
-    def test_get_uri_ipv6_ondata(self):
+    def test_get_uri_ipv6_ondata(self) -> None:
         """Ensure url_regex includes URLs with IPv6 hosts, including zone Indexes"""
         test_urls = """
         Lorem ipsum dolor sit amet http://[2001:0db8:85a3:0000:0000:8a2e:0370:7334]
@@ -192,11 +192,11 @@ class TestEMLParser:
 
         assert eml_parser.EmlParser(ip_force_routable=False).get_uri_ondata(test_urls) == expected_result
 
-    def test_get_uri_ipv6_routable_ondata(self):
+    def test_get_uri_ipv6_routable_ondata(self) -> None:
         """Ensure url_regex can exclude private and other unallocated IPv6 hosts in URLs."""
         test_urls = """
-        Curabitur vel neque lacinia, consequat erat id http://[2001:0db8:85a3:0000:0000:8a2e:0370:7334], 
-        venenatis sem. Etiam dignissim ullamcorper http://[2606:2800:220:1:248:1893:25c8:1946] risus non pulvinar. 
+        Curabitur vel neque lacinia, consequat erat id http://[2001:0db8:85a3:0000:0000:8a2e:0370:7334],
+        venenatis sem. Etiam dignissim ullamcorper http://[2606:2800:220:1:248:1893:25c8:1946] risus non pulvinar.
         Etiam dui tortor http://[fe80::1ff:fe23:4567:890a%25eth0]/6️⃣, posuere et iaculis sed, accumsan a erat.
         """
 
@@ -204,13 +204,13 @@ class TestEMLParser:
 
         assert eml_parser.EmlParser(ip_force_routable=True).get_uri_ondata(test_urls) == expected_result
 
-    def test_get_uri_www_ondata(self):
+    def test_get_uri_www_ondata(self) -> None:
         test_urls = """
-        www91.example.com@www92.example.com  www93.example.com@example.com  
+        www91.example.com@www92.example.com  www93.example.com@example.com
         www94......example.com/path  not.www95.example.com:443/path
         www2.example.com:443/path 'www3.example.com/path' ‘www4.example.com#abc’  www5.example.com:443?def   \nwww6.example.com.../path
         www7.example.com/?# www8.example.com?/#  www9.example.com#?/  www10.example.com/?
-        https://www01.example.com/path  https://www02.example.com..../path  https://www03.example.com/  
+        https://www01.example.com/path  https://www02.example.com..../path  https://www03.example.com/
         http://www04.example.com/?# http://www05.example.com?/#  http://www06.example.com#?/  http://www07.example.com/?
         """
 
@@ -235,7 +235,7 @@ class TestEMLParser:
 
         assert eml_parser.EmlParser(include_www=True).get_uri_ondata(test_urls) == expected_result
 
-    def test_headeremail2list_1(self):
+    def test_headeremail2list_1(self) -> None:
         msg = EmailMessage()
         msg['Subject'] = 'Test subject éèàöüä${}'
         msg['From'] = Address('John Doe', 'john.doe', 'example.com')
@@ -248,7 +248,7 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
 
         assert sorted(ep.headeremail2list(header='to')) == ['james.doe@example.com', 'jane.doe@example.com']
 
-    def test_headeremail2list_2(self):
+    def test_headeremail2list_2(self) -> None:
         """Here we test the headeremail2list function using an input which should trigger
         a email library bug 27257
         """
@@ -268,7 +268,7 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
         # using a workaround
         assert ep.headeremail2list(header='to') == ['test@example.com']
 
-    def test_parse_email_1(self):
+    def test_parse_email_1(self) -> None:
         """Parses a generated sample e-mail and tests it against a known good result"""
         msg = EmailMessage()
         msg['Subject'] = 'Test subject éèàöüä${}'
@@ -289,7 +289,7 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
 
         recursive_compare(good_output, test_output)
 
-    def test_parse_email_2(self):
+    def test_parse_email_2(self) -> None:
         """Parses the e-mails from the samples folder"""
         ep = eml_parser.EmlParser()
 
@@ -303,7 +303,7 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
                     raw_email = fhdl.read()
                     _ = ep.decode_email_bytes(raw_email)
 
-    def test_parse_email_3(self):
+    def test_parse_email_3(self) -> None:
         """Parses the e-mails from the samples folder while keeping raw data"""
         ep = eml_parser.EmlParser(include_raw_body=True, include_attachment_data=True)
 
@@ -317,7 +317,7 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
                     raw_email = fhdl.read()
                     _ = ep.decode_email_bytes(raw_email)
 
-    def test_parse_email_4(self):
+    def test_parse_email_4(self) -> None:
         """Parses the e-mails from the samples folder while keeping raw data and passing
         in a filtering config 'pconf'"""
         pconf = {'whiteip': ['192.168.1.1'], 'whitefor': ['a@example.com'], 'byhostentry': ['example.com']}
@@ -333,7 +333,7 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
                     raw_email = fhdl.read()
                     _ = ep.decode_email_bytes(raw_email)
 
-    def test_parse_email_5(self):
+    def test_parse_email_5(self) -> None:
         """Parses a generated sample e-mail and tests it against a known good result. In this test
         we want to specifically ignore e-mail addresses without TLD."""
         msg = EmailMessage()
@@ -356,7 +356,7 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
 
         recursive_compare(good_output, test_output)
 
-    def test_parse_email_6(self):
+    def test_parse_email_6(self) -> None:
         with pathlib.Path(samples_dir, 'sample_attachments.eml').open('rb') as fhdl:
             raw_email = fhdl.read()
 
@@ -372,7 +372,7 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
             filename = attachment.get('filename', '')
             assert filename in attachment_filenames
 
-    def test_parse_email_7(self):
+    def test_parse_email_7(self) -> None:
         """Parse the sample file and make sure the currently unparsable date is returned as is.
 
         See https://bugs.python.org/issue30681 for details.
@@ -385,7 +385,7 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
 
         assert test['header']['header']['orig-date'][0] == 'Wed Jul 2020 23:11:43 +0100'
 
-    def test_parse_email_8(self):
+    def test_parse_email_8(self) -> None:
         """Parse the sample file and make sure the currently unparsable date is returned as is.
 
         See https://github.com/GOVCERT-LU/eml_parser/issues/48 for details.
@@ -398,7 +398,7 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
 
         assert test['body'][0]['hash'] == '4c8b6a63156885b0ca0855b1d36816c54984e1eb6f68277b46b55b4777cfac89'
 
-    def test_parse_email_9(self):
+    def test_parse_email_9(self) -> None:
         """Parses an email and verifies that www URLs with no scheme are extracted, and that URLs at the end of a message body are extracted"""
         with pathlib.Path(samples_dir, 'sample_body_noscheme_url.eml').open('rb') as fhdl:
             raw_email = fhdl.read()
@@ -409,7 +409,7 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
         assert sorted(test['body'][0]['uri_noscheme']) == ['www.example.com/a/b/c/d/', 'www.example.com/test1?bla']
         assert sorted(test['body'][0]['uri']) == ['http://www.example.com/', 'https://www.example2.com']
 
-    def test_parse_email_from_email_email(self):
+    def test_parse_email_from_email_email(self) -> None:
         """Parses a generated sample e-mail and tests it against a known good result. In this test
         we want to specifically test for correct from address parsing where the from field contains two e-mail addresses."""
         msg = EmailMessage()
@@ -431,7 +431,7 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
 
         recursive_compare(good_output, test_output)
 
-    def test_parse_email_to_email_email(self):
+    def test_parse_email_to_email_email(self) -> None:
         """Parses a generated sample e-mail and tests it against a known good result. In this test
         we want to specifically test for correct to address parsing where the to field contains two e-mail addresses."""
         msg = EmailMessage()
@@ -453,7 +453,7 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
 
         recursive_compare(good_output, test_output)
 
-    def test_parse_email_newline_quopri(self):
+    def test_parse_email_newline_quopri(self) -> None:
         """Make sure we can parse RFC2047 encoded header fields with CR/LF embedded (which is invalid)."""
         ep = eml_parser.EmlParser()
         sample = samples_dir / 'sample_gh_issue_76.eml'
@@ -468,7 +468,7 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
         assert output['header']['header']['to'] == ['\n <badname@example.com>']
         assert output['header']['header']['cc'] == ['\r <badname@example.com>']
 
-    def test_parse_email_bad_message_id(self):
+    def test_parse_email_bad_message_id(self) -> None:
         """Parse bad message-id format."""
         ep = eml_parser.EmlParser()
         sample_1 = samples_dir / 'sample_gh_issue_79_1.eml'

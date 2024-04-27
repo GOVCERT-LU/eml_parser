@@ -10,7 +10,7 @@ samples_dir = os.path.join(parent_dir, 'samples')
 
 
 class TestRouting:
-    def test_noparenthesis(self):
+    def test_noparenthesis(self) -> None:
         test_input = {
             '(test)': '',
             '((test))': '',
@@ -21,7 +21,7 @@ class TestRouting:
         for test, expected_result in test_input.items():
             assert eml_parser.routing.noparenthesis(test) == expected_result
 
-    def test_cleanline(self):
+    def test_cleanline(self) -> None:
         test_input = {
             '   ;': '',
             '  test  ': 'test',
@@ -31,7 +31,7 @@ class TestRouting:
         for test, expected_result in test_input.items():
             assert eml_parser.routing.cleanline(test) == expected_result
 
-    def test_give_dom_ip(self):
+    def test_give_dom_ip(self) -> None:
         test_input = {
             ' 192.168.1.1 abc bla bla www.example.com sdsf ::1 test ': ['192.168.1.1', '::1', 'www.example.com'],
         }
@@ -39,7 +39,7 @@ class TestRouting:
         for test, expected_result in test_input.items():
             assert sorted(eml_parser.routing.get_domain_ip(test)) == sorted(expected_result)
 
-    def test_parserouting(self):
+    def test_parserouting(self) -> None:
         test_input = {
             'test1': (
                 """Received: from mta1.example.com (mta1.example.com [192.168.1.100]) (using TLSv1 with cipher ADH-AES256-SHA (256/256 bits)) (No client certificate requested) by mta.example2.com (Postfix) with ESMTPS id 6388F684168 for <info@example.com>; Fri, 26 Apr 2013 13:15:55 +0200 (CEST)""",
@@ -71,11 +71,11 @@ class TestRouting:
             ),
         }
 
-        for test_number, test in test_input.items():
+        for _test_number, test in test_input.items():
             test_output = eml_parser.routing.parserouting(test[0])
 
             # get all keys from the test case
-            supported_keys = [x for x in test[1]]
+            supported_keys = list(test[1])
 
             for sk in supported_keys:
                 # make sure key is also in output
