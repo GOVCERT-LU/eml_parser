@@ -63,8 +63,7 @@ def get_domain_ip(line: str) -> typing.List[str]:
 
 
 def parserouting(line: str) -> typing.Dict[str, typing.Any]:
-    """This method tries to parsed a e-mail header received line\
-    and extract machine readable information.
+    """This method tries to parsed a e-mail header received line and extract machine readable information.
 
     Note that there are a large number of formats for these lines
     and a lot of weird ones which are not commonly used.

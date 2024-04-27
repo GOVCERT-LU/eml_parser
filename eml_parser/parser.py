@@ -1,6 +1,4 @@
-"""eml_parser serves as a python module for parsing eml files and returning various\
-information found in the e-mail as well as computed information.
-"""
+"""eml_parser serves as a python module for parsing eml files and returning various information found in the e-mail as well as computed information."""
 
 import base64
 import binascii
@@ -199,7 +197,9 @@ class EmlParser:
             dict: A dictionary with the content of the EML parsed and broken down into
                   key-value pairs.
         """
-        with open(eml_file, 'rb') as fp:
+        eml_file_path = pathlib.Path(eml_file)
+
+        with eml_file_path.open('rb') as fp:
             raw_email = fp.read()
 
         return self.decode_email_bytes(raw_email, ignore_bad_start=ignore_bad_start)
@@ -244,8 +244,7 @@ class EmlParser:
         return self.parse_email()
 
     def parse_email(self) -> dict:
-        """Parse an e-mail and return a dictionary containing the various parts of\
-        the e-mail broken down into key-value pairs.
+        """Parse an e-mail and return a dictionary containing the various parts of the e-mail broken down into key-value pairs.
 
         Returns:
           dict: A dictionary with the content of the EML parsed and broken down into
@@ -307,7 +306,7 @@ class EmlParser:
                     headers_struc['from'] = msg_header_field
 
             else:
-                headers_struc['from'] = typing.cast(typing.Tuple[str, str], from_)[1]
+                headers_struc['from'] = from_[1]
 
         # parse and decode "to"
         headers_struc['to'] = self.headeremail2list('to')
@@ -681,8 +680,8 @@ class EmlParser:
             ptr_start = 0
 
             for ptr_end in range(slice_step, body_length + slice_step, slice_step):
-                if ' ' in body[ptr_end - 1 : ptr_end]:
-                    while not (eml_parser.regexes.window_slice_regex.match(body[ptr_end - 1 : ptr_end]) or ptr_end > body_length):
+                if ' ' in body[ptr_end - 1: ptr_end]:
+                    while not (eml_parser.regexes.window_slice_regex.match(body[ptr_end - 1: ptr_end]) or ptr_end > body_length):
                         if ptr_end > body_length:
                             ptr_end = body_length
                             break
@@ -690,20 +689,20 @@ class EmlParser:
                         ptr_end += 1
 
                 # Found a :// near the start of the slice, rewind
-                if ptr_start > 16 and '://' in body[ptr_start - 8 : ptr_start + 8]:
+                if ptr_start > 16 and '://' in body[ptr_start - 8: ptr_start + 8]:
                     ptr_start -= 16
 
                 # Found a :// near the end of the slice, rewind from that location
-                if ptr_end < body_length and '://' in body[ptr_end - 8 : ptr_end + 8]:
+                if ptr_end < body_length and '://' in body[ptr_end - 8: ptr_end + 8]:
                     pos = body.rfind('://', ptr_end - 8, ptr_end + 8)
                     ptr_end = pos - 8
 
                 # Found a :// within the slice; try to expand the slice until we find an invalid
                 # URL character in order to avoid cutting off URLs
-                if '://' in body[ptr_start:ptr_end] and not body[ptr_end - 1 : ptr_end] == ' ':
+                if '://' in body[ptr_start:ptr_end] and not body[ptr_end - 1: ptr_end] == ' ':
                     distance = 1
 
-                    while body[ptr_end - 1 : ptr_end] not in (' ', '>') and distance < max_distance and ptr_end <= body_length:
+                    while body[ptr_end - 1: ptr_end] not in (' ', '>') and distance < max_distance and ptr_end <= body_length:
                         distance += 1
                         ptr_end += 1
 
@@ -877,7 +876,7 @@ class EmlParser:
         if msg.is_multipart():
             boundary = msg.get_boundary(failobj=None)
             for part in msg.get_payload():
-                raw_body.extend(self.get_raw_body_text(part, boundary=boundary))
+                raw_body.extend(self.get_raw_body_text(typing.cast(email.message.Message, part), boundary=boundary))
         else:
             # Treat text document attachments as belonging to the body of the mail.
             # Attachments with a file-extension of .htm/.html are implicitly treated
@@ -921,8 +920,7 @@ class EmlParser:
 
     @staticmethod
     def get_file_hash(data: bytes) -> typing.Dict[str, str]:
-        """Generate hashes of various types (``MD5``, ``SHA-1``, ``SHA-256``, ``SHA-512``)\
-        for the provided data.
+        """Generate hashes of various types (``MD5``, ``SHA-1``, ``SHA-256``, ``SHA-512``) for the provided data.
 
         Args:
           data (bytes): The data to calculate the hashes on.
@@ -1140,7 +1138,9 @@ def decode_email(
     """
     warnings.warn('You are using a deprecated method, please use the EmlParser class instead.', DeprecationWarning)
 
-    with open(eml_file, 'rb') as fp:
+    eml_file_path = pathlib.Path(eml_file)
+
+    with eml_file_path.open('rb') as fp:
         raw_email = fp.read()
 
     return decode_email_b(
@@ -1194,7 +1194,7 @@ def decode_email_b(
         email_force_tld (bool, optional): Only match e-mail addresses with a TLD. I.e exclude something like
                                           john@doe. By default this is disabled.
 
-      parse_attachments (bool, optional): Set this to false if you want to disable the parsing of attachments.
+        parse_attachments (bool, optional): Set this to false if you want to disable the parsing of attachments.
                                           Please note that HTML attachments as well as other text data marked to be
                                           in-lined, will always be parsed.
 

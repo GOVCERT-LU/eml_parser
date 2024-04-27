@@ -127,9 +127,7 @@ def decode_string(string: bytes, encoding: typing.Optional[str] = None) -> str:
 
 
 def workaround_bug_27257(msg: email.message.Message, header: str) -> typing.List[str]:
-    """Function to work around bug 27257 and just tries its best using \
-    the compat32 policy to extract any meaningful information, i.e. \
-    e-mail addresses.
+    """Function to work around bug 27257 and just tries its best using the compat32 policy to extract any meaningful information, i.e. e-mail addresses.
 
     Args:
         msg (email.message.Message): An e-mail message object.
@@ -150,8 +148,7 @@ def workaround_bug_27257(msg: email.message.Message, header: str) -> typing.List
 
 
 def workaround_field_value_parsing_errors(msg: email.message.Message, header: str) -> typing.List[str]:
-    """Function to work around field value parsing errors by trying a best effort parsing using \
-    the compat32 policy to extract any meaningful information.
+    """Function to work around field value parsing errors by trying a best effort parsing using the compat32 policy to extract any meaningful information.
 
     Args:
         msg (email.message.Message): An e-mail message object.
