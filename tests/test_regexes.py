@@ -1,6 +1,6 @@
 import pathlib
 
-from eml_parser.regexes import *
+from eml_parser.regexes import dom_regex, url_regex_simple, url_regex_www
 
 my_execution_dir = pathlib.Path(__file__).resolve().parent
 parent_dir = my_execution_dir.parent

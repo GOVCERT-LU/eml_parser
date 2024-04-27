@@ -31,10 +31,10 @@ def deep_flatten_object(obj: typing.Any) -> dict:
     """
 
     def sub(obj: typing.Any, res: list) -> typing.Iterator[typing.Tuple[str, typing.Any]]:
-        if type(obj) == dict:
+        if isinstance(obj, dict):
             for k, v in obj.items():
                 yield from sub(v, res + [k])
-        elif type(obj) == list:
+        elif isinstance(obj, list):
             for v in obj:
                 yield from sub(v, res)
         elif obj is None:

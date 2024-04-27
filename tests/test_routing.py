@@ -1,12 +1,12 @@
 import datetime
-import os.path
+import pathlib
 
 import eml_parser.parser
 import eml_parser.routing
 
-my_execution_dir = os.path.dirname(os.path.realpath(__file__))
-parent_dir = os.path.split(my_execution_dir)[0]
-samples_dir = os.path.join(parent_dir, 'samples')
+my_execution_dir = pathlib.Path(__file__).resolve().parent
+parent_dir = my_execution_dir.parent
+samples_dir = parent_dir / 'samples'
 
 
 class TestRouting:
