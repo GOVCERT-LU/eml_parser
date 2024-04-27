@@ -102,7 +102,7 @@ select = [
     "C", # flake8-comprehensions
     "B", # flake8-bugbear
     "D", # pydocstyle
-    "N",  # pep8-naming
+    "N", # pep8-naming
     "UP", # pyupgrade
     "YTT", # flake8-2020
     "ANN", # flake8-annotations
@@ -164,6 +164,13 @@ ignore = [
     "COM812", #	missing-trailing-comma
     "ISC001", # single-line-implicit-string-concatenation
     "Q001", # bad-quotes-multiline-string
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = [
+    "S101", # Use of `assert` detected
+    "D", # docstring
+    "RET504", # Unnecessary assignment before `return` statement
 ]
 
 [tool.ruff.format]
