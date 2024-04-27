@@ -1,6 +1,5 @@
 """This module contains various string import, check and parse methods."""
 
-
 import datetime
 import email
 import email.errors

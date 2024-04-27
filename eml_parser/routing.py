@@ -1,6 +1,5 @@
 """This module is used for parsing the received lines into a machine readable structure."""
 
-
 import re
 import typing
 

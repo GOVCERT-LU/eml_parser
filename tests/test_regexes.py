@@ -1,5 +1,3 @@
-
-
 import pathlib
 from eml_parser.regexes import *
 
@@ -47,7 +45,7 @@ class TestRegularExpressions:
     def test_dom_regex(self):
         """Ensure dom_regex matches domain samples"""
 
-        test_doms = '''www1.example.com www2.example.com'''
+        test_doms = """www1.example.com www2.example.com"""
 
         expected_result = ['www1.example.com', 'www2.example.com']
 

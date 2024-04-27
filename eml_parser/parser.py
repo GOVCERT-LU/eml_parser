@@ -2,7 +2,6 @@
 information found in the e-mail as well as computed information.
 """
 
-
 import base64
 import binascii
 import collections
@@ -861,7 +860,9 @@ class EmlParser:
 
         return return_field
 
-    def get_raw_body_text(self, msg: email.message.Message, boundary: typing.Optional[str] = None) -> typing.List[typing.Tuple[typing.Any, typing.Any, typing.Any, typing.Optional[str]]]:
+    def get_raw_body_text(
+        self, msg: email.message.Message, boundary: typing.Optional[str] = None
+    ) -> typing.List[typing.Tuple[typing.Any, typing.Any, typing.Any, typing.Optional[str]]]:
         """This method recursively retrieves all e-mail body parts and returns them as a list.
 
         Args:

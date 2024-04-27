@@ -26,8 +26,8 @@ class TestDecode:
             'Sécuriser vos achats sur Internet': '=?utf-8?q?S=C3=A9curiser_vos_achats_sur_Internet?=',
             '[Spam]': '=?utf-8?Q?=5BSpam=5D?=',
             'Léa Lala-Lulu <lealalalulu@example.com>': '=?iso-8859-1?Q?L=E9a_Lala-Lulu?= <lealalalulu@example.com>',
-            '''[Spam][SPAM]\r
- Cliente Example Bank''': '=?utf-8?Q?=5BSpam=5D?= =?utf-8?Q?=5BSPAM=5D=0D=0A=20Cliente=20Example=20Bank?='
+            """[Spam][SPAM]\r
+ Cliente Example Bank""": '=?utf-8?Q?=5BSpam=5D?= =?utf-8?Q?=5BSPAM=5D=0D=0A=20Cliente=20Example=20Bank?=',
         }
 
         for clear, encoded in test_subjects.items():
@@ -39,11 +39,12 @@ class TestDecode:
         """
         default_date = '1970-01-01T00:00:00+0000'
         default_date_date = dateutil.parser.parse(default_date)
-        test_input = ['Mon, 12 Jun 2017 22:25:19 +0200',
-                      'Mon, 12 Jun 2017 20:24:43 +0000 (UTC)',
-                      'Mon, 12 Jun 2017 16:24:21 -0400',
-                      '12 Jun 2017 22:01:19.5933'
-                      ]
+        test_input = [
+            'Mon, 12 Jun 2017 22:25:19 +0200',
+            'Mon, 12 Jun 2017 20:24:43 +0000 (UTC)',
+            'Mon, 12 Jun 2017 16:24:21 -0400',
+            '12 Jun 2017 22:01:19.5933',
+        ]
 
         for test in test_input:
             assert eml_parser.decode.robust_string2date(test) != default_date_date
