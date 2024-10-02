@@ -680,8 +680,8 @@ class EmlParser:
             ptr_start = 0
 
             for ptr_end in range(slice_step, body_length + slice_step, slice_step):
-                if ' ' in body[ptr_end - 1: ptr_end]:
-                    while not (eml_parser.regexes.window_slice_regex.match(body[ptr_end - 1: ptr_end]) or ptr_end > body_length):
+                if ' ' in body[ptr_end - 1 : ptr_end]:
+                    while not (eml_parser.regexes.window_slice_regex.match(body[ptr_end - 1 : ptr_end]) or ptr_end > body_length):
                         if ptr_end > body_length:
                             ptr_end = body_length
                             break
@@ -689,20 +689,20 @@ class EmlParser:
                         ptr_end += 1
 
                 # Found a :// near the start of the slice, rewind
-                if ptr_start > 16 and '://' in body[ptr_start - 8: ptr_start + 8]:
+                if ptr_start > 16 and '://' in body[ptr_start - 8 : ptr_start + 8]:
                     ptr_start -= 16
 
                 # Found a :// near the end of the slice, rewind from that location
-                if ptr_end < body_length and '://' in body[ptr_end - 8: ptr_end + 8]:
+                if ptr_end < body_length and '://' in body[ptr_end - 8 : ptr_end + 8]:
                     pos = body.rfind('://', ptr_end - 8, ptr_end + 8)
                     ptr_end = pos - 8
 
                 # Found a :// within the slice; try to expand the slice until we find an invalid
                 # URL character in order to avoid cutting off URLs
-                if '://' in body[ptr_start:ptr_end] and not body[ptr_end - 1: ptr_end] == ' ':
+                if '://' in body[ptr_start:ptr_end] and not body[ptr_end - 1 : ptr_end] == ' ':
                     distance = 1
 
-                    while body[ptr_end - 1: ptr_end] not in (' ', '>') and distance < max_distance and ptr_end <= body_length:
+                    while body[ptr_end - 1 : ptr_end] not in (' ', '>') and distance < max_distance and ptr_end <= body_length:
                         distance += 1
                         ptr_end += 1
 
