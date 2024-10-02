@@ -3,7 +3,7 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [unreleased]
+## [v2.0.0]
 ### Breaking
 - Set minimum supported Python version to 3.9
 - Remove pyre2 as it hasn't been updated in a long time and regex seems to be the better lib here
@@ -11,7 +11,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changes
 - Add ruff config
-- Add PY3.12 to tests
+- Add Python 3.12 to tests
 
 ## [v1.17.5]
 ### Changes
