@@ -19,7 +19,6 @@ import re
 import typing
 import urllib.parse
 import uuid
-import warnings
 from collections import Counter
 from html import unescape
 
@@ -250,10 +249,10 @@ class EmlParser:
           dict: A dictionary with the content of the EML parsed and broken down into
                 key-value pairs.
         """
-        header: typing.Dict[str, typing.Any] = {}
-        report_struc: typing.Dict[str, typing.Any] = {}  # Final structure
-        headers_struc: typing.Dict[str, typing.Any] = {}  # header_structure
-        bodys_struc: typing.Dict[str, typing.Any] = {}  # body structure
+        header: dict[str, typing.Any] = {}
+        report_struc: dict[str, typing.Any] = {}  # Final structure
+        headers_struc: dict[str, typing.Any] = {}  # header_structure
+        bodys_struc: dict[str, typing.Any] = {}  # body structure
 
         if self.msg is None:
             raise ValueError('msg is not set.')
@@ -455,11 +454,11 @@ class EmlParser:
             multipart = True
 
         for body_tup in raw_body:
-            bodie: typing.Dict[str, typing.Any] = {}
+            bodie: dict[str, typing.Any] = {}
             _, body, body_multhead, boundary = body_tup
             # Parse any URLs and mail found in the body
-            list_observed_urls: typing.List[str] = []
-            list_observed_urls_noscheme: typing.List[str] = []
+            list_observed_urls: list[str] = []
+            list_observed_urls_noscheme: list[str] = []
             list_observed_email: typing.Counter[str] = Counter()
             list_observed_dom: typing.Counter[str] = Counter()
             list_observed_ip: typing.Counter[str] = Counter()
@@ -536,7 +535,7 @@ class EmlParser:
             # "a","toto"           a: [toto,titi]
             # "a","titi"   --->    c: [truc]
             # "c","truc"
-            ch: typing.Dict[str, typing.List] = {}
+            ch: dict[str, list] = {}
             for k, v in body_multhead:
                 # make sure we are working with strings only
                 v = str(v)
@@ -785,7 +784,7 @@ class EmlParser:
 
         return url
 
-    def get_uri_ondata(self, body: str) -> typing.List[str]:
+    def get_uri_ondata(self, body: str) -> list[str]:
         """Function for extracting URLs from the input string.
 
         Args:
@@ -817,7 +816,7 @@ class EmlParser:
 
         return list(list_observed_urls)
 
-    def headeremail2list(self, header: str) -> typing.List[str]:
+    def headeremail2list(self, header: str) -> list[str]:
         """Parses a given header field with e-mail addresses to a list of e-mail addresses.
 
         Args:
@@ -840,7 +839,7 @@ class EmlParser:
             for v in _field:
                 v = eml_parser.decode.rfc2047_decode(v).replace('\n', '').replace('\r', '')
 
-                parsing_result: typing.Dict[str, typing.Any] = {}
+                parsing_result: dict[str, typing.Any] = {}
                 parser_cls = typing.cast(email.headerregistry.AddressHeader, email.headerregistry.HeaderRegistry()[header])
                 parser_cls.parse(v, parsing_result)
                 for _group in parsing_result['groups']:
@@ -861,7 +860,7 @@ class EmlParser:
 
     def get_raw_body_text(
         self, msg: email.message.Message, boundary: typing.Optional[str] = None
-    ) -> typing.List[typing.Tuple[typing.Any, typing.Any, typing.Any, typing.Optional[str]]]:
+    ) -> list[tuple[typing.Any, typing.Any, typing.Any, typing.Optional[str]]]:
         """This method recursively retrieves all e-mail body parts and returns them as a list.
 
         Args:
@@ -871,7 +870,7 @@ class EmlParser:
         Returns:
             list: Returns a list of sets which are in the form of "set(encoding, raw_body_string, message field headers, possible boundary marker)"
         """
-        raw_body: typing.List[typing.Tuple[typing.Any, typing.Any, typing.Any, typing.Optional[str]]] = []
+        raw_body: list[tuple[typing.Any, typing.Any, typing.Any, typing.Optional[str]]] = []
 
         if msg.is_multipart():
             boundary = msg.get_boundary(failobj=None)
@@ -898,14 +897,14 @@ class EmlParser:
 
                 charset = msg.get_content_charset()
                 if charset is None:
-                    raw_body_str = msg.get_payload(decode=True)
-                    raw_body_str = eml_parser.decode.decode_string(raw_body_str, None)
+                    raw_body_b = typing.cast(bytes, msg.get_payload(decode=True))
+                    raw_body_str = eml_parser.decode.decode_string(raw_body_b, None)
                 else:
                     try:
-                        raw_body_str = msg.get_payload(decode=True).decode(charset, 'ignore')
+                        raw_body_str = typing.cast(bytes, msg.get_payload(decode=True)).decode(charset, 'ignore')
                     except (LookupError, ValueError):
                         logger.debug('An exception occurred while decoding the payload!', exc_info=True)
-                        raw_body_str = msg.get_payload(decode=True).decode('ascii', 'ignore')
+                        raw_body_str = typing.cast(bytes, msg.get_payload(decode=True)).decode('ascii', 'ignore')
 
                 # In case we hit bug 27257 or any other parsing error, try to downgrade the used policy
                 try:
@@ -919,7 +918,7 @@ class EmlParser:
         return raw_body
 
     @staticmethod
-    def get_file_hash(data: bytes) -> typing.Dict[str, str]:
+    def get_file_hash(data: bytes) -> dict[str, str]:
         """Generate hashes of various types (``MD5``, ``SHA-1``, ``SHA-256``, ``SHA-512``) for the provided data.
 
         Args:
@@ -954,7 +953,7 @@ class EmlParser:
 
         return hash_algo(_value).hexdigest()
 
-    def traverse_multipart(self, msg: email.message.Message, counter: int = 0) -> typing.Dict[str, typing.Any]:
+    def traverse_multipart(self, msg: email.message.Message, counter: int = 0) -> dict[str, typing.Any]:
         """Recursively traverses all e-mail message multi-part elements and returns in a parsed form as a dict.
 
         Args:
@@ -975,13 +974,13 @@ class EmlParser:
                     attachments.update(self.prepare_multipart_part_attachment(msg, counter))
 
             for part in msg.get_payload():
-                attachments.update(self.traverse_multipart(part, counter))
+                attachments.update(self.traverse_multipart(typing.cast(email.message.EmailMessage, part), counter))
         else:
             return self.prepare_multipart_part_attachment(msg, counter)
 
         return attachments
 
-    def prepare_multipart_part_attachment(self, msg: email.message.Message, counter: int = 0) -> typing.Dict[str, typing.Any]:
+    def prepare_multipart_part_attachment(self, msg: email.message.Message, counter: int = 0) -> dict[str, typing.Any]:
         """Extract meta-information from a multipart-part.
 
         Args:
@@ -993,7 +992,7 @@ class EmlParser:
             dict: Returns a dict with original multi-part headers as well as generated hash check-sums,
                 date size, file extension, real mime-type.
         """
-        attachment: typing.Dict[str, typing.Any] = {}
+        attachment: dict[str, typing.Any] = {}
 
         # In case we hit bug 27257, try to downgrade the used policy
         try:
@@ -1013,15 +1012,15 @@ class EmlParser:
                     logger.warning('More than one payload for "message/rfc822" part detected. This is not supported, please report!')
 
                 try:
-                    custom_policy = email.policy.default.clone(max_line_length=0)
-                    data = payload[0].as_bytes(policy=custom_policy)
+                    custom_policy: email.policy.Policy = email.policy.default.clone(max_line_length=0)
+                    data = typing.cast(list[email.message.EmailMessage], payload)[0].as_bytes(policy=custom_policy)
                 except UnicodeEncodeError:
                     custom_policy = email.policy.compat32.clone(max_line_length=0)
-                    data = payload[0].as_bytes(policy=custom_policy)
+                    data = typing.cast(list[email.message.EmailMessage], payload)[0].as_bytes(policy=custom_policy)
 
                 file_size = len(data)
             else:
-                data = msg.get_payload(decode=True)
+                data = typing.cast(bytes, msg.get_payload(decode=True))
                 file_size = len(data)
 
             filename = msg.get_filename('')
@@ -1055,7 +1054,7 @@ class EmlParser:
             if self.include_attachment_data:
                 attachment[file_id]['raw'] = base64.b64encode(data)
 
-            ch: typing.Dict[str, typing.List[str]] = {}
+            ch: dict[str, list[str]] = {}
             for k, v in msg.items():
                 k = k.lower()
                 v = str(v)
@@ -1072,7 +1071,7 @@ class EmlParser:
         return attachment
 
     @staticmethod
-    def get_mime_type(data: bytes) -> typing.Union[typing.Tuple[str, str], typing.Tuple[None, None]]:
+    def get_mime_type(data: bytes) -> typing.Union[tuple[str, str], tuple[None, None]]:
         """Get mime-type information based on the provided bytes object.
 
         Args:
@@ -1087,131 +1086,3 @@ class EmlParser:
 
         detected = magic.detect_from_content(data)
         return detected.name, detected.mime_type
-
-
-def decode_email(
-    eml_file: str,
-    include_raw_body: bool = False,
-    include_attachment_data: bool = False,
-    pconf: typing.Optional[dict] = None,
-    policy: email.policy.Policy = email.policy.default,
-    ignore_bad_start: bool = False,
-    email_force_tld: bool = False,
-    parse_attachments: bool = True,
-) -> dict:
-    """Function for decoding an EML file into an easily parsable structure.
-
-    Some intelligence is applied while parsing the file in order to work around
-    broken files.
-    Besides just parsing, this function also computes hashes and extracts meta
-    information from the source file.
-
-    !!! important
-        Deprecated since version 1.12.0
-
-    Args:
-      eml_file (str): Full absolute path to the file to be parsed.
-      include_raw_body (bool, optional): Boolean parameter which indicates whether
-                                         to include the original file contents in
-                                         the returned structure. Default is False.
-      include_attachment_data (bool, optional): Boolean parameter which indicates whether
-                                                to include raw attachment data in the
-                                                returned structure. Default is False.
-      pconf (dict, optional): A dict with various optional configuration parameters,
-                              e.g. whitelist IPs, whitelist e-mail addresses, etc.
-
-      policy (email.policy.Policy, optional): Policy to use when parsing e-mails.
-            Default = email.policy.default.
-
-      ignore_bad_start (bool, optional): Ignore invalid file start. This has a considerable performance impact.
-
-      email_force_tld (bool, optional): Only match e-mail addresses with a TLD. I.e exclude something like
-                                        john@doe. By default this is disabled.
-
-      parse_attachments (bool, optional): Set this to false if you want to disable the parsing of attachments.
-                                          Please note that HTML attachments as well as other text data marked to be
-                                          in-lined, will always be parsed.
-
-    Returns:
-      dict: A dictionary with the content of the EML parsed and broken down into
-            key-value pairs.
-    """
-    warnings.warn('You are using a deprecated method, please use the EmlParser class instead.', DeprecationWarning)
-
-    eml_file_path = pathlib.Path(eml_file)
-
-    with eml_file_path.open('rb') as fp:
-        raw_email = fp.read()
-
-    return decode_email_b(
-        eml_file=raw_email,
-        include_raw_body=include_raw_body,
-        include_attachment_data=include_attachment_data,
-        pconf=pconf,
-        policy=policy,
-        ignore_bad_start=ignore_bad_start,
-        email_force_tld=email_force_tld,
-        parse_attachments=parse_attachments,
-    )
-
-
-def decode_email_b(
-    eml_file: bytes,
-    include_raw_body: bool = False,
-    include_attachment_data: bool = False,
-    pconf: typing.Optional[dict] = None,
-    policy: email.policy.Policy = email.policy.default,
-    ignore_bad_start: bool = False,
-    email_force_tld: bool = False,
-    parse_attachments: bool = True,
-) -> dict:
-    """Function for decoding an EML file into an easily parsable structure.
-
-    Some intelligence is applied while parsing the file in order to work around
-    broken files.
-    Besides just parsing, this function also computes hashes and extracts meta
-    information from the source file.
-
-    !!! important
-        Deprecated since version 1.12.0
-
-    Args:
-        eml_file (bytes): Contents of the raw EML file passed to this function as string.
-        include_raw_body (bool, optional): Boolean parameter which indicates whether
-                                           to include the original file contents in
-                                           the returned structure. Default is False.
-        include_attachment_data (bool, optional): Boolean parameter which indicates whether
-                                                  to include raw attachment data in the
-                                                  returned structure. Default is False.
-        pconf (dict, optional): A dict with various optional configuration parameters,
-                                e.g. whitelist IPs, whitelist e-mail addresses, etc.
-
-        policy (email.policy.Policy, optional): Policy to use when parsing e-mails.
-              Default = email.policy.default.
-
-        ignore_bad_start (bool, optional): Ignore invalid file start. This has a considerable performance impact.
-
-        email_force_tld (bool, optional): Only match e-mail addresses with a TLD. I.e exclude something like
-                                          john@doe. By default this is disabled.
-
-        parse_attachments (bool, optional): Set this to false if you want to disable the parsing of attachments.
-                                          Please note that HTML attachments as well as other text data marked to be
-                                          in-lined, will always be parsed.
-
-    Returns:
-        dict: A dictionary with the content of the EML parsed and broken down into
-              key-value pairs.
-    """
-    warnings.warn('You are using a deprecated method, please use the EmlParser class instead.', DeprecationWarning)
-
-    ep = EmlParser(
-        include_raw_body=include_raw_body,
-        include_attachment_data=include_attachment_data,
-        pconf=pconf,
-        policy=policy,
-        ignore_bad_start=ignore_bad_start,
-        email_force_tld=email_force_tld,
-        parse_attachments=parse_attachments,
-    )
-
-    return ep.decode_email_bytes(eml_file)

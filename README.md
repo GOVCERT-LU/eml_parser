@@ -1,5 +1,4 @@
 [![Code Health](https://codebeat.co/badges/d631cfb2-a7f8-476a-9d2e-58e58db95bc8)](https://codebeat.co/projects/github-com-govcert-lu-eml_parser-master)
-[![Travis CI](https://travis-ci.com/GOVCERT-LU/eml_parser.svg?branch=master)](https://travis-ci.com/GOVCERT-LU/eml_parser)
 [![Documentation Status](https://readthedocs.org/projects/eml-parser/badge/)](http://eml-parser.readthedocs.io)
 [![PyPI](https://badge.fury.io/py/eml-parser.svg)](https://badge.fury.io/py/eml-parser)
 [![PyPI pyversions](https://img.shields.io/pypi/pyversions/eml-parser.svg)](https://pypi.python.org/pypi/eml-parser/)
@@ -33,15 +32,6 @@ pip install eml_parser
 ### Known Issues
 #### **OSX** users
 Make sure to install libmagic, else eml_parser will not work.
-
-#### Python <=3.7.4 "rare header field parsing issue"
-It has been reported (in #60) that there are parsing issues in some particular cases which seem
-to be caused by a bug in the *email* module of the Python standard library. At least versions <=3.7.4 are affected.
-
-Python versions >=3.7.11 are not affected. If you do get *KeyError* exceptions on header field parsing, you should
-consider upgrading to a more recent version of Python.
-
--> Please open an issue if the error persists after upgrading.
 
 
 ### Example usage:

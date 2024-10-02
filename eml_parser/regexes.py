@@ -5,10 +5,7 @@
 try:
     import regex as re
 except ImportError:
-    try:
-        import re2 as re
-    except ImportError:
-        import re
+    import re
 
 __author__ = 'Toth Georges, Jung Paul'
 __email__ = 'georges@trypill.org, georges.toth@govcert.etat.lu'
@@ -46,47 +43,24 @@ ipv6_regex = re.compile(
 url_regex_comma = re.compile(r',(?=https?|ftps?)', flags=re.IGNORECASE)
 url_regex_www_comma = re.compile(r',(?=https?|ftps?|www\d{0,3})', flags=re.IGNORECASE)
 
-if re.__name__ == 're2':
-    url_regex_simple = re.compile(
-        r"""
-    \b
-    (?:https?|ftps?):
-    (?:/{1,3}|[a-z0-9%])
-    (?:
-      \[[0-9a-f:.]{2,40}(?:%[^\x00-\x20\s\]]{1,100})?\]
-    |
-      [^\x00-\x20\s`()<>{}\[\]\/'"«»“”‘’]+
-    )
-    (?:[\w\-._~%!$&'()*+,;=:/?#\[\]@\x{00001000}-\x{0010FFFF}]*[^\x00-\x20\s`!\[\]{};:'".,<>«»“”‘’])?
-    """,
-        flags=re.IGNORECASE | re.VERBOSE,
-    )
-    url_regex_www = re.compile(
-        r"""
-    (?:
-    # http/ftp schemes
-        \b
-        (?:https?|ftps?):
-        (?:/{1,3}|[a-z0-9%])
-        (?:
-          \[[0-9a-f:.]{2,40}(?:%[^\x00-\x20\s\]]{1,100})?\]
-        |
-          [^\x00-\x20\s`()<>{}\[\]\/'"«»“”‘’]+
-        )
-        (?:[\w\-._~%!$&'()*+,;=:/?#\[\]@\x{00001000}-\x{0010FFFF}]*[^\x00-\x20\s`!\[\]{};:'".,<>«»“”‘’])?
-    |
-    # www address  (any preceding matched character needs to be removed afterward)
-        (?:^|[ \t\n\r\f\v\'\"«»“”‘’])
-        www\d{0,3}[.][-\w\x{0900}-\x{2017}\x{2020}-\x{0010FFFF}.]+  # Host
-        (?::[0]*[1-9][0-9]{0,4})?  # Port
-        [\/\\#?][\w\-._~%!$&'()*+,;=:/?#\[\]@\x{00001000}-\x{0010FFFF}]*[^\x00-\x20\s`!\[\]{};:'\".,<>«»“”‘’]  # Path, etc.
-    )
-    """,
-        flags=re.IGNORECASE | re.VERBOSE,
-    )
-else:
-    url_regex_simple = re.compile(
-        r"""
+url_regex_simple = re.compile(
+    r"""
+\b
+(?:https?|ftps?):
+(?:/{1,3}|[a-z0-9%])
+(?:
+  \[[0-9a-f:.]{2,40}(?:%[^\x00-\x20\s\]]{1,100})?\]
+|
+  [^\x00-\x20\s`()<>{}\[\]\/'"«»“”‘’]+
+)
+(?:[\w\-._~%!$&'()*+,;=:/?#\[\]@\U00001000-\U0010FFFF]*[^\x00-\x20\s`!\[\]{};:'".,<>«»“”‘’])?
+""",
+    flags=re.IGNORECASE | re.VERBOSE,
+)
+url_regex_www = re.compile(
+    r"""
+(?:
+# http/ftp schemes
     \b
     (?:https?|ftps?):
     (?:/{1,3}|[a-z0-9%])
@@ -96,33 +70,17 @@ else:
       [^\x00-\x20\s`()<>{}\[\]\/'"«»“”‘’]+
     )
     (?:[\w\-._~%!$&'()*+,;=:/?#\[\]@\U00001000-\U0010FFFF]*[^\x00-\x20\s`!\[\]{};:'".,<>«»“”‘’])?
-    """,
-        flags=re.IGNORECASE | re.VERBOSE,
-    )
-    url_regex_www = re.compile(
-        r"""
+|
+# www address  (any preceding matched character needs to be removed afterward)
     (?:
-    # http/ftp schemes
-        \b
-        (?:https?|ftps?):
-        (?:/{1,3}|[a-z0-9%])
-        (?:
-          \[[0-9a-f:.]{2,40}(?:%[^\x00-\x20\s\]]{1,100})?\]
-        |
-          [^\x00-\x20\s`()<>{}\[\]\/'"«»“”‘’]+
-        )
-        (?:[\w\-._~%!$&'()*+,;=:/?#\[\]@\U00001000-\U0010FFFF]*[^\x00-\x20\s`!\[\]{};:'".,<>«»“”‘’])?
-    |
-    # www address  (any preceding matched character needs to be removed afterward)
-        (?:
-        ^|[ \t\n\r\f\v\'\"«»“”‘’])
-        www\d{0,3}[.](?:[-\w\u0900-\u2017\u2020-\U0010FFFF]{1,250}[.]){1,250}[-0-9a-z\w\u0900-\u0DFF]{2,30}[.]*  # Host Simple TLD regex
-        (?::[0]*[1-9][0-9]{0,4})?  # Port
-        (?:[\/#?](?:[\w\-._~%!$&'()*+,;=:/?#\[\]@\U00001000-\U0010FFFF]*[^\x00-\x20\s`!\[\]{};:'\".,<>«»“”‘’])) # Path, etc.
-    )
-    """,
-        flags=re.IGNORECASE | re.VERBOSE,
-    )
+    ^|[ \t\n\r\f\v\'\"«»“”‘’])
+    www\d{0,3}[.](?:[-\w\u0900-\u2017\u2020-\U0010FFFF]{1,250}[.]){1,250}[-0-9a-z\w\u0900-\u0DFF]{2,30}[.]*  # Host Simple TLD regex
+    (?::[0]*[1-9][0-9]{0,4})?  # Port
+    (?:[\/#?](?:[\w\-._~%!$&'()*+,;=:/?#\[\]@\U00001000-\U0010FFFF]*[^\x00-\x20\s`!\[\]{};:'\".,<>«»“”‘’])) # Path, etc.
+)
+""",
+    flags=re.IGNORECASE | re.VERBOSE,
+)
 
 
 # Search for URLs in HTML IMG or A tags

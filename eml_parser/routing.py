@@ -48,7 +48,7 @@ def cleanline(line: str) -> str:
     return eml_parser.regexes.cleanline_regex.sub('', line)
 
 
-def get_domain_ip(line: str) -> typing.List[str]:
+def get_domain_ip(line: str) -> list[str]:
     """Method returns all domains, IPv4 and IPv6 addresses found in a given string.
 
     Args:
@@ -62,7 +62,7 @@ def get_domain_ip(line: str) -> typing.List[str]:
     return list(set(m))
 
 
-def parserouting(line: str) -> typing.Dict[str, typing.Any]:
+def parserouting(line: str) -> dict[str, typing.Any]:
     """This method tries to parsed a e-mail header received line and extract machine readable information.
 
     Note that there are a large number of formats for these lines
@@ -105,7 +105,7 @@ def parserouting(line: str) -> typing.Dict[str, typing.Any]:
     npline = npline.strip(' ')  # Remove any border WhiteSpace
 
     borders = ['from ', 'by ', 'with ', 'for ']
-    result: typing.List[typing.Dict[str, typing.Any]] = []
+    result: list[dict[str, typing.Any]] = []
 
     # Scan the line to determine the order, and presence of each "from/by/with/for" words
     for word in borders:
@@ -128,7 +128,7 @@ def parserouting(line: str) -> typing.Dict[str, typing.Any]:
     tout = []
     for word in borders:
         result_max = 0xFFFFFFFF
-        line_max: typing.Dict[str, typing.Any] = {}
+        line_max: dict[str, typing.Any] = {}
         for eline in result:
             if eline['name_in'] == word and eline['weight'] <= result_max:
                 result_max = eline['weight']

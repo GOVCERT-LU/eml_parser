@@ -14,13 +14,13 @@ classifiers = [
     "Intended Audience :: Developers",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "Topic :: Communications :: Email",
 ]
-requires-python = ">= 3.8"
+requires-python = ">= 3.9"
 dependencies = [
     "python-dateutil",
     "charset-normalizer",
@@ -42,7 +42,6 @@ content-type = "text/markdown"
 [project.optional-dependencies]
 filemagic = ["file-magic >= 0.4.0"]
 regex = ["regex"]
-pyre2 = ["pyre2"]
 docs = [
     "mkdocs-material",
     "mkdocstrings[crystal,python]",
@@ -91,7 +90,7 @@ check_untyped_defs = false
 [tool.ruff]
 line-length = 160
 indent-width = 4
-target-version = "py38"
+target-version = "py39"
 
 [tool.ruff.lint]
 select = [

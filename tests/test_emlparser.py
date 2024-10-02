@@ -30,7 +30,7 @@ def deep_flatten_object(obj: typing.Any) -> dict:
         dict: Returns a dict with the result.
     """
 
-    def sub(obj: typing.Any, res: list) -> typing.Iterator[typing.Tuple[str, typing.Any]]:
+    def sub(obj: typing.Any, res: list) -> typing.Iterator[tuple[str, typing.Any]]:
         if isinstance(obj, dict):
             for k, v in obj.items():
                 yield from sub(v, res + [k])
@@ -42,7 +42,7 @@ def deep_flatten_object(obj: typing.Any) -> dict:
         else:
             yield ('_'.join(res), obj)
 
-    flat_kv: typing.Dict[str, typing.List[str]] = {}
+    flat_kv: dict[str, list[str]] = {}
     for k, v in sub(obj, []):
         if k not in flat_kv:
             flat_kv[k] = [v]
@@ -52,7 +52,7 @@ def deep_flatten_object(obj: typing.Any) -> dict:
     return flat_kv
 
 
-def recursive_compare(element_a: typing.Dict[str, str], element_b: typing.Dict[str, str]) -> None:
+def recursive_compare(element_a: dict[str, str], element_b: dict[str, str]) -> None:
     """This function flattens both input elements and compares them recursively.
 
     Args:
@@ -160,7 +160,7 @@ class TestEMLParser:
         assert eml_parser.EmlParser(include_href=True, domain_force_tld=True).get_uri_ondata(test_urls) == expected_result
 
     def test_get_uri_re_backtracking(self) -> None:
-        """Ensure url_regex_simple does not cause catastrophic backtracking (Issue 63), test with re instead of re2 or regex"""
+        """Ensure url_regex_simple does not cause catastrophic backtracking (Issue 63), test with re instead of regex"""
         test_urls = """
         Lorem ipsum dolor sit amet, http://xxxxxxxxxx.example.com������������������������������������������������������������������������������������������������������������������������������������������������ consectetur adipiscing elit.
         """
