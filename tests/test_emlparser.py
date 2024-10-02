@@ -3,6 +3,7 @@ import email.policy
 import email.utils
 import json
 import pathlib
+import platform
 import typing
 from email.headerregistry import Address
 from email.message import EmailMessage
@@ -257,9 +258,14 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
 
         msg = email.message_from_bytes(raw_email, policy=email.policy.default)
 
-        # just to be sure we still hit bug 27257 (else there is no more need for the workaround)
-        with pytest.raises(AttributeError):
-            msg.items()
+        python_version_tuple = platform.python_version_tuple()
+        if python_version_tuple[0] == '3' and int(python_version_tuple[1]) < 12:
+            # Just to be sure we still hit bug 27257 (else there is no more need for the workaround)
+            # This should no longer raise under Python >= 3.12
+            with pytest.raises(AttributeError):
+                msg.items()
+        else:
+            assert msg.items()
 
         ep = eml_parser.EmlParser()
         ep.msg = msg
