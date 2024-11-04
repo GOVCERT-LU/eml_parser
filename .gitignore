@@ -1,5 +1,6 @@
 *.eml
 *.pyc
+uv.lock
 
 build
 dist

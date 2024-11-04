@@ -12,5 +12,5 @@ max_line_length = 160
 ij_continuation_indent_size = 4
 ij_python_blank_line_at_file_end = true
 
-[{*.yml_sample,*.yaml_sample,*.yml,*.yaml}]
+[{*.yml_sample,*.yaml_sample,*.yml,*.yaml,*.toml}]
 indent_size = 2

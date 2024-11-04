@@ -18,6 +18,7 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Communications :: Email",
 ]
 requires-python = ">= 3.9"
@@ -53,7 +54,7 @@ dev = [
     "ruff",
 ]
 test = [
-    "pytest",
+    "pytest>=8.3",
     "pytest-sugar",
     "coverage",
 ]
@@ -86,6 +87,16 @@ warn_redundant_casts = true
 warn_unused_ignores = true
 strict_optional = true
 check_untyped_defs = false
+
+files = [
+    "eml_parser/**/*.py"
+]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = [
+    "tests"
+]
 
 [tool.ruff]
 line-length = 160
