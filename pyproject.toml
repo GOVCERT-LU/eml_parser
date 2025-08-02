@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=65", "setuptools_scm[toml]>=7.0"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
 
 [project]
 name = "eml_parser"
@@ -43,11 +43,14 @@ content-type = "text/markdown"
 [project.optional-dependencies]
 filemagic = ["file-magic >= 0.4.0"]
 regex = ["regex"]
+
+[dependency-groups]
 docs = [
     "mkdocs-material",
     "mkdocstrings[crystal,python]",
 ]
 dev = [
+    "pip",
     "mypy",
     "types-python-dateutil",
     "types-chardet",
@@ -59,21 +62,8 @@ test = [
     "coverage",
 ]
 
-[tool.setuptools_scm]
-
-[tool.setuptools]
-include-package-data = true
-license-files = ["LICENSE"]
-
-[tool.setuptools.packages.find]
-exclude = [
-    "e2e",
-    "tests",
-]
-namespaces = false
-
-[tool.setuptools.package-data]
-eml_parser = ["py.typed"]
+[tool.hatch.envs.default]
+installer = "uv"
 
 [tool.mypy]
 show_error_context = true
@@ -91,6 +81,9 @@ check_untyped_defs = false
 files = [
     "eml_parser/**/*.py"
 ]
+
+[tool.hatch.version]
+source = "vcs"
 
 [tool.pytest.ini_options]
 minversion = "8.0"
