@@ -25,7 +25,7 @@ jobs:
       - name: Install dependencies
         run: |
           python3 -m pip install uv
-          uv sync --extra test --extra filemagic --extra regex
+          uv sync --group test --extra filemagic --extra regex
       - name: Test with pytest
         run: |
           uv run pytest -v tests
