@@ -3,7 +3,7 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [unreleased]
+## [v3.0.4]
 ### Fixes
 - Security & Performance: Fix $O(n^4)$ algorithmic complexity DoS in routing.parserouting by replacing static npdate regex matching with non-greedy sequence terminators (thanks @iam-niranjan).
 
