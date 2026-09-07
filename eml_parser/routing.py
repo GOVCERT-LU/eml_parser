@@ -58,7 +58,7 @@ def get_domain_ip(line: str) -> list[str]:
 
 
 def parserouting(line: str) -> dict[str, typing.Any]:
-    """This method tries to parsed a e-mail header received line and extract machine readable information.
+    """This method tries to parse an e-mail header received line and extract machine-readable information.
 
     Note that there are a large number of formats for these lines
     and a lot of weird ones which are not commonly used.
@@ -100,49 +100,32 @@ def parserouting(line: str) -> dict[str, typing.Any]:
     npline = npline.strip(' ')  # Remove any border WhiteSpace
 
     borders = ['from ', 'by ', 'with ', 'for ']
-    result: list[dict[str, typing.Any]] = []
 
     # Scan the line to determine the order, and presence of each "from/by/with/for" words
+    raw_matches: list[tuple[int, str]] = []
     for word in borders:
-        candidate = list(borders)
-        candidate.remove(word)
-        for endword in candidate:
-            if word in npline:
-                loc = npline.find(word)
-                end = npline.find(endword)
-                if end < loc or end == -1:
-                    end = 0xFFFFFFF  # Kindof MAX 31 bits
-                result.append({'name_in': word, 'pos': loc, 'name_out': endword, 'weight': end + loc})
-                # print({'name_in': word, 'pos': loc, 'name_out': endword, 'weight': end+loc})
+        pos = npline.find(word)
+        if pos != -1:
+            raw_matches.append((pos, word))
 
-    # Create the word list... "from/by/with/for" by sorting the list.
-    if not result:
+    if not raw_matches:
         out['warning'] = ['Nothing Parsable']
         return out
 
-    tout = []
-    for word in borders:
-        result_max = 0xFFFFFFFF
-        line_max: dict[str, typing.Any] = {}
-        for eline in result:
-            if eline['name_in'] == word and eline['weight'] <= result_max:
-                result_max = eline['weight']
-                line_max = eline
+    # Sort keywords sequentially by their appearance order in the header
+    tout = sorted(raw_matches, key=lambda match: match[0])
 
-        if line_max:
-            tout.append([line_max.get('pos'), line_max.get('name_in')])
-
-    # structure is list[list[int, str]]
-    # we sort based on the first element of the sub list, i.e. int
-    tout = sorted(tout, key=lambda x: typing.cast('int', x[0]))
-
-    # build regex.
     reg = ''
-    for item in tout:
-        reg += item[1] + '(?P<' + item[1].strip() + '>.*)'  # type: ignore
-    if npdate:
-        # escape special regex chars
-        reg += eml_parser.regexes.escape_special_regex_chars.sub(r"""\\\1""", npdate)
+    for i, item in enumerate(tout):
+        field = item[1].strip()
+        kw = item[1]
+
+        # Capture lazily until the next keyword
+        reg += kw + r'(?P<' + field + r'>.*?)'
+
+        if i + 1 >= len(tout):
+            # Last field captures lazily until a date separator ';' or end of string
+            reg += '(?:;|$)'
 
     reparse = re.compile(reg)
     reparseg = reparse.search(line)

@@ -3,6 +3,10 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [unreleased]
+### Fixes
+- Security & Performance: Fix $O(n^4)$ algorithmic complexity DoS in routing.parserouting by replacing static npdate regex matching with non-greedy sequence terminators (thanks @iam-niranjan).
+
 ## [v3.0.3]
 ### Fixes
 - Fix `AttributeError` crash in `rfc2047_decode()` when decoding header values that contain no RFC2047 encoded-word (e.g. plain ASCII). `email.header.decode_header()` returns `str` fragments in that case instead of `bytes`, which was previously assumed unconditionally.
