@@ -194,6 +194,13 @@ ignore = [
   "D", # docstring
   "RET504", # Unnecessary assignment before `return` statement
 ]
+"examples/*" = [
+  "D", # docstring
+  "T201",
+  "PTH123",
+  "ANN",
+  "RET",
+]
 
 [tool.ruff.format]
 quote-style = "single"
