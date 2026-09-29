@@ -7,14 +7,14 @@ repos:
   - repo: builtin
     hooks:
       - id: check-added-large-files
-        args: ['--maxkb=750']
+        args: [ '--maxkb=750' ]
         exclude: ^uv.lock$
       - id: end-of-file-fixer
         exclude:
           glob:
             - "samples/**/*.eml"
       - id: trailing-whitespace
-        args: [--markdown-linebreak-ext=md]
+        args: [ --markdown-linebreak-ext=md ]
         exclude:
           glob:
             - "samples/**/*.eml"
@@ -23,7 +23,7 @@ repos:
       - id: check-toml
       - id: check-yaml
       - id: mixed-line-ending
-        args: [--fix=lf]
+        args: [ --fix=lf ]
         exclude:
           glob:
             - "samples/**/*.eml"
@@ -38,18 +38,19 @@ repos:
         entry: uv run ruff check --force-exclude --fix --exit-non-zero-on-fix
         require_serial: true
         language: unsupported
-        types: [python]
+        types: [ python ]
 
       - id: local-ruff-format
         name: ruff format
         entry: uv run ruff format --force-exclude --exit-non-zero-on-format
         require_serial: true
         language: unsupported
-        types: [python]
+        types: [ python ]
 
       - id: mypy
         name: run mypy
         entry: uv run mypy
         require_serial: true
         language: python
-        types: [python]
+        types: [ python ]
+        pass_filenames: false
