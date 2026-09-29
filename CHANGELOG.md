@@ -3,6 +3,13 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v4.0.0]
+### Breaking
+- Set minimum supported Python version to 3.11.
+- Upgrade typing syntax for Python 3.11.
+### Changes
+- Security & Performance: Make the regex package a core dependency instead of an optional extra, as its engine evaluates the address/URL patterns in linear time even on pathological input (no catastrophic backtracking), which removes the remaining ReDoS primitive of the stdlib re fallback regardless of header length, and additionally speeds up parsing of large or malformed files.
+
 ## [v3.0.5]
 ### Fixes
 - Security & Performance: Fix $O(n^2)$ algorithmic complexity DoS in body URL/domain extraction by re-extracting domains once from the deduplicated URL set after slicing, instead of re-scanning the entire accumulated URL list on every sliding-window slice (thanks @manus-pi - GHSA-mx3x-26cx-vw34).

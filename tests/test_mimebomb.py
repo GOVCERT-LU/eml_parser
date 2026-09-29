@@ -48,7 +48,7 @@ def mime_bomb_c(depth: int = 124):
             b'From: level' + str(i).encode() + b'@test.com\r\n'
             b'To: recipient@test.com\r\n'
             b'Subject: Nesting Level ' + str(depth - i).encode() + b'\r\n'
-            b'Date: ' + datetime.datetime.now(tz=getattr(datetime, 'UTC', datetime.timezone.utc)).strftime('%a, %d %b %Y %H:%M:%S +0000').encode() + b'\r\n'
+            b'Date: ' + datetime.datetime.now(tz=getattr(datetime, 'UTC', datetime.UTC)).strftime('%a, %d %b %Y %H:%M:%S +0000').encode() + b'\r\n'
             b'MIME-Version: 1.0\r\n'
             b'Content-Type: multipart/mixed; boundary="' + boundary + b'"\r\n\r\n'
         )

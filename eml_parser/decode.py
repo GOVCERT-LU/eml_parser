@@ -209,7 +209,7 @@ def robust_string2date(line: str) -> datetime.datetime:
             return datetime.datetime.fromisoformat(default_date)
 
     if date_.tzname() is None:
-        return date_.replace(tzinfo=datetime.timezone.utc)
+        return date_.replace(tzinfo=datetime.UTC)
 
     return date_
 
@@ -218,7 +218,7 @@ def json_serial(obj: typing.Any) -> str | None:
     """JSON serializer for objects not serializable by default json code."""
     if isinstance(obj, datetime.datetime):
         if obj.tzinfo is not None:
-            serial = obj.astimezone(datetime.timezone.utc).isoformat()
+            serial = obj.astimezone(datetime.UTC).isoformat()
         else:
             serial = obj.isoformat()
 

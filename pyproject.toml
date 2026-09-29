@@ -15,7 +15,6 @@ classifiers = [
   "Intended Audience :: Developers",
   "Operating System :: OS Independent",
   "Programming Language :: Python :: 3 :: Only",
-  "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
@@ -23,11 +22,12 @@ classifiers = [
   "Programming Language :: Python :: 3.15",
   "Topic :: Communications :: Email",
 ]
-requires-python = ">= 3.10"
+requires-python = ">= 3.11"
 dependencies = [
   "python-dateutil",
   "charset-normalizer",
   "publicsuffixlist",
+  "regex>=2026",
 ]
 dynamic = ["version"]
 
@@ -49,22 +49,20 @@ docs = [
   "mkdocstrings[crystal,python]",
 ]
 dev = [
-  "pip",
-  "mypy",
+  "mypy>=2.3",
   "types-python-dateutil",
   "types-chardet",
-  "ruff",
-  "prek>=0.3.4",
+  "ruff>=0.16",
+  "prek>=0.5.4",
 ]
 test = [
-  "pytest>=8.3",
-  "pytest-sugar",
-  "coverage",
+  "pytest>=9.1",
+  "pytest-sugar>=1.1",
+  "coverage>=7.16",
 ]
 
 [project.optional-dependencies]
 filemagic = ["file-magic >= 0.4.0"]
-regex = ["regex"]
 
 [tool.hatch.envs.default]
 installer = "uv"
@@ -103,7 +101,7 @@ files = [
 ]
 
 [tool.pytest.ini_options]
-minversion = "8.0"
+minversion = "9.0"
 testpaths = [
   "tests"
 ]
@@ -111,7 +109,7 @@ testpaths = [
 [tool.ruff]
 line-length = 160
 indent-width = 4
-target-version = "py310"
+target-version = "py311"
 include = [
   "pyproject.toml",
   "eml_parser/**/*.py",
