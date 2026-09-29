@@ -497,14 +497,6 @@ class EmlParser:
                     if valid_domain:
                         list_observed_dom[match.lower()] = 1
 
-                # URLs do not necessarily appear as-is in the body, as they may contain escaped entities.
-                # For this reason, we have to extract the domains again from each parsed URL.
-                for url in list_observed_urls + list_observed_urls_noscheme:
-                    for match in eml_parser.regexes.dom_regex.findall(url):
-                        valid_domain = self.get_valid_domain_or_ip(match.lower())
-                        if valid_domain:
-                            list_observed_dom[match.lower()] = 1
-
                 for ip_regex in (eml_parser.regexes.ipv4_regex, eml_parser.regexes.ipv6_regex):
                     for match in ip_regex.findall(body_slice):
                         valid_ip = self.get_valid_domain_or_ip(match.lower())
@@ -512,6 +504,15 @@ class EmlParser:
                             continue
                         if valid_ip:
                             list_observed_ip[valid_ip] = 1
+
+            # URLs do not necessarily appear as-is in the body, as they may contain escaped entities.
+            # For this reason, we have to extract the domains again from each parsed URL.
+            # Run once over the deduplicated URLs after slicing to keep the cost linear in the body size.
+            for url in set(list_observed_urls) | set(list_observed_urls_noscheme):
+                for match in eml_parser.regexes.dom_regex.findall(url):
+                    valid_domain = self.get_valid_domain_or_ip(match.lower())
+                    if valid_domain:
+                        list_observed_dom[match.lower()] = 1
 
             # Report uri,email and observed domain or hash if no raw body
             if self.include_raw_body:

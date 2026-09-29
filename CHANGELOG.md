@@ -3,6 +3,10 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [unreleased]
+### Fixes
+- Security & Performance: Fix $O(n^2)$ algorithmic complexity DoS in body URL/domain extraction by re-extracting domains once from the deduplicated URL set after slicing, instead of re-scanning the entire accumulated URL list on every sliding-window slice (thanks @manus-pi - GHSA-mx3x-26cx-vw34).
+
 ## [v3.0.4]
 ### Fixes
 - Security & Performance: Fix $O(n^4)$ algorithmic complexity DoS in routing.parserouting by replacing static npdate regex matching with non-greedy sequence terminators (thanks @iam-niranjan).
