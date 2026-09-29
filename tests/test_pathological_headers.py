@@ -28,3 +28,12 @@ class TestPathologicalHeaders:
         ep.decode_email_bytes(sample)
         elapsed = time.monotonic() - start
         assert elapsed < 0.5
+
+    def test_many_local_part_characters_in_received_header(self) -> None:
+        count = 100000
+        start = time.monotonic()
+        sample = b'Received: from ' + b'a' * count + b', a.a, '
+        ep = eml_parser.EmlParser()
+        ep.decode_email_bytes(sample)
+        elapsed = time.monotonic() - start
+        assert elapsed < 1
