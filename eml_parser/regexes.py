@@ -14,7 +14,7 @@ __license__ = 'AGPL v3+'
 
 # regex compilation
 # W3C HTML5 standard recommended regex for e-mail validation
-# It also implements the 64 character limit on the local part (RFC3696, section 3), with a safety factor.
+# It also implements the 64 character limit on the local part (RFC 5321, section 2.4), with a safety factor.
 # This mitigates an issue with quadratic complexity when searching for e-mail addresses in very long strings.
 email_no_force_tld_regex = re.compile(r"""([a-zA-Z0-9.!#$%&'*+\-/=?^_`{|}~]{1,128}@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*)""", re.MULTILINE)
 email_force_tld_regex = re.compile(r"""([a-zA-Z0-9.!#$%&'*+\-/=?^_`{|}~]{1,128}@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)+)""", re.MULTILINE)
