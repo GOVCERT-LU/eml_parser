@@ -599,6 +599,9 @@ class EmlParser:
             # Run once over the deduplicated URLs after slicing to keep the cost linear in the body size.
             for url in dict.fromkeys([*list_observed_urls, *list_observed_urls_noscheme]):
                 for match in eml_parser.regexes.dom_regex.findall(url):
+                    if self.is_file_name(match):
+                        continue
+
                     valid_domain = self.get_valid_domain_or_ip(match.lower())
                     if valid_domain:
                         list_observed_dom[match.lower()] = 1

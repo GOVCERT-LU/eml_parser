@@ -53,3 +53,11 @@ def test_extension_which_is_a_tld_is_not_a_file_name(monkeypatch: pytest.MonkeyP
 
     assert parser.is_file_name('invoice.pdf')
     assert not parser.is_file_name('evil.zip')
+
+
+def test_file_name_in_url_path_is_not_a_domain() -> None:
+    """The domains are also derived from the URLs found: a file name in the path is not one."""
+    raw = b'From: a@example.com\r\n\r\nGet http://evil.example.com/dl/payload.docx now'
+    body = eml_parser.parser.EmlParser(include_raw_body=True).decode_email_bytes(raw)['body'][0]
+
+    assert body['domain'] == ['evil.example.com']
