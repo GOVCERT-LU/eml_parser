@@ -1,8 +1,13 @@
+import base64
+import datetime
+import email.message
+import json
 import types
 
 import pytest
 
 import eml_parser.decode
+import eml_parser.parser
 
 
 class TestDecodeString:
@@ -51,3 +56,35 @@ class TestDecodeString:
     def test_plain_and_empty_input(self) -> None:
         assert eml_parser.decode.decode_string(b'') == ''
         assert eml_parser.decode.decode_string(b'plain ascii') == 'plain ascii'
+
+
+class TestExportToJson:
+    def test_bytes_values_are_exported_as_text(self) -> None:
+        exported = eml_parser.decode.export_to_json({'raw': base64.b64encode(b'payload')})
+
+        assert json.loads(exported) == {'raw': 'cGF5bG9hZA=='}
+
+    def test_non_base64_bytes_are_rejected(self) -> None:
+        with pytest.raises(UnicodeDecodeError):
+            eml_parser.decode.export_to_json({'raw': b'\xff\xfeabc'})
+
+    def test_attachment_data_survives_the_export(self) -> None:
+        message = email.message.EmailMessage()
+        message['From'] = 'a@example.com'
+        message['To'] = 'b@example.com'
+        message.set_content('body')
+        message.add_attachment(b'\x00\x01binary', maintype='application', subtype='octet-stream', filename='blob.bin')
+
+        parsed = eml_parser.parser.EmlParser(include_attachment_data=True).decode_email_bytes(message.as_bytes())
+        exported = json.loads(eml_parser.decode.export_to_json(parsed))
+
+        assert base64.b64decode(exported['attachment'][0]['raw']) == b'\x00\x01binary'
+
+    def test_datetime_is_still_exported_as_utc(self) -> None:
+        moment = datetime.datetime(2026, 1, 2, 3, 4, 5, tzinfo=datetime.timezone(datetime.timedelta(hours=2)))
+
+        assert json.loads(eml_parser.decode.export_to_json({'date': moment})) == {'date': '2026-01-02T01:04:05+00:00'}
+
+    def test_unsupported_types_still_raise(self) -> None:
+        with pytest.raises(TypeError):
+            eml_parser.decode.export_to_json({'value': object()})

@@ -8,7 +8,6 @@ import email.policy
 import email.utils
 import json
 import logging
-import typing
 
 import charset_normalizer
 import dateutil.parser
@@ -207,15 +206,30 @@ def robust_string2date(line: str) -> datetime.datetime:
     return date_
 
 
-def json_serial(obj: typing.Any) -> str | None:
-    """JSON serializer for objects not serializable by default json code."""
+def json_serial(obj: object) -> str:
+    """JSON serializer for objects not serializable by default json code.
+
+    Supported are datetime objects (exported as ISO 8601 strings, converted to UTC if timezone aware) and
+    ASCII bytes objects, i.e. the base64 encoded attachment data added by the *include_attachment_data* option.
+
+    Args:
+        obj: The object to serialize.
+
+    Returns:
+        str: The string representation of the object.
+
+    Raises:
+        TypeError: If the type of the object is not supported.
+        UnicodeDecodeError: If a bytes object is not ASCII, i.e. not base64.
+    """
     if isinstance(obj, datetime.datetime):
         if obj.tzinfo is not None:
-            serial = obj.astimezone(datetime.UTC).isoformat()
-        else:
-            serial = obj.isoformat()
+            return obj.astimezone(datetime.UTC).isoformat()
 
-        return serial
+        return obj.isoformat()
+
+    if isinstance(obj, bytes):
+        return obj.decode('ascii')
 
     raise TypeError(f'Type not serializable - {str(type(obj))}')
 
