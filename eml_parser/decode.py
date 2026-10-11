@@ -48,6 +48,7 @@ import eml_parser.regexes
 logger = logging.getLogger(__name__)
 
 default_date = '1970-01-01T00:00:00+00:00'
+_DATEUTIL_DEFAULT = datetime.datetime(1970, 1, 1)  # noqa: DTZ001
 
 
 def decode_field(field: str) -> str:
@@ -175,7 +176,8 @@ def robust_string2date(line: str) -> datetime.datetime:
     It is guaranteed to always return a valid datetime.datetime object.
     If first tries the built-in email module method for parsing the date according
     to related RFC's.
-    If this fails it returns, dateutil is tried. If that fails as well, a datetime.datetime
+    If this fails, dateutil is tried (missing parts of the date are taken from 1970-01-01 and not from the current date).
+    If that fails as well, a datetime.datetime
     object representing "1970-01-01 00:00:00 +0000" is returned.
     In case there is no timezone information in the parsed date, we set it to UTC.
 
@@ -197,7 +199,9 @@ def robust_string2date(line: str) -> datetime.datetime:
         logger.debug('Exception parsing date "%s"', line, exc_info=True)
 
         try:
-            date_ = dateutil.parser.parse(line)
+            # dateutil takes missing parts (e.g. the year) from the current date by default, which would make the
+            # result depend on the time of the analysis. Use a fixed default instead.
+            date_ = dateutil.parser.parse(line, default=_DATEUTIL_DEFAULT)
         except (AttributeError, ValueError, OverflowError):
             # Now we are facing an invalid date.
             return datetime.datetime.fromisoformat(default_date)
