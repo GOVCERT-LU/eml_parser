@@ -707,69 +707,40 @@ class EmlParser:
         return report_struc
 
     @staticmethod
-    def string_sliding_window_loop(body: str, slice_step: int = 500, max_distance: int = 100) -> typing.Iterator[str]:
-        """Yield a more or less constant slice of a large string.
+    def string_sliding_window_loop(body: str, slice_step: int = 500, max_distance: int = 8192) -> typing.Iterator[str]:
+        """Split a large string into consecutive slices which are cut at whitespace.
 
-        If we directly do a *regex* findall on 500K+ body we get time and memory issues.
-        If more than the configured slice step, lets cheat, we will cut around the thing we search "://, @, ."
-        in order to reduce regex complexity.
-
-        In case we find a *://* at the first 8 characters of a sliced body window, we rewind the window by 16 characters.
-        If we find the same string at the end of a sliced body window we try to look for invalid URL characters up to *max_distance*
-        length, until which we give up and return the sliced body part. This is done in order to return a maximum possible
-        correct URLs.
-
-        The choice for 8 character is because *https://* is 8 characters, which is the maximum size we accept for schemes.
+        Running the regular expressions over a 500K+ body at once causes time and memory issues, so the body is processed in slices.
+        A slice is never cut in the middle of a token (URL, address, domain): it ends at the first whitespace found within
+        *max_distance* characters after *slice_step* (or at the end of the body). Together the slices cover the complete body without gaps or overlaps.
 
         Args:
             body: Body to slice into smaller pieces.
-            slice_step: Slice this number or characters.
-            max_distance: In case we find a *://* in a string window towards the end, we try our best to enlarge the window
-                            as to not cut off URLs. This variable sets the maximum permitted additional window size to consider.
+            slice_step: Preferred length of a slice.
+            max_distance: Maximum number of characters a slice is extended to reach the next whitespace. Tokens longer than
+                this are cut. The default is the usual request line limit of web servers, which no sane URL exceeds.
 
-        Returns:
-            typing.Iterator[str]: Sliced body string.
+        Yields:
+            str: Consecutive slices of the body.
         """
-        body_length = len(body)
+        start = 0
+        scanned = 0  # no whitespace was found before this position, so it is not searched again
 
-        if body_length <= slice_step:
-            yield body
+        while len(body) - start > slice_step:
+            end = start + slice_step
+            boundary = eml_parser.regexes.window_slice_regex.search(body, max(end, scanned), end + max_distance)
+            if boundary:
+                end = boundary.start()
+            elif len(body) - end <= max_distance:
+                # No whitespace, but the body ends within reach, so the last token is complete.
+                break
+            else:
+                scanned = end + max_distance
 
-        else:
-            ptr_start = 0
+            yield body[start:end]
+            start = end
 
-            for _ptr_end in range(slice_step, body_length + slice_step, slice_step):
-                ptr_end = _ptr_end
-
-                if ' ' in body[ptr_end - 1 : ptr_end]:
-                    while not (eml_parser.regexes.window_slice_regex.match(body[ptr_end - 1 : ptr_end]) or ptr_end > body_length):
-                        if ptr_end > body_length:
-                            ptr_end = body_length
-                            break
-
-                        ptr_end += 1
-
-                # Found a :// near the start of the slice, rewind
-                if ptr_start > 16 and '://' in body[ptr_start - 8 : ptr_start + 8]:
-                    ptr_start -= 16
-
-                # Found a :// near the end of the slice, rewind from that location
-                if ptr_end < body_length and '://' in body[ptr_end - 8 : ptr_end + 8]:
-                    pos = body.rfind('://', ptr_end - 8, ptr_end + 8)
-                    ptr_end = pos - 8
-
-                # Found a :// within the slice; try to expand the slice until we find an invalid
-                # URL character in order to avoid cutting off URLs
-                if '://' in body[ptr_start:ptr_end] and not body[ptr_end - 1 : ptr_end] == ' ':
-                    distance = 1
-
-                    while body[ptr_end - 1 : ptr_end] not in (' ', '>') and distance < max_distance and ptr_end <= body_length:
-                        distance += 1
-                        ptr_end += 1
-
-                yield body[ptr_start:ptr_end]
-
-                ptr_start = ptr_end
+        yield body[start:]
 
     def get_valid_domain_or_ip(self, data: str) -> str | None:
         """Function to determine if an IP address, Email address, or Domain is valid.
