@@ -85,8 +85,9 @@ def decode_string(string: bytes, encoding: str | None = None) -> str:
     """Try anything possible to parse an encoded bytes string and return the result.
 
     We do this using the encoding hint, if this fails, we try to detect the correct
-    encoding using the charset-normalizer module, if that failed we try latin-1, utf-8 and
-    as a last resort ascii.
+    encoding using the charset-normalizer module, if that failed we try utf-8 and as a
+    last resort latin-1, which can decode any byte sequence and thereby always preserves
+    the ASCII parts of the input.
     In any case we always return something.
 
     Args:
@@ -103,27 +104,19 @@ def decode_string(string: bytes, encoding: str | None = None) -> str:
         try:
             return string.decode(encoding)
         except (UnicodeDecodeError, LookupError):
-            pass
+            logger.debug('Unable to decode with the provided encoding hint "%s"', encoding, exc_info=True)
 
-    value = str(charset_normalizer.from_bytes(string).best())
+    best_match = charset_normalizer.from_bytes(string).best()
 
-    if value is None:
-        text = ''
+    if best_match is not None:
+        return str(best_match)
 
-        for e in ('latin1', 'utf-8'):
-            try:
-                text = string.decode(e)
-            except UnicodeDecodeError:
-                pass
-            else:
-                break
+    try:
+        return string.decode('utf-8')
+    except UnicodeDecodeError:
+        logger.debug('Unable to detect the encoding, falling back to latin-1', exc_info=True)
 
-        if text == '':
-            value = string.decode('ascii', 'ignore')
-        else:
-            value = text
-
-    return value
+    return string.decode('latin-1')
 
 
 def workaround_bug_27257(msg: email.message.Message, header: str) -> list[str]:

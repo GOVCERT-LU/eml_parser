@@ -3,6 +3,10 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Fixes
+- Fix `decode.decode_string()` returning the literal string `'None'` whenever `charset_normalizer` could not detect an encoding (`str(None)`). This made the intended fallback unreachable and silently discarded the content, including any IOCs in it. The fallback is now UTF-8 followed by latin-1, which cannot fail and therefore always preserves the ASCII parts of the input.
+
 ## [v4.0.0]
 ### Breaking
 - Set minimum supported Python version to 3.11.
