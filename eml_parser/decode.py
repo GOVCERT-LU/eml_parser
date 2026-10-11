@@ -276,6 +276,11 @@ def rfc2047_decode(value: str) -> str:
             parsed += k.decode('ascii', errors='ignore')
 
         else:
-            parsed += k.decode(v, errors='replace')
+            try:
+                parsed += k.decode(v, errors='replace')
+            except LookupError:
+                # Unknown charset name, e.g. "=?foo-bar?q?x?=". Never fail on attacker controlled input.
+                logger.debug('Unknown charset "%s" in RFC2047 encoded word, trying to detect the encoding', v, exc_info=True)
+                parsed += decode_string(k)
 
     return parsed

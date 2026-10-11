@@ -9,6 +9,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Fix the `ignore_bad_start` option, which could never work as intended: the check for a header in the first line compared bytes to a list and was always true, and the rebuilt data had all line feeds removed, so for LF-only files the headers and the body were merged into one line (and the body hash of valid messages changed). The garbage in front of the first header field is now skipped by slicing the original data, which also removes the documented performance penalty of this option.
 - Fix `decode.export_to_json()` raising `TypeError` for results created with `include_attachment_data=True`, as `decode.json_serial()` could not serialize the `bytes` attachment data. It is now exported as (base64) text.
 - Fix `decode.json_serial()` raising `OverflowError` for timezone aware dates close to `datetime.min`/`datetime.max` (e.g. `Date: Fri, 31 Dec 9999 23:59:59 -0500`) when converting them to UTC, which allowed a crafted `Date` header to break `export_to_json()`. Such dates are now exported with their original offset.
+- Fix `decode.rfc2047_decode()` raising `LookupError` for RFC2047 encoded words with an unknown charset (e.g. `=?foo-bar?q?x?=`), which allowed a crafted header to abort the parsing of the whole message. The charset is now detected instead.
 
 ## [v4.0.0]
 ### Breaking

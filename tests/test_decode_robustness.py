@@ -111,3 +111,21 @@ class TestJsonSerialExtremeDates:
         exported = json.loads(eml_parser.decode.export_to_json(parsed))
 
         assert exported['header']['date'].startswith('9999-12-31T23:59:59')
+
+
+class TestRfc2047Decode:
+    def test_unknown_charset_does_not_raise(self) -> None:
+        assert eml_parser.decode.rfc2047_decode('=?foo-bar?q?hello_world?=') == 'hello world'
+
+    def test_unknown_charset_in_mixed_value(self) -> None:
+        assert eml_parser.decode.rfc2047_decode('Re: =?foo-bar?b?aGVsbG8=?= there') == 'Re: hello there'
+
+    def test_known_charset_is_still_decoded(self) -> None:
+        assert eml_parser.decode.rfc2047_decode('=?utf-8?q?caf=C3=A9?=') == 'café'
+
+    def test_invalid_bytes_in_known_charset_are_replaced(self) -> None:
+        assert eml_parser.decode.rfc2047_decode('=?utf-8?q?a=FFb?=') == 'a�b'
+
+    def test_plain_ascii_and_empty(self) -> None:
+        assert eml_parser.decode.rfc2047_decode('plain') == 'plain'
+        assert eml_parser.decode.rfc2047_decode('') == ''
