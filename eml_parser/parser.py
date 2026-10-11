@@ -29,6 +29,7 @@ from html import unescape
 import publicsuffixlist
 import regex
 
+import eml_parser.anomalies
 import eml_parser.constants
 import eml_parser.decode
 import eml_parser.regexes
@@ -1214,6 +1215,10 @@ class EmlParser:
             attachment[file_id]['hash'] = self.get_file_hash(data)
 
             mime_type, mime_type_short = self.get_mime_type(data)
+
+            anomalies = eml_parser.anomalies.find_filename_anomalies(filename, data, mime_type_short)
+            if anomalies:
+                attachment[file_id]['anomaly'] = anomalies
 
             if not (mime_type is None or mime_type_short is None):
                 attachment[file_id]['mime_type'] = mime_type

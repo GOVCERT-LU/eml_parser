@@ -26,3 +26,16 @@ TEXT_ATTACHMENT_CONTENT_TYPES = frozenset(
 
 # Attachments (not inline text) larger than this are not scanned as text; the size is the one of the encoded payload.
 MAX_TEXT_ATTACHMENT_SIZE = 10 * 1024 * 1024
+
+# File name extensions of programs and scripts, used to detect disguised executables.
+EXECUTABLE_EXTENSIONS = frozenset('bat cmd com cpl dll exe hta jar js jse lnk msi pif ps1 reg scr vbe vbs wsf wsh'.split())
+
+# File name extensions of documents and pictures, which a disguised executable is claiming to be.
+DECOY_EXTENSIONS = frozenset('bmp csv doc docm docx gif htm html jpeg jpg pdf png ppt pptm pptx rtf tif tiff txt xls xlsm xlsx'.split())
+
+EXECUTABLE_MIME_TYPES = frozenset(
+    """
+    application/vnd.microsoft.portable-executable application/x-dosexec application/x-executable application/x-msdownload
+    application/x-mach-binary application/x-sharedlib application/x-pie-executable
+    """.split()
+)
