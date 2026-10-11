@@ -114,3 +114,6 @@ ipv4_obfuscated_regex = re.compile(r"""[0-9a-fA-FxX.]+""")
 
 # URL whose host is a plain number (decimal or hexadecimal), e.g. http://3232235777/ or http://user@0xC0A80101:8080/
 url_numeric_host_regex = re.compile(r"""[a-z][a-z0-9+.\-]*://(?:[^/?#@]*@)?(?:0x[0-9a-f]+|[0-9]+)(?:[:/?#]|$)""", re.IGNORECASE)
+
+# A line which looks like a MIME multipart delimiter (RFC 2046, section 5.1.1), used to guess the boundary of broken multipart messages.
+multipart_boundary_guess_regex = re.compile(r"""^--([0-9A-Za-z'()+_,./:=?\-]{1,69}[0-9A-Za-z'()+_,./:=?\-])[ \t]*\r?$""", re.MULTILINE)

@@ -291,8 +291,48 @@ class EmlParser:
             _eml_file = eml_file[find_header_start(eml_file) :]
 
         self.msg = email.message_from_bytes(_eml_file, policy=self.policy)
+        self.repair_multipart(self.msg)
 
         return self.parse_email()
+
+    @staticmethod
+    def guess_boundary(payload: str, declared: str | None) -> str | None:
+        """Find the boundary of a multipart payload: the declared one if it occurs, else the first line which looks like a delimiter (`--something`)."""
+        if declared and f'--{declared}' in payload:
+            return declared
+
+        return next((m.group(1) for m in eml_parser.regexes.multipart_boundary_guess_regex.finditer(payload) if not m.group(1).endswith('--')), None)
+
+    def repair_multipart(self, msg: email.message.Message) -> None:
+        """Split multipart parts which the stdlib parser could not split because their boundary is missing or wrong.
+
+        The stdlib leaves the content of such a part as one opaque string, so the URLs, addresses and attachments in it would be invisible.
+        This is what malware authors and broken mailers produce. If no boundary can be found at all, the part is treated as plain text instead
+        of being ignored. The defects reported by the stdlib are kept. Parts created by the repair are checked as well.
+
+        Args:
+            msg (email.message.Message): The parsed message, modified in place.
+        """
+        parts = [msg]
+
+        while parts:
+            part = parts.pop()
+            payload = part.get_payload()
+
+            if part.is_multipart():
+                parts.extend(typing.cast('list[email.message.Message]', payload))
+            elif part.get_content_maintype() == 'multipart' and isinstance(payload, str):
+                boundary = self.guess_boundary(payload, part.get_boundary(failobj=None))
+
+                if boundary is None:
+                    part.replace_header('Content-Type', 'text/plain')
+                    continue
+
+                part.set_param('boundary', boundary)
+                part.set_payload(
+                    email.message_from_string(f'Content-Type: multipart/mixed; boundary="{boundary}"\n\n{payload}', policy=self.policy).get_payload()
+                )
+                parts.append(part)
 
     def parse_email(self) -> dict:
         """Parse an e-mail and return a dictionary containing the various parts of the e-mail broken down into key-value pairs.
