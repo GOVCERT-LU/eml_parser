@@ -14,6 +14,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Fix all attachments without a file name being named `part-000`. The counter used by `traverse_multipart()` was passed by value and thus never advanced between parts. It is now shared by the whole traversal, so unnamed attachments are numbered `part-000`, `part-001`, ... (every attachment consumes a number). As a consequence the `counter` argument of `traverse_multipart()` and `prepare_multipart_part_attachment()` is now an iterator instead of an `int`.
 - Security: Stop using `uuid.uuid1()` for the internal body and attachment ids, as version 1 UUIDs embed the MAC address of the host and a timestamp and so leak information about the machine running the parser. Random version 4 UUIDs are used instead.
 - `EmlParser` no longer rebinds `eml_parser.regexes.email_regex` at construction time; the e-mail regex is per-instance state passed to `CustomPolicy`, `parserouting()` and `workaround_bug_27257()`, so parsers with different `email_force_tld` settings can coexist (also across threads).
+- Fix URLs without scheme (e.g. `www.example.com/path`) being completely missing from the result in the default (hashed) mode. They are now reported as `uri_noscheme_hash` (SHA-256 of the lower-cased value, like `uri_hash`). With `include_raw_body=True` they were already reported as `uri_noscheme`.
 
 ## [v4.0.0]
 ### Breaking

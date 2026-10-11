@@ -566,6 +566,10 @@ class EmlParser:
                     bodie['uri_hash'] = []
                     for element in list_observed_urls:
                         bodie['uri_hash'].append(self.get_hash(element.lower(), 'sha256'))
+                if list_observed_urls_noscheme:
+                    bodie['uri_noscheme_hash'] = []
+                    for element in set(list_observed_urls_noscheme):
+                        bodie['uri_noscheme_hash'].append(self.get_hash(element.lower(), 'sha256'))
                 if list_observed_email:
                     bodie['email_hash'] = []
                     for element in list_observed_email:
