@@ -16,6 +16,7 @@ import logging
 import os.path
 import pathlib
 import re
+import string
 import typing
 import urllib.parse
 import uuid
@@ -74,6 +75,40 @@ __author__ = 'Toth Georges, Jung Paul'
 __email__ = 'georges@trypill.org, georges.toth@govcert.etat.lu'
 __copyright__ = 'Copyright 2013-2014 Georges Toth, Copyright 2013-present GOVCERT Luxembourg'
 __license__ = 'AGPL v3+'
+
+# Characters allowed in a header field name (RFC 5322 ftext): printable ASCII except space and colon.
+FIELD_NAME_BYTES = (string.ascii_letters + string.digits + string.punctuation.replace(':', '')).encode()
+
+
+def find_header_start(data: bytes) -> int:
+    """Find the first line which looks like a header field.
+
+    Plain bytes operations are used on purpose: this is much faster than a regular expression on large inputs
+    and every line is looked at only once.
+
+    Args:
+        data: Raw e-mail, possibly with garbage in front of the headers.
+
+    Returns:
+        Offset of the first line starting with a valid field name followed by a colon, or 0 if there is none.
+    """
+    pos = 0
+
+    while (colon := data.find(b':', pos)) != -1:
+        line_start = max(pos, data.rfind(b'\n', pos, colon) + 1)
+        field_name = data[line_start:colon].rstrip(b' \t')
+
+        if field_name and not field_name.translate(None, FIELD_NAME_BYTES):
+            return line_start
+
+        line_end = data.find(b'\n', colon)
+
+        if line_end == -1:
+            break
+
+        pos = line_end + 1
+
+    return 0
 
 
 class CustomPolicy(email.policy.EmailPolicy):
@@ -150,7 +185,7 @@ class EmlParser:
                                     e.g. whitelist IPs, whitelist e-mail addresses, etc.
             policy (CustomPolicy, optional): Policy to use when parsing e-mails.
                                                     Default = CustomPolicy.
-            ignore_bad_start (bool, optional): Ignore invalid file start. This has a considerable performance impact.
+            ignore_bad_start (bool, optional): Ignore invalid file start, i.e. any lines in front of the first header field.
             email_force_tld (bool, optional): Only match e-mail addresses with a TLD, i.e. exclude something like
                                               john@doe. If enabled, it uses domain_force_tld and ip_force_routable settings
                                               to validate the host portion of the address. By default this is disabled.
@@ -203,7 +238,7 @@ class EmlParser:
 
         Args:
             eml_file: Path to the file to be parsed. os.PathLike objects are supported.
-            ignore_bad_start: Ignore invalid file start for this run. This has a considerable performance impact.
+            ignore_bad_start: Ignore invalid file start for this run, i.e. any lines in front of the first header field.
 
         Returns:
             dict: A dictionary with the content of the EML parsed and broken down into
@@ -226,30 +261,18 @@ class EmlParser:
 
         Args:
             eml_file: Contents of the raw EML file passed to this function as string.
-            ignore_bad_start: Ignore invalid file start for this run. This has a considerable performance impact.
+            ignore_bad_start: Ignore invalid file start for this run, i.e. any lines in front of the first header field.
 
         Returns:
             dict: A dictionary with the content of the EML parsed and broken down into
                   key-value pairs.
         """
+        _eml_file = eml_file
+
         if self.ignore_bad_start or ignore_bad_start:
-            # Skip invalid start of file
-            # Note that this has a considerable performance impact, which is why it is disabled by default.
-            _eml_file = b''
-
-            if b':' not in eml_file.split(b'\n', 1):
-                start = True
-                for line in eml_file.split(b'\n'):
-                    if start and b':' not in line:
-                        continue
-
-                    start = False
-
-                    _eml_file += line
-            else:
-                _eml_file = eml_file
-        else:
-            _eml_file = eml_file
+            # Skip any garbage in front of the first header field.
+            # The data is only sliced, so line endings and the message body stay untouched.
+            _eml_file = eml_file[find_header_start(eml_file) :]
 
         self.msg = email.message_from_bytes(_eml_file, policy=self.policy)
 

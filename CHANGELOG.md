@@ -6,6 +6,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## [Unreleased]
 ### Fixes
 - Fix `decode.decode_string()` returning the literal string `'None'` whenever `charset_normalizer` could not detect an encoding (`str(None)`). This made the intended fallback unreachable and silently discarded the content, including any IOCs in it. The fallback is now UTF-8 followed by latin-1, which cannot fail and therefore always preserves the ASCII parts of the input.
+- Fix the `ignore_bad_start` option, which could never work as intended: the check for a header in the first line compared bytes to a list and was always true, and the rebuilt data had all line feeds removed, so for LF-only files the headers and the body were merged into one line (and the body hash of valid messages changed). The garbage in front of the first header field is now skipped by slicing the original data, which also removes the documented performance penalty of this option.
 
 ## [v4.0.0]
 ### Breaking
