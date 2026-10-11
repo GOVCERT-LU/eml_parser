@@ -976,16 +976,7 @@ class EmlParser:
             ):
                 encoding = msg.get('content-transfer-encoding', '').lower()
 
-                charset = msg.get_content_charset()
-                if charset is None:
-                    raw_body_b = typing.cast('bytes', msg.get_payload(decode=True))
-                    raw_body_str = eml_parser.decode.decode_string(raw_body_b, None)
-                else:
-                    try:
-                        raw_body_str = typing.cast('bytes', msg.get_payload(decode=True)).decode(charset, 'ignore')
-                    except (LookupError, ValueError):
-                        logger.debug('An exception occurred while decoding the payload!', exc_info=True)
-                        raw_body_str = typing.cast('bytes', msg.get_payload(decode=True)).decode('ascii', 'ignore')
+                raw_body_str = eml_parser.decode.decode_body(typing.cast('bytes', msg.get_payload(decode=True)), msg.get_content_charset())
 
                 # In case we hit bug 27257 or any other parsing error, try to downgrade the used policy
                 try:

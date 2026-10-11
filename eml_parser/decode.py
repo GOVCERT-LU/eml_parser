@@ -75,11 +75,34 @@ def decode_field(field: str) -> str:
             string += decode_string(_text, charset)
         elif isinstance(_text, bytes):
             # @TODO might be an idea to check with charset-normalizer here
-            string += _text.decode('utf-8', 'ignore')
+            string += _text.decode('utf-8', 'replace')
         else:
             string += _text
 
     return string
+
+
+def decode_body(data: bytes, charset: str | None) -> str:
+    """Decode a text body without dropping undecodable bytes.
+
+    Dropping bytes (the *ignore* error handler) glues the neighbouring characters together and can create indicators which are not in the message,
+    e.g. `http://good<invalid byte>.evil.com` would become `http://good.evil.com`. Keeping the replacement character U+FFFD would make it part of
+    URLs and e-mail addresses instead. Undecodable bytes are therefore replaced with a space, i.e. they act as a separator between indicators.
+
+    Args:
+        data (bytes): The body.
+        charset (str, optional): The charset declared in the Content-Type header. If it is missing or unknown, the encoding is detected.
+
+    Returns:
+        str: The decoded body.
+    """
+    try:
+        text = data.decode(charset, 'replace') if charset else decode_string(data)
+    except (LookupError, ValueError):
+        logger.debug('Unknown charset "%s", trying to detect the encoding', charset, exc_info=True)
+        text = decode_string(data)
+
+    return text.replace('\ufffd', ' ')
 
 
 def decode_string(string: bytes, encoding: str | None = None) -> str:
@@ -279,7 +302,7 @@ def rfc2047_decode(value: str) -> str:
             # need RFC2047 decoding, e.g. when the whole value is plain ASCII.
             parsed += k
         elif v is None:
-            parsed += k.decode('ascii', errors='ignore')
+            parsed += k.decode('ascii', errors='replace')
 
         else:
             try:

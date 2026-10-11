@@ -17,6 +17,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Fix URLs without scheme (e.g. `www.example.com/path`) being completely missing from the result in the default (hashed) mode. They are now reported as `uri_noscheme_hash` (SHA-256 of the lower-cased value, like `uri_hash`). With `include_raw_body=True` they were already reported as `uri_noscheme`.
 - Fix `decode.robust_string2date()` filling in the missing parts of incomplete dates (e.g. `March 2024`, `Tue, 5 Mar` or `12:30`) from the current date, which made the result depend on the day of the analysis. Missing parts are now taken from `1970-01-01`.
 - Fix the reported `defect` list consisting of empty strings (`str()` of most stdlib defects is empty). The name of the defect class, e.g. `NoBoundaryInMultipartDefect`, is reported now, followed by the message if there is one.
+- Fix body text (and header fragments) being decoded with `errors='ignore'`, which dropped undecodable bytes and glued the neighbouring characters together, creating indicators which are not in the message (`http://good\xff.evil.com` became `http://good.evil.com`). Undecodable bytes in the body are now replaced with a space, so they separate indicators instead of joining them or becoming part of them. An unknown charset falls back to charset detection instead of dropping all non-ASCII characters (new `decode.decode_body()`).
 
 ## [v4.0.0]
 ### Breaking
