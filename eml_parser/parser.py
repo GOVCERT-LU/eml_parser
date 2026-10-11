@@ -742,6 +742,10 @@ class EmlParser:
 
         headers_struc['header'] = header
 
+        authentication = self.parse_authentication_results(header)
+        if authentication:
+            headers_struc['authentication'] = authentication
+
         # parse attachments
         if self.parse_attachments:
             try:
@@ -850,6 +854,37 @@ class EmlParser:
                 return host
 
         return None
+
+    @staticmethod
+    def parse_authentication_results(header: dict[str, list[str]]) -> dict[str, list[str]]:
+        """Extract the results of the e-mail authentication methods (SPF, DKIM, DMARC, ARC, ...) reported by the receiving servers.
+
+        The headers *Authentication-Results* (RFC 8601) and *Received-SPF* (RFC 7208) are evaluated. Comments are ignored and
+        so are properties like `header.d=` of a method. Note that these headers are only meaningful if they were added by
+        a server you trust; a sender can forge them, and mail from outside of your infrastructure may carry anything.
+
+        Args:
+            header: The parsed headers (lower-cased names, list of values).
+
+        Returns:
+            dict: The results per method, in the order of occurrence, e.g. `{'spf': ['pass'], 'dkim': ['pass', 'fail']}`.
+        """
+        results: dict[str, list[str]] = {}
+
+        for value in header.get('authentication-results', []):
+            text = str(value)
+            while (stripped := eml_parser.regexes.header_comment_regex.sub(' ', text)) != text:
+                text = stripped
+
+            for method, result in eml_parser.regexes.authentication_result_regex.findall(text):
+                results.setdefault(method.lower(), []).append(result.lower())
+
+        for value in header.get('received-spf', []):
+            spf_result = eml_parser.regexes.received_spf_regex.match(str(value))
+            if spf_result:
+                results.setdefault('spf', []).append(spf_result.group(1).lower())
+
+        return results
 
     def get_obfuscated_ip(self, host: str) -> str | None:
         """Resolve a host which is an IPv4 address in a notation browsers accept, e.g. `3232235777`, `0xC0A80101`, `0300.0250.0.1` or `127.1`.

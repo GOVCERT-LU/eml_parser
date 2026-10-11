@@ -131,3 +131,12 @@ multipart_boundary_guess_regex = re.compile(r"""^--([0-9A-Za-z'()+_,./:=?\-]{1,6
 
 # XML namespace declarations (xmlns="...", xmlns:v='...'): identifiers which look like URLs (http://www.w3.org/1999/xhtml) but are never fetched or visited.
 xmlns_declaration_regex = re.compile(r"""\bxmlns(?::[\w.\-]{1,100})?\s*=\s*(?:"[^"]{0,2000}"|'[^']{0,2000}')""", flags=re.IGNORECASE)
+
+# method=result pairs of an Authentication-Results header (RFC 8601); the method must not be the property of another one (header.d=, smtp.mailfrom=)
+authentication_result_regex = re.compile(r"""(?<![\w.\-])(spf|dkim|dmarc|arc|auth|iprev|dkim-atps)\s*=\s*([a-z]+)""", re.IGNORECASE)
+
+# a comment in a header, nested comments are removed from the inside out
+header_comment_regex = re.compile(r"""\([^()]*\)""")
+
+# the result at the start of a Received-SPF header (RFC 7208)
+received_spf_regex = re.compile(r"""^\s*(pass|fail|softfail|neutral|none|temperror|permerror)\b""", re.IGNORECASE)
