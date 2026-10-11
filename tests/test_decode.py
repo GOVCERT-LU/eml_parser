@@ -58,3 +58,23 @@ class TestDecode:
 
         for test in test_input:
             assert eml_parser.decode.robust_string2date(test) != default_date_date
+
+    def test_noparenthesis(self) -> None:
+        test_input = {
+            ' test ': ' test ',
+            '(test)': '',
+            '((test))': '',
+            '(((test) (bla)))': '',
+            '(test) foo': ' foo',
+            'asd (foo (test)(() foo': 'asd (foo ( foo',
+            'foo (test) )()foo)': 'foo  )foo)',
+            '(asd)(((((': '(((((',
+            '))))(asd)': '))))',
+        }
+
+        for test, expected_result in test_input.items():
+            assert eml_parser.decode.noparenthesis(test) == expected_result
+
+    def test_noparenthesis_replacement(self) -> None:
+        assert eml_parser.decode.noparenthesis('pass(a(b))dkim=fail (c)', ' ') == 'pass dkim=fail  '
+        assert eml_parser.decode.noparenthesis('a(b', ' ') == 'a(b'

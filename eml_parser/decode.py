@@ -1,6 +1,7 @@
 """This module contains various string import, check and parse methods."""
 
 import datetime
+import decimal
 import email
 import email.errors
 import email.header
@@ -273,7 +274,7 @@ def robust_string2date(line: str) -> datetime.datetime:
             # dateutil takes missing parts (e.g. the year) from the current date by default, which would make the
             # result depend on the time of the analysis. Use a fixed default instead.
             date_ = dateutil.parser.parse(line, default=_DATEUTIL_DEFAULT)
-        except (AttributeError, ValueError, OverflowError):
+        except (AttributeError, ValueError, OverflowError, decimal.InvalidOperation):
             # Now we are facing an invalid date.
             return datetime.datetime.fromisoformat(default_date)
 
@@ -361,3 +362,26 @@ def rfc2047_decode(value: str) -> str:
                 parsed += decode_string(k)
 
     return parsed
+
+
+def noparenthesis(line: str, replacement: str = '') -> str:
+    """Remove nested parentheses, until no pairs of matching parentyheses are present.
+
+    Args:
+        line (str): Input text to search in for parentheses.
+        replacement (str): Inserted in place of every removed pair, e.g. a space so that the text around it is not glued together.
+
+    Returns:
+        str: Return a string with all text in matching parentheses removed. For example,
+        noparenthesis('a((b)c(d') == 'a(c(d'
+    """
+    fragments: list[list[str]] = [[]]
+    for ch in line:
+        if ch == '(':
+            fragments.append([ch])
+        else:
+            fragments[-1].append(ch)
+        if ch == ')' and len(fragments) > 1:
+            fragments.pop()
+            fragments[-1].append(replacement)
+    return ''.join(ch for w in fragments for ch in w)

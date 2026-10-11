@@ -129,3 +129,16 @@ class TestRfc2047Decode:
     def test_plain_ascii_and_empty(self) -> None:
         assert eml_parser.decode.rfc2047_decode('plain') == 'plain'
         assert eml_parser.decode.rfc2047_decode('') == ''
+
+
+@pytest.mark.parametrize('raw', [b'From:=??q?=0A\xcd', b' \nCc:=?\xd5?q?=0D'])
+def test_malformed_encoded_address_headers_do_not_raise(raw: bytes) -> None:
+    """Encoded words which decode to line breaks or to the wrong type must not make the parser fail."""
+    assert eml_parser.parser.EmlParser().decode_email_bytes(raw)
+
+
+def test_attached_message_which_cannot_be_serialised_does_not_raise() -> None:
+    """A message/rfc822 part with text the generator cannot encode is still listed as attachment."""
+    raw = b' \nContent-Type:multipart/\n--0t\nContent-Type:message/rfc822\n\xad'
+
+    assert eml_parser.parser.EmlParser().decode_email_bytes(raw)['attachment']

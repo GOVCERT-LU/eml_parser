@@ -1,5 +1,7 @@
 """Tests for the SPF / DKIM / DMARC results."""
 
+import time
+
 import eml_parser.parser
 
 
@@ -29,3 +31,14 @@ def test_reported_in_header() -> None:
 
     assert failing['authentication'] == {'spf': ['fail'], 'dkim': ['pass'], 'dmarc': ['fail']}
     assert 'authentication' not in plain
+
+
+def test_deeply_nested_comments_are_cheap() -> None:
+    """Hundreds of thousands of nested parentheses must not cost one pass over the header per level."""
+    header = {'authentication-results': ['(' * 300_000 + ')' * 300_000 + ' spf=pass']}
+
+    start = time.monotonic()
+    result = eml_parser.parser.EmlParser.parse_authentication_results(header)
+
+    assert result == {'spf': ['pass']}
+    assert time.monotonic() - start < 2

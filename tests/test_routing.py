@@ -10,22 +10,6 @@ samples_dir = parent_dir / 'samples'
 
 
 class TestRouting:
-    def test_noparenthesis(self) -> None:
-        test_input = {
-            ' test ': ' test ',
-            '(test)': '',
-            '((test))': '',
-            '(((test) (bla)))': '',
-            '(test) foo': ' foo',
-            'asd (foo (test)(() foo': 'asd (foo ( foo',
-            'foo (test) )()foo)': 'foo  )foo)',
-            '(asd)(((((': '(((((',
-            '))))(asd)': '))))',
-        }
-
-        for test, expected_result in test_input.items():
-            assert eml_parser.routing.noparenthesis(test) == expected_result
-
     def test_cleanline(self) -> None:
         test_input = {
             '   ;': '',

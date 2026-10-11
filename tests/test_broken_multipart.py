@@ -51,3 +51,22 @@ def test_nested_broken_multipart() -> None:
     parsed = _parse(b'multipart/mixed', b'--x1\r\nContent-Type: multipart/alternative\r\n\r\n' + inner + b'--x1--\r\n')
 
     assert parsed['body'][0]['uri'] == ['http://nested.example.com/x']
+
+
+def test_boundary_which_the_stdlib_decodes_does_not_loop_forever() -> None:
+    """A guessed boundary containing an encoded word is decoded by the stdlib and never matches; the part is then scanned as text."""
+    raw = (
+        b'From: a@b.com\r\nContent-Type: multipart/mixed; boundary="b"\r\n\r\n'
+        b'--=?x?q?=ff?=b\r\nContent-Type: text/html\r\n\r\nhttp://evil.example.com/x\r\n--b--\r\n'
+    )
+
+    result = eml_parser.parser.EmlParser(include_raw_body=True).decode_email_bytes(raw)
+
+    assert 'evil.example.com' in result['body'][0]['domain']
+
+
+def test_deeply_nested_parts_do_not_raise() -> None:
+    """Thousands of nested multiparts, each announcing the next one, exceed the recursion limit of the stdlib parser."""
+    nested = b''.join(b'--b%d\r\nContent-Type: multipart/mixed; boundary="b%d"\r\n\r\n' % (i, i + 1) for i in range(5000))
+
+    assert eml_parser.parser.EmlParser().decode_email_bytes(b'From: a@b.com\r\nContent-Type: multipart/mixed\r\n\r\n' + nested)

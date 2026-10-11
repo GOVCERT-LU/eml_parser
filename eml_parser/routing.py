@@ -9,27 +9,6 @@ import eml_parser.decode
 import eml_parser.regexes
 
 
-def noparenthesis(line: str) -> str:
-    """Remove nested parentheses, until no pairs of matching parentyheses are present.
-
-    Args:
-        line (str): Input text to search in for parentheses.
-
-    Returns:
-        str: Return a string with all text in matching parentheses removed. For example,
-        noparenthesis('a((b)c(d') == 'a(c(d'
-    """
-    fragments: list[list[str]] = [[]]
-    for ch in line:
-        if ch == '(':
-            fragments.append([ch])
-        else:
-            fragments[-1].append(ch)
-        if ch == ')' and len(fragments) > 1:
-            fragments.pop()
-    return ''.join(ch for w in fragments for ch in w)
-
-
 def cleanline(line: str) -> str:
     """Remove space and ; from start/end of line.
 
@@ -82,7 +61,7 @@ def parserouting(line: str, email_regex: regex.Pattern[str] = eml_parser.regexes
     npline = line.replace(')', ' ) ')  # normalise space # Re-space () ")by " exists often
     npline = npline.replace('(', ' ( ')  # normalise space # Re-space ()
     npline = npline.replace(';', ' ; ')  # normalise space # Re-space ;
-    npline = noparenthesis(npline)  # Remove any "()"
+    npline = eml_parser.decode.noparenthesis(npline)  # Remove any "()"
     npline = ' '.join(npline.split())  # normalise space
     npline = npline.strip('\n')  # Remove any new-line
     raw_find_data = eml_parser.regexes.date_regex.findall(npline)  # extract date on end line.

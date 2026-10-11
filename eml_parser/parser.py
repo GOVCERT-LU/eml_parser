@@ -343,10 +343,19 @@ class EmlParser:
                     part.replace_header('Content-Type', 'text/plain')
                     continue
 
+                try:
+                    repaired = email.message_from_string(f'Content-Type: multipart/mixed; boundary="{boundary}"\n\n{payload}', policy=self.policy).get_payload()
+                except RecursionError:
+                    logger.warning('Multipart parts nested too deeply to repair, treating the part as text.')
+                    repaired = None
+
+                if not isinstance(repaired, list):
+                    # The stdlib did not split it either, e.g. because it decodes an encoded word in the boundary. Retrying would never end.
+                    part.replace_header('Content-Type', 'text/plain')
+                    continue
+
                 part.set_param('boundary', boundary)
-                part.set_payload(
-                    email.message_from_string(f'Content-Type: multipart/mixed; boundary="{boundary}"\n\n{payload}', policy=self.policy).get_payload()
-                )
+                part.set_payload(repaired)
                 parts.append(part)
 
     def parse_email(self) -> dict:
@@ -765,8 +774,8 @@ class EmlParser:
                 # extract values using a relaxed policy
                 for _field in eml_parser.decode.workaround_field_value_parsing_errors(self.msg, k):
                     # check if this is a RFC2047 encoded field
-                    if eml_parser.regexes.email_regex_rfc2047.search(_field):
-                        decoded_values.append(eml_parser.decode.rfc2047_decode(_field))
+                    if eml_parser.regexes.email_regex_rfc2047.search(str(_field)):
+                        decoded_values.append(eml_parser.decode.rfc2047_decode(str(_field)))
                     else:
                         logger.error('ERROR: Field value parsing error, trying to work around this! - %s', _field)
 
@@ -908,11 +917,7 @@ class EmlParser:
         results: dict[str, list[str]] = {}
 
         for value in header.get('authentication-results', []):
-            text = str(value)
-            while (stripped := eml_parser.regexes.header_comment_regex.sub(' ', text)) != text:
-                text = stripped
-
-            for method, result in eml_parser.regexes.authentication_result_regex.findall(text):
+            for method, result in eml_parser.regexes.authentication_result_regex.findall(eml_parser.decode.noparenthesis(str(value), ' ')):
                 results.setdefault(method.lower(), []).append(result.lower())
 
         for value in header.get('received-spf', []):
@@ -1079,7 +1084,7 @@ class EmlParser:
                     for _group in parsing_result['groups']:
                         for _address in _group.addresses:
                             field.append((_address.display_name, _address.addr_spec))
-                except (AttributeError, IndexError):
+                except (AttributeError, IndexError, ValueError):
                     # The stdlib address/header parser can itself raise on certain malformed
                     # values (e.g. an unquoted display name ending in a bare period, such as
                     # "Test.<test@example.com>"). The exact exception type raised for this
@@ -1277,12 +1282,17 @@ class EmlParser:
                 if len(payload) > 1:
                     logger.warning('More than one payload for "message/rfc822" part detected. This is not supported, please report!')
 
+                embedded_message = typing.cast('list[email.message.EmailMessage]', payload)[0]
                 try:
                     custom_policy: email.policy.Policy = email.policy.default.clone(max_line_length=0)
-                    data = typing.cast('list[email.message.EmailMessage]', payload)[0].as_bytes(policy=custom_policy)
+                    data = embedded_message.as_bytes(policy=custom_policy)
                 except UnicodeEncodeError:
                     custom_policy = email.policy.compat32.clone(max_line_length=0)
-                    data = typing.cast('list[email.message.EmailMessage]', payload)[0].as_bytes(policy=custom_policy)
+                    try:
+                        data = embedded_message.as_bytes(policy=custom_policy)
+                    except UnicodeEncodeError:
+                        # Text which cannot be encoded as declared (lone surrogates, a wrong charset): keep what can be.
+                        data = embedded_message.as_string(policy=custom_policy).encode('utf-8', 'replace')
 
                 file_size = len(data)
             else:

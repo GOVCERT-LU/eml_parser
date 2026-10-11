@@ -1,3 +1,5 @@
+import datetime
+
 import pytest
 
 import eml_parser.decode
@@ -22,3 +24,8 @@ def test_missing_date_parts_never_come_from_the_current_clock(line: str, expecte
 @pytest.mark.parametrize('line', ['', 'not a date', 'Fri, 31 Feb 2024 10:00:00 +0000', '0000-00-00', 'garbage 99'])
 def test_unparsable_dates_still_return_the_default(line: str) -> None:
     assert eml_parser.decode.robust_string2date(line).isoformat() == eml_parser.decode.default_date
+
+
+def test_absurd_number_is_an_invalid_date() -> None:
+    """dateutil raises decimal.InvalidOperation for huge numbers of minutes or seconds."""
+    assert eml_parser.decode.robust_string2date('99999999999999999999999999999m') == datetime.datetime.fromisoformat(eml_parser.decode.default_date)
