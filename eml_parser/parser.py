@@ -539,7 +539,7 @@ class EmlParser:
             # URLs do not necessarily appear as-is in the body, as they may contain escaped entities.
             # For this reason, we have to extract the domains again from each parsed URL.
             # Run once over the deduplicated URLs after slicing to keep the cost linear in the body size.
-            for url in set(list_observed_urls) | set(list_observed_urls_noscheme):
+            for url in dict.fromkeys([*list_observed_urls, *list_observed_urls_noscheme]):
                 for match in eml_parser.regexes.dom_regex.findall(url):
                     valid_domain = self.get_valid_domain_or_ip(match.lower())
                     if valid_domain:
@@ -548,10 +548,10 @@ class EmlParser:
             # Report uri,email and observed domain or hash if no raw body
             if self.include_raw_body:
                 if list_observed_urls:
-                    bodie['uri'] = list(set(list_observed_urls))
+                    bodie['uri'] = list(dict.fromkeys(list_observed_urls))
 
                 if list_observed_urls_noscheme:
-                    bodie['uri_noscheme'] = list(set(list_observed_urls_noscheme))
+                    bodie['uri_noscheme'] = list(dict.fromkeys(list_observed_urls_noscheme))
 
                 if list_observed_email:
                     bodie['email'] = list(list_observed_email)
@@ -565,11 +565,11 @@ class EmlParser:
             else:
                 if list_observed_urls:
                     bodie['uri_hash'] = []
-                    for element in list_observed_urls:
+                    for element in dict.fromkeys(list_observed_urls):
                         bodie['uri_hash'].append(self.get_hash(element.lower(), 'sha256'))
                 if list_observed_urls_noscheme:
                     bodie['uri_noscheme_hash'] = []
-                    for element in set(list_observed_urls_noscheme):
+                    for element in dict.fromkeys(list_observed_urls_noscheme):
                         bodie['uri_noscheme_hash'].append(self.get_hash(element.lower(), 'sha256'))
                 if list_observed_email:
                     bodie['email_hash'] = []
