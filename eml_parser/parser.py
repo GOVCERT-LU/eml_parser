@@ -554,6 +554,7 @@ class EmlParser:
             # Parse any URLs and mail found in the body
             list_observed_urls: list[str] = []
             list_observed_urls_noscheme: list[str] = []
+            list_observed_unc: dict[str, int] = {}
             list_observed_email: typing.Counter[str] = Counter()
             list_observed_dom: typing.Counter[str] = Counter()
             list_observed_ip: typing.Counter[str] = Counter()
@@ -568,6 +569,9 @@ class EmlParser:
                         list_observed_urls.append(url_match)
                     else:
                         list_observed_urls_noscheme.append(url_match)
+
+                for share in eml_parser.regexes.unc_regex.finditer(body_slice):
+                    list_observed_unc[share.group(0).rstrip('.,;')] = 1
 
                 for match in self.email_regex.findall(body_slice):
                     valid_email = self.get_valid_domain_or_ip(match.lower())
@@ -615,6 +619,16 @@ class EmlParser:
                 if obfuscated_ip and obfuscated_ip not in self.pconf['whiteip']:
                     list_observed_ip[obfuscated_ip] = 1
 
+            # The host of a remote file share is the indicator: it is contacted (and authenticated to) when the path is opened.
+            for share_host in filter(None, map(self.get_share_host, list_observed_unc)):
+                try:
+                    ipaddress.ip_address(share_host)
+                except ValueError:
+                    list_observed_dom[share_host] = 1
+                else:
+                    if share_host not in self.pconf['whiteip']:
+                        list_observed_ip[share_host] = 1
+
             # Report uri,email and observed domain or hash if no raw body
             if self.include_raw_body:
                 if list_observed_urls:
@@ -622,6 +636,9 @@ class EmlParser:
 
                 if list_observed_urls_noscheme:
                     bodie['uri_noscheme'] = list(dict.fromkeys(list_observed_urls_noscheme))
+
+                if list_observed_unc:
+                    bodie['unc'] = list(list_observed_unc)
 
                 if list_observed_email:
                     bodie['email'] = list(list_observed_email)
@@ -641,6 +658,8 @@ class EmlParser:
                     bodie['uri_noscheme_hash'] = []
                     for element in dict.fromkeys(list_observed_urls_noscheme):
                         bodie['uri_noscheme_hash'].append(self.get_hash(element.lower(), 'sha256'))
+                if list_observed_unc:
+                    bodie['unc_hash'] = [self.get_hash(share.lower(), 'sha256') for share in list_observed_unc]
                 if list_observed_email:
                     bodie['email_hash'] = []
                     for element in list_observed_email:
@@ -888,6 +907,31 @@ class EmlParser:
                 results.setdefault('spf', []).append(spf_result.group(1).lower())
 
         return results
+
+    def get_share_host(self, share: str) -> str | None:
+        """Get the host of a remote file share reference (see `regexes.unc_regex`) if it is a domain or an IP address.
+
+        A bare NetBIOS name such as *fileserver* is a host of the local network and no indicator; *localhost* is local as well.
+        Encoded IPv6 addresses (`2001-db8--1.ipv6-literal.net`) are decoded and numeric hosts (a decimal IPv4 address) are resolved like in the URLs.
+
+        Args:
+            share: A match of `regexes.unc_regex`.
+
+        Returns:
+            str: The domain or IP address, or None.
+        """
+        match = eml_parser.regexes.unc_regex.match(share)
+        if match is None:
+            return None
+
+        host = (match.group('unc_host') or match.group('url_host')).partition('@')[0].lower()  # `@SSL` and `@port` select WebDAV
+        if host.endswith('.ipv6-literal.net'):
+            host = host.removesuffix('.ipv6-literal.net').replace('-', ':')
+
+        if '.' in host or ':' in host:
+            return self.get_valid_domain_or_ip(host)
+
+        return self.get_obfuscated_ip(host)
 
     def get_obfuscated_ip(self, host: str) -> str | None:
         """Resolve a host which is an IPv4 address in a notation browsers accept, e.g. `3232235777`, `0xC0A80101`, `0300.0250.0.1` or `127.1`.

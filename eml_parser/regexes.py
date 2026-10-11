@@ -140,3 +140,24 @@ header_comment_regex = re.compile(r"""\([^()]*\)""")
 
 # the result at the start of a Received-SPF header (RFC 7208)
 received_spf_regex = re.compile(r"""^\s*(pass|fail|softfail|neutral|none|temperror|permerror)\b""", re.IGNORECASE)
+
+# Remote file shares. UNC paths (`\\host\share\path`, also the WebDAV forms `\\host@SSL\DavWWWRoot\x` and `\\host@8080\x`, and the `\\?\UNC\host\share` prefix)
+# as well as `file://host/share` and `smb://host/share` URLs. A client which opens such a path connects to the host and authenticates (leaking the NTLM hash)
+# or fetches content from it, which makes them a classic phishing and credential theft primitive. The host is the indicator.
+unc_regex = re.compile(
+    r"""
+    (?:
+        (?<![\\\w:.])                              # not part of a longer token or an escaped path such as C:\\Users
+        \\{2}(?:\?\\UNC\\)?
+        (?P<unc_host>[a-z0-9-]+(?:\.[a-z0-9-]+)*(?:@(?:ssl|\d{1,5}))?)
+        \\(?!\\)                                   # exactly one backslash: in escaped text (`\\\\Users\\\\Bob`) the separators are doubled
+        [^\s\\/:*?"<>|]+                            # share name
+        (?:\\[^\s"'<>|)\]]*)?                       # path
+    |
+        (?:file://(?!/)|file:////|smb://)            # `file:///C:/x` and `file://localhost/` are local
+        (?P<url_host>[a-z0-9-]+(?:\.[a-z0-9-]+)*(?:@(?:ssl|\d{1,5}))?)
+        (?:/[^\s"'<>)\]]*)?
+    )
+    """,
+    flags=re.IGNORECASE | re.VERBOSE,
+)
