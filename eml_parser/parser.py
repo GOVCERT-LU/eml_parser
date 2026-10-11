@@ -18,6 +18,7 @@ import logging
 import os.path
 import pathlib
 import re
+import socket
 import string
 import typing
 import urllib.parse
@@ -560,6 +561,15 @@ class EmlParser:
                     if valid_domain:
                         list_observed_dom[match.lower()] = 1
 
+                # http://3232235777/ is a valid URL for browsers but contains no dotted IP address
+                try:
+                    host = urllib.parse.urlparse(url if ':/' in url else '//' + url).hostname
+                except ValueError:
+                    host = None
+                obfuscated_ip = self.get_obfuscated_ip(host.rstrip('.')) if host else None
+                if obfuscated_ip and obfuscated_ip not in self.pconf['whiteip']:
+                    list_observed_ip[obfuscated_ip] = 1
+
             # Report uri,email and observed domain or hash if no raw body
             if self.include_raw_body:
                 if list_observed_urls:
@@ -799,6 +809,23 @@ class EmlParser:
 
         return None
 
+    def get_obfuscated_ip(self, host: str) -> str | None:
+        """Resolve a host which is an IPv4 address in a notation browsers accept, e.g. `3232235777`, `0xC0A80101`, `0300.0250.0.1` or `127.1`.
+
+        Args:
+            host (str): The host name of an URL.
+
+        Returns:
+            str: The address in dotted decimal notation (if it passes the IP validation of this instance) or None.
+        """
+        if not eml_parser.regexes.ipv4_obfuscated_regex.fullmatch(host):
+            return None
+
+        try:
+            return self.get_valid_domain_or_ip(socket.inet_ntoa(socket.inet_aton(host)))
+        except OSError:
+            return None
+
     def clean_found_uri(self, url: str) -> str | None:
         """Function for validating URLs from the input string.
 
@@ -811,9 +838,9 @@ class EmlParser:
         if '&' in url:
             url = unescape(url)
 
-        if '.' not in url and '[' not in url:
+        if '.' not in url and '[' not in url and not eml_parser.regexes.url_numeric_host_regex.match(url.lstrip(' \t\n\r\f\v\'"«»“”‘’')):
             # if we found a URL like e.g. http://afafasasfasfas; that makes no
-            # sense, thus skip it, but include http://[2001:db8::1]
+            # sense, thus skip it, but include http://[2001:db8::1] and http://3232235777 (a numeric host is an IPv4 address)
             return None
 
         try:
@@ -831,7 +858,7 @@ class EmlParser:
 
             host = _hostname.rstrip('.')
 
-            if self.get_valid_domain_or_ip(host) is None:
+            if self.get_valid_domain_or_ip(host) is None and self.get_obfuscated_ip(host) is None:
                 return None
         except ValueError:
             logger.warning('Unable to parse URL - %s', url)

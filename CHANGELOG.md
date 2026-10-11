@@ -24,6 +24,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Fix false positive indicators: IPv4 and IPv6 addresses are no longer extracted from inside longer dotted numbers, words or host names (`1.2.3.4.5`, `v1.2.3.4`, `1.2.3.4.nip.io`, `std::vector`, `1:2:3:4:5:6:7:8:9`), names with a numeric top level domain (`999.1.1.1`, `v1.20.30`) are no longer accepted as hosts, and file names (`invoice.pdf`, see the new `eml_parser.constants.FILE_EXTENSIONS`) are not reported as domains, unless the extension is a top level domain according to the public suffix list (e.g. `evil.zip`).
 ### Changes
 - Cache the validation of host names and IP addresses per `EmlParser` instance (bounded LRU), as bodies contain the same hosts over and over. `domain_force_tld` and `ip_force_routable` must therefore not be changed after construction.
+### Added
+- Report URLs whose host is an IPv4 address in an obfuscated notation (`http://3232235777/`, `http://0xC0A80101/`, `http://0xC0.0xA8.1.1/`, `http://127.1/`), which browsers resolve like normal addresses and which are a common phishing/filter evasion trick; their address is added to the observed IPs (honouring `ip_force_routable` and `whiteip`). New `EmlParser.get_obfuscated_ip()`, based on `socket.inet_aton()`.
 
 ## [v4.0.0]
 ### Breaking

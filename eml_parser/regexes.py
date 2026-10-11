@@ -108,3 +108,9 @@ cleanline_regex = re.compile(r"""(^[;\s]{0,}|[;\s]{0,}$)""")
 escape_special_regex_chars = re.compile(r"""([\^$\[\]()+?.])""")
 
 window_slice_regex = re.compile(r"""\s""")
+
+# Candidates for an IPv4 address in the notations of inet_aton(): http://3232235777/, 0xC0A80101, 0300.0250.0.1, 127.1 (validated by get_obfuscated_ip())
+ipv4_obfuscated_regex = re.compile(r"""[0-9a-fA-FxX.]+""")
+
+# URL whose host is a plain number (decimal or hexadecimal), e.g. http://3232235777/ or http://user@0xC0A80101:8080/
+url_numeric_host_regex = re.compile(r"""[a-z][a-z0-9+.\-]*://(?:[^/?#@]*@)?(?:0x[0-9a-f]+|[0-9]+)(?:[:/?#]|$)""", re.IGNORECASE)
