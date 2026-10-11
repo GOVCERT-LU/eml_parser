@@ -12,6 +12,7 @@ import email.policy
 import email.utils
 import hashlib
 import ipaddress
+import itertools
 import logging
 import os.path
 import pathlib
@@ -666,7 +667,7 @@ class EmlParser:
         # parse attachments
         if self.parse_attachments:
             try:
-                report_struc['attachment'] = self.traverse_multipart(self.msg, 0)
+                report_struc['attachment'] = self.traverse_multipart(self.msg, itertools.count())
             except (binascii.Error, AssertionError):
                 # we hit this exception if the payload contains invalid data
                 logger.exception('Exception occurred while parsing attachment data. Collected data will not be complete!')
@@ -1022,13 +1023,13 @@ class EmlParser:
 
         return hash_algo(_value).hexdigest()
 
-    def traverse_multipart(self, msg: email.message.Message, counter: int = 0, depth: int = 0) -> dict[str, typing.Any]:
+    def traverse_multipart(self, msg: email.message.Message, counter: collections.abc.Iterator[int], depth: int = 0) -> dict[str, typing.Any]:
         """Recursively traverses all e-mail message multi-part elements and returns in a parsed form as a dict.
 
         Args:
             msg (email.message.Message): An e-mail message object.
-            counter (int, optional): A counter which is used for generating attachments
-                file-names in case there are none found in the header. Default = 0.
+            counter (Iterator[int]): Iterator shared by all parts of one message, used for generating attachments
+                file-names in case there are none found in the header.
             depth: Parameter used to track the current recursion level.
 
         Returns:
@@ -1057,13 +1058,13 @@ class EmlParser:
 
         return attachments
 
-    def prepare_multipart_part_attachment(self, msg: email.message.Message, counter: int = 0) -> dict[str, typing.Any]:
+    def prepare_multipart_part_attachment(self, msg: email.message.Message, counter: collections.abc.Iterator[int]) -> dict[str, typing.Any]:
         """Extract meta-information from a multipart-part.
 
         Args:
             msg (email.message.Message): An e-mail message object.
-            counter (int, optional): A counter which is used for generating attachments
-                file-names in case there are none found in the header. Default = 0.
+            counter (Iterator[int]): Iterator shared by all parts of one message, used for generating attachments
+                file-names in case there are none found in the header.
 
         Returns:
             dict: Returns a dict with original multi-part headers as well as generated hash check-sums,
@@ -1100,9 +1101,11 @@ class EmlParser:
                 data = typing.cast('bytes', msg.get_payload(decode=True))
                 file_size = len(data)
 
+            part_number = next(counter)
+
             filename = msg.get_filename('')
             if filename == '':
-                filename = f'part-{counter:03d}'
+                filename = f'part-{part_number:03d}'
             else:
                 filename = eml_parser.decode.decode_field(filename)
 
@@ -1142,8 +1145,6 @@ class EmlParser:
                     ch[k] = [v]
 
             attachment[file_id]['content_header'] = ch
-
-            counter += 1
 
         return attachment
 
