@@ -630,8 +630,10 @@ class EmlParser:
         # "a","titi"   --->    c: [truc]
         # "c","truc"
         #
-        for header_field_name in set(self.msg.keys()):
-            k = header_field_name.lower()  # Lot of lower, pre-compute...
+        # Iterate over the unique (case-insensitive) header names in the order of their first occurrence.
+        # A set would make the output order depend on PYTHONHASHSEED and would process names differing only
+        # in case (e.g. "X-Foo" and "x-foo") twice, duplicating their values, as get_all() is case-insensitive.
+        for k in dict.fromkeys(header_field_name.lower() for header_field_name in self.msg.keys()):
             decoded_values = []
 
             try:
