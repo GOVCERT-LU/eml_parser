@@ -50,6 +50,9 @@ logger = logging.getLogger(__name__)
 default_date = '1970-01-01T00:00:00+00:00'
 _DATEUTIL_DEFAULT = datetime.datetime(1970, 1, 1)  # noqa: DTZ001
 
+# The charset detection is slow, bodies larger than this are decoded with the declared charset only, even if that is wrong.
+MAX_CHARSET_DETECTION_SIZE = 256 * 1024
+
 
 def decode_field(field: str) -> str:
     """Try to get the specified field using the Header module.
@@ -91,18 +94,37 @@ def decode_body(data: bytes, charset: str | None) -> str:
 
     Args:
         data (bytes): The body.
-        charset (str, optional): The charset declared in the Content-Type header. If it is missing or unknown, the encoding is detected.
+        charset (str, optional): The charset declared in the Content-Type header. If it is missing or unknown, or if decoding with it
+            loses bytes, the encoding is detected.
 
     Returns:
         str: The decoded body.
     """
-    try:
-        text = data.decode(charset, 'replace') if charset else decode_string(data)
-    except (LookupError, ValueError):
-        logger.debug('Unknown charset "%s", trying to detect the encoding', charset, exc_info=True)
+    if charset:
+        try:
+            text = _redetect_if_damaged(data, data.decode(charset, 'replace'))
+        except (LookupError, ValueError):
+            logger.debug('Unknown charset "%s", trying to detect the encoding', charset, exc_info=True)
+            text = decode_string(data)
+    else:
         text = decode_string(data)
 
     return text.replace('\ufffd', ' ')
+
+
+def _redetect_if_damaged(data: bytes, text: str) -> str:
+    """Return the detected decoding of data instead of text, if text lost bytes (U+FFFD) because the declared charset is wrong.
+
+    Declared charsets are often wrong (e.g. *us-ascii* for UTF-8 text). The detection is slow, so it is only run if needed and not for huge bodies.
+    """
+    damage = text.count('\ufffd')
+
+    if not damage or len(data) > MAX_CHARSET_DETECTION_SIZE:
+        return text
+
+    detected = decode_string(data)
+
+    return detected if detected.count('\ufffd') < damage else text
 
 
 def decode_string(string: bytes, encoding: str | None = None) -> str:
