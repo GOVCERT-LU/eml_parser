@@ -6,6 +6,7 @@ import email.errors
 import email.header
 import email.policy
 import email.utils
+import html
 import json
 import logging
 
@@ -163,6 +164,31 @@ def decode_string(string: bytes, encoding: str | None = None) -> str:
         logger.debug('Unable to detect the encoding, falling back to latin-1', exc_info=True)
 
     return string.decode('latin-1')
+
+
+def normalize_attribute_url(value: str) -> str:
+    """Normalise the value of an HTML attribute containing an URL the way a browser does before using it.
+
+    Character references are resolved, tabs and line feeds (which browsers drop from URLs anywhere) are removed and backslashes
+    after the scheme are treated as slashes, so an obfuscated `ht&#9;tp:` followed by backslashes becomes a plain `http://` URL.
+
+    Args:
+        value (str): The raw attribute value, possibly with the opening quote.
+
+    Returns:
+        str: The normalised value.
+    """
+    if '&' in value:
+        value = html.unescape(value)
+
+    value = value.translate(eml_parser.regexes.url_drop_chars_table)
+
+    if eml_parser.regexes.url_backslash_scheme_regex.match(value):
+        # Backslashes are treated like slashes up to the query string or fragment.
+        end = min((pos for pos in (value.find('?'), value.find('#')) if pos != -1), default=len(value))
+        value = value[:end].replace('\\', '/') + value[end:]
+
+    return value
 
 
 def workaround_bug_27257(msg: email.message.Message, header: str, email_regex: regex.Pattern[str] = eml_parser.regexes.email_no_force_tld_regex) -> list[str]:

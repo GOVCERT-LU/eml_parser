@@ -885,10 +885,13 @@ class EmlParser:
 
         try:
             # Remove leading spaces and quote characters
-            url = url.lstrip(' \t\n\r\f\v\'"«»“”‘’').replace('\r', '').replace('\n', '')
+            url = url.lstrip(' \t\n\r\f\v\'"«»“”‘’').replace('\r', '').replace('\n', '').replace('\t', '')
             url = urllib.parse.urlparse(url).geturl()
             scheme_url = url
-            if ':/' not in scheme_url:
+            if url.startswith('//'):
+                # protocol-relative URL, i.e. the scheme of the document is used
+                scheme_url = 'noscheme:' + url
+            elif ':/' not in scheme_url:
                 scheme_url = 'noscheme://' + url
 
             _hostname = urllib.parse.urlparse(scheme_url).hostname
@@ -898,7 +901,10 @@ class EmlParser:
 
             host = _hostname.rstrip('.')
 
-            if self.get_valid_domain_or_ip(host) is None and self.get_obfuscated_ip(host) is None:
+            # Without a scheme, a host without a dot or with a file extension is a relative reference like "images/logo.png", not a host.
+            is_relative_reference = scheme_url.startswith('noscheme:') and ('.' not in host or self.is_file_name(host))
+
+            if is_relative_reference or (self.get_valid_domain_or_ip(host) is None and self.get_obfuscated_ip(host) is None):
                 return None
         except ValueError:
             logger.warning('Unable to parse URL - %s', url)
@@ -939,7 +945,7 @@ class EmlParser:
 
         if self.include_href:
             for found_url in eml_parser.regexes.url_regex_href.findall(body):
-                clean_uri = self.clean_found_uri(found_url)
+                clean_uri = self.clean_found_uri(eml_parser.decode.normalize_attribute_url(found_url))
                 if clean_uri is not None:
                     list_observed_urls[clean_uri] = 1
 

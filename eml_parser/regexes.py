@@ -90,17 +90,28 @@ url_regex_www = re.compile(
 )
 
 
-# Search for URLs in HTML IMG or A tags
+# Search for URLs in the attributes of HTML tags: links and images, but also the targets of forms (phishing), frames, scripts, embedded objects and redirects.
 # regex overlaps with url_regex_simple, so simple URL content that starts with "<a " or "<img " still matches.
 url_regex_href = re.compile(
     r"""
-<(?:a[\s\/]+[^>]*?href
- |img[\s\/]+[^>]*?src)
-[\s\/]*=[\s\/]*
+<(?:(?:a|area|link|base)[\s\/]+[^>]*?href
+ |(?:img|script|iframe|frame|embed|source|audio|video|track|input|bgsound)[\s\/]+[^>]*?src
+ |form[\s\/]+[^>]*?action
+ |(?:button|input)[\s\/]+[^>]*?formaction
+ |object[\s\/]+[^>]*?data
+ |body[\s\/]+[^>]*?background
+ |[a-z:]+[\s\/]+[^>]*?xlink:href)
+[\s\/]*=\s*
 ((?:[\"][^\"]+)|[\'][^\']+|[^\s>]+)
 """,
     flags=re.IGNORECASE | re.VERBOSE,
 )
+
+# Characters which browsers remove from URLs, wherever they are (`ht&#9;tp://...` or a scheme broken over two lines is a valid URL).
+url_drop_chars_table = str.maketrans('', '', '\t\n\r')
+
+# A (quoted) value starting with a scheme followed by slashes or backslashes, i.e. http:\\\\host\\path
+url_backslash_scheme_regex = re.compile(r"""[\"\']?[a-z][a-z0-9+.\-]*:[\\/]{2}""", re.IGNORECASE)
 
 date_regex = re.compile(r""";[ \w\s:,+\-()]+$""")
 cleanline_regex = re.compile(r"""(^[;\s]{0,}|[;\s]{0,}$)""")

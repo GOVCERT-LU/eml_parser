@@ -27,6 +27,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Cache the validation of host names and IP addresses per `EmlParser` instance (bounded LRU), as bodies contain the same hosts over and over. `domain_force_tld` and `ip_force_routable` must therefore not be changed after construction.
 ### Added
 - Report URLs whose host is an IPv4 address in an obfuscated notation (`http://3232235777/`, `http://0xC0A80101/`, `http://0xC0.0xA8.1.1/`, `http://127.1/`), which browsers resolve like normal addresses and which are a common phishing/filter evasion trick; their address is added to the observed IPs (honouring `ip_force_routable` and `whiteip`). New `EmlParser.get_obfuscated_ip()`, based on `socket.inet_aton()`.
+- Extract URLs from more HTML attributes: `form action`, `button`/`input` `formaction`, `iframe`/`frame`/`script`/`embed`/`source`/`audio`/`video`/`track`/`input` `src`, `area`/`link`/`base` `href`, `object data`, `body background`, `xlink:href`. These are the usual targets of phishing forms, hidden frames, remote scripts and redirects. Attribute values are normalised like a browser does before use (`decode.normalize_attribute_url()`: character references, tabs and line breaks inside the scheme, backslashes), protocol-relative URLs (`//host/path`) are reported and relative references (`images/logo.png`, `page.html`) are no longer mistaken for hosts.
 
 ## [v4.0.0]
 ### Breaking
