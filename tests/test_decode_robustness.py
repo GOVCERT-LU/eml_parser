@@ -88,3 +88,26 @@ class TestExportToJson:
     def test_unsupported_types_still_raise(self) -> None:
         with pytest.raises(TypeError):
             eml_parser.decode.export_to_json({'value': object()})
+
+
+class TestJsonSerialExtremeDates:
+    @pytest.mark.parametrize(
+        ('moment', 'expected'),
+        [
+            (datetime.datetime(9999, 12, 31, 23, 59, 59, tzinfo=datetime.timezone(datetime.timedelta(hours=-5))), '9999-12-31T23:59:59-05:00'),
+            (datetime.datetime(1, 1, 1, 0, 0, 0, tzinfo=datetime.timezone(datetime.timedelta(hours=5))), '0001-01-01T00:00:00+05:00'),
+        ],
+    )
+    def test_dates_which_cannot_be_converted_to_utc_keep_their_offset(self, moment: datetime.datetime, expected: str) -> None:
+        assert eml_parser.decode.json_serial(moment) == expected
+
+    def test_naive_datetime_is_unchanged(self) -> None:
+        assert eml_parser.decode.json_serial(datetime.datetime.fromisoformat('2026-01-02T03:04:05')) == '2026-01-02T03:04:05'
+
+    def test_hostile_date_header_can_be_exported(self) -> None:
+        raw_email = b'From: a@example.com\r\nDate: Fri, 31 Dec 9999 23:59:59 -0500\r\n\r\nbody'
+
+        parsed = eml_parser.parser.EmlParser().decode_email_bytes(raw_email)
+        exported = json.loads(eml_parser.decode.export_to_json(parsed))
+
+        assert exported['header']['date'].startswith('9999-12-31T23:59:59')

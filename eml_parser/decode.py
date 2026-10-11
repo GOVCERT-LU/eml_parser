@@ -209,7 +209,7 @@ def robust_string2date(line: str) -> datetime.datetime:
 def json_serial(obj: object) -> str:
     """JSON serializer for objects not serializable by default json code.
 
-    Supported are datetime objects (exported as ISO 8601 strings, converted to UTC if timezone aware) and
+    Supported are datetime objects (exported as ISO 8601 strings, converted to UTC if timezone aware and possible) and
     ASCII bytes objects, i.e. the base64 encoded attachment data added by the *include_attachment_data* option.
 
     Args:
@@ -224,7 +224,11 @@ def json_serial(obj: object) -> str:
     """
     if isinstance(obj, datetime.datetime):
         if obj.tzinfo is not None:
-            return obj.astimezone(datetime.UTC).isoformat()
+            try:
+                return obj.astimezone(datetime.UTC).isoformat()
+            except OverflowError:
+                # Dates close to datetime.min/max (e.g. 9999-12-31 23:59:59 -0500) can not be converted to UTC.
+                logger.debug('Unable to convert "%s" to UTC, exporting it with its original offset', obj, exc_info=True)
 
         return obj.isoformat()
 
