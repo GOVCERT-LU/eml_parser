@@ -28,6 +28,7 @@ from html import unescape
 import publicsuffixlist
 import regex
 
+import eml_parser.constants
 import eml_parser.decode
 import eml_parser.regexes
 import eml_parser.routing
@@ -223,6 +224,10 @@ class EmlParser:
         self.include_www = include_www
         self.include_href = include_href
         self._psl = publicsuffixlist.PublicSuffixList(accept_unknown=not self.domain_force_tld)
+        # A file extension which is a TLD (or becomes one) is a domain and not a file name, so the public suffix list decides.
+        self._file_extensions = frozenset(
+            ext for ext in eml_parser.constants.FILE_EXTENSIONS if self._psl.publicsuffix(f'x.{ext}', accept_unknown=False) is None
+        )
         # The same hosts occur over and over in a body; the verdict only depends on settings which are constant for an instance.
         self._cached_valid_domain_or_ip = functools.lru_cache(maxsize=32768)(self._get_valid_domain_or_ip)
 
@@ -527,12 +532,19 @@ class EmlParser:
                         list_observed_email[match.lower()] = 1
 
                 for match in eml_parser.regexes.dom_regex.findall(body_slice):
+                    if self.is_file_name(match):
+                        continue
+
                     valid_domain = self.get_valid_domain_or_ip(match.lower())
                     if valid_domain:
                         list_observed_dom[match.lower()] = 1
 
                 for ip_regex in (eml_parser.regexes.ipv4_regex, eml_parser.regexes.ipv6_regex):
                     for match in ip_regex.findall(body_slice):
+                        if ':' in match and not any(char.isdigit() for char in match) and match.count(':') < 3:
+                            # "::" or a scope resolution like "Add::dead" is not an address
+                            continue
+
                         valid_ip = self.get_valid_domain_or_ip(match.lower())
                         if valid_ip in self.pconf['whiteip']:
                             continue
@@ -745,6 +757,10 @@ class EmlParser:
 
         yield body[start:]
 
+    def is_file_name(self, domain: str) -> bool:
+        """Check whether a domain-like string is rather a file name, e.g. *invoice.pdf*."""
+        return domain.rpartition('.')[2].lower() in self._file_extensions
+
     def get_valid_domain_or_ip(self, data: str) -> str | None:
         """Function to determine if an IP address, Email address, or Domain is valid.
 
@@ -772,6 +788,10 @@ class EmlParser:
             else:
                 return str(valid_ip)
         except ValueError:
+            # A top level domain is never numeric (RFC 3696, section 2): this rejects invalid addresses ("999.1.1.1") and version numbers ("v1.20.30").
+            if host.rstrip('.').rpartition('.')[2].isdecimal():
+                return None
+
             # _psl uses self.domain_force_tld
             valid_domain = self._psl.publicsuffix(host)
             if valid_domain:
