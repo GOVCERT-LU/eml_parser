@@ -12,6 +12,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Fix `decode.rfc2047_decode()` raising `LookupError` for RFC2047 encoded words with an unknown charset (e.g. `=?foo-bar?q?x?=`), which allowed a crafted header to abort the parsing of the whole message. The charset is now detected instead.
 - Fix the order of the parsed headers (`header['header']`) being random between runs (depending on `PYTHONHASHSEED`) as it was built from a `set`. Headers are now returned in the order of their first occurrence in the message. Additionally, headers whose names only differ in case (e.g. `X-Foo` and `x-foo`) no longer have their values duplicated.
 - Fix all attachments without a file name being named `part-000`. The counter used by `traverse_multipart()` was passed by value and thus never advanced between parts. It is now shared by the whole traversal, so unnamed attachments are numbered `part-000`, `part-001`, ... (every attachment consumes a number). As a consequence the `counter` argument of `traverse_multipart()` and `prepare_multipart_part_attachment()` is now an iterator instead of an `int`.
+- Security: Stop using `uuid.uuid1()` for the internal body and attachment ids, as version 1 UUIDs embed the MAC address of the host and a timestamp and so leak information about the machine running the parser. Random version 4 UUIDs are used instead.
 
 ## [v4.0.0]
 ### Breaking

@@ -621,7 +621,7 @@ class EmlParser:
                 # only include boundary key if there is a value set
                 bodie['boundary'] = boundary
 
-            uid = str(uuid.uuid1())
+            uid = str(uuid.uuid4())
             bodys[uid] = bodie
 
         bodys_struc = bodys
@@ -1109,7 +1109,7 @@ class EmlParser:
             else:
                 filename = eml_parser.decode.decode_field(filename)
 
-            file_id = str(uuid.uuid1())
+            file_id = str(uuid.uuid4())
             attachment[file_id] = {}
             attachment[file_id]['filename'] = filename
             attachment[file_id]['size'] = file_size
