@@ -82,6 +82,20 @@ __email__ = 'georges@trypill.org, georges.toth@govcert.etat.lu'
 __copyright__ = 'Copyright 2013-2014 Georges Toth, Copyright 2013-present GOVCERT Luxembourg'
 __license__ = 'AGPL v3+'
 
+
+@functools.cache
+def get_public_suffix_list(accept_unknown: bool) -> publicsuffixlist.PublicSuffixList:
+    """Return the public suffix list; it is parsed once per setting and shared, as parsing it takes about 40 ms and it is read-only afterwards.
+
+    Args:
+        accept_unknown: Whether names with an unknown top level domain are accepted.
+
+    Returns:
+        The parsed public suffix list.
+    """
+    return publicsuffixlist.PublicSuffixList(accept_unknown=accept_unknown)
+
+
 # Characters allowed in a header field name (RFC 5322 ftext): printable ASCII except space and colon.
 FIELD_NAME_BYTES = (string.ascii_letters + string.digits + string.punctuation.replace(':', '')).encode()
 
@@ -225,7 +239,7 @@ class EmlParser:
         self.parse_attachments = parse_attachments
         self.include_www = include_www
         self.include_href = include_href
-        self._psl = publicsuffixlist.PublicSuffixList(accept_unknown=not self.domain_force_tld)
+        self._psl = get_public_suffix_list(not self.domain_force_tld)
         # A file extension which is a TLD (or becomes one) is a domain and not a file name, so the public suffix list decides.
         self._file_extensions = frozenset(
             ext for ext in eml_parser.constants.FILE_EXTENSIONS if self._psl.publicsuffix(f'x.{ext}', accept_unknown=False) is None
