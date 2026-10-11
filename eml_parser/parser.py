@@ -560,7 +560,8 @@ class EmlParser:
             # If we start directly a findall on 500K+ body we got time and memory issues...
             # if more than 4K.. lets cheat, we will cut around the thing we search "://, @, ."
             # in order to reduce regex complexity.
-            for body_slice in self.string_sliding_window_loop(body):
+            # Namespace declarations (Outlook HTML, SVG, XHTML) are identifiers, not links, and would be reported as indicators on nearly every mail.
+            for body_slice in self.string_sliding_window_loop(eml_parser.regexes.xmlns_declaration_regex.sub(' ', body)):
                 for url_match in self.get_uri_ondata(body_slice):
                     if ':/' in url_match[:10]:
                         list_observed_urls.append(url_match)
@@ -1004,6 +1005,26 @@ class EmlParser:
 
         return return_field
 
+    @staticmethod
+    def is_text_part(msg: email.message.Message, filename: str) -> bool:
+        """Check whether a part is text which is to be scanned like the body.
+
+        These are text parts (unless they are attachments) and attachments which carry links, i.e. scripts, shortcuts, web pages, SVG, ...
+        Data attachments (XML, JSON, CSV, ...) are not scanned, and neither are attachments larger than `MAX_TEXT_ATTACHMENT_SIZE`.
+        """
+        is_attachment = msg.get_content_disposition() == 'attachment'
+        is_text = (
+            (msg.get_content_maintype() == 'text' and not is_attachment)
+            or msg.get_content_type() in eml_parser.constants.TEXT_ATTACHMENT_CONTENT_TYPES
+            or filename.endswith(eml_parser.constants.TEXT_ATTACHMENT_EXTENSIONS)
+        )
+
+        if is_text and is_attachment and len(msg.get_payload()) > eml_parser.constants.MAX_TEXT_ATTACHMENT_SIZE:
+            logger.warning('Text attachment "%s" is larger than %d bytes, it is not scanned.', filename, eml_parser.constants.MAX_TEXT_ATTACHMENT_SIZE)
+            return False
+
+        return is_text
+
     def get_raw_body_text(
         self, msg: email.message.Message, boundary: str | None = None, depth: int = 0
     ) -> list[tuple[typing.Any, typing.Any, typing.Any, str | None]]:
@@ -1041,12 +1062,7 @@ class EmlParser:
                 logger.exception('Exception occurred while trying to parse the content-disposition header. Collected data will not be complete.')
                 filename = ''
 
-            # pylint: disable=too-many-boolean-expressions
-            if (
-                ('content-disposition' not in msg and msg.get_content_maintype() == 'text')
-                or (filename.endswith(('.html', '.htm')))
-                or ('content-disposition' in msg and msg.get_content_disposition() == 'inline' and msg.get_content_maintype() == 'text')
-            ):
+            if self.is_text_part(msg, filename):
                 encoding = msg.get('content-transfer-encoding', '').lower()
 
                 raw_body_str = eml_parser.decode.decode_body(typing.cast('bytes', msg.get_payload(decode=True)), msg.get_content_charset())

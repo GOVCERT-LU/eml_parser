@@ -128,3 +128,6 @@ url_numeric_host_regex = re.compile(r"""[a-z][a-z0-9+.\-]*://(?:[^/?#@]*@)?(?:0x
 
 # A line which looks like a MIME multipart delimiter (RFC 2046, section 5.1.1), used to guess the boundary of broken multipart messages.
 multipart_boundary_guess_regex = re.compile(r"""^--([0-9A-Za-z'()+_,./:=?\-]{1,69}[0-9A-Za-z'()+_,./:=?\-])[ \t]*\r?$""", re.MULTILINE)
+
+# XML namespace declarations (xmlns="...", xmlns:v='...'): identifiers which look like URLs (http://www.w3.org/1999/xhtml) but are never fetched or visited.
+xmlns_declaration_regex = re.compile(r"""\bxmlns(?::[\w.\-]{1,100})?\s*=\s*(?:"[^"]{0,2000}"|'[^']{0,2000}')""", flags=re.IGNORECASE)
