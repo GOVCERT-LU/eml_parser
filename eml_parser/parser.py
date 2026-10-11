@@ -10,6 +10,7 @@ import email.headerregistry
 import email.message
 import email.policy
 import email.utils
+import functools
 import hashlib
 import ipaddress
 import itertools
@@ -222,6 +223,8 @@ class EmlParser:
         self.include_www = include_www
         self.include_href = include_href
         self._psl = publicsuffixlist.PublicSuffixList(accept_unknown=not self.domain_force_tld)
+        # The same hosts occur over and over in a body; the verdict only depends on settings which are constant for an instance.
+        self._cached_valid_domain_or_ip = functools.lru_cache(maxsize=32768)(self._get_valid_domain_or_ip)
 
         self.email_regex = eml_parser.regexes.email_force_tld_regex if email_force_tld else eml_parser.regexes.email_no_force_tld_regex
         self.policy = policy or CustomPolicy(email_regex=self.email_regex)
@@ -745,12 +748,18 @@ class EmlParser:
     def get_valid_domain_or_ip(self, data: str) -> str | None:
         """Function to determine if an IP address, Email address, or Domain is valid.
 
+        The result is cached per instance, so `domain_force_tld` and `ip_force_routable` must not be changed after construction.
+
         Args:
             data (str): Text input which should be validated.
 
         Returns:
             str: Returns a string of the validated IP address or the host.
         """
+        return self._cached_valid_domain_or_ip(data)
+
+    def _get_valid_domain_or_ip(self, data: str) -> str | None:
+        """Uncached implementation of `get_valid_domain_or_ip()`."""
         host = data.rpartition('@')[-1].strip(' \r\n\t[]')
         try:
             # Zone index support was added to ipaddress in Python 3.9

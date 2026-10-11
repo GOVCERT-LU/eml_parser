@@ -21,6 +21,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Fix the URL lists of the body being non-deterministic or full of duplicates: `uri` and `uri_noscheme` were built from a `set` (order depending on `PYTHONHASHSEED`, which also made the derived `domain` and `ip` lists random) and `uri_hash` held one entry per occurrence of a URL. All are now unique and in order of first appearance.
 - Fix `string_sliding_window_loop()` cutting tokens in half and losing parts of large bodies (the rewind logic could move the end of a slice behind its start, so text was skipped and URLs, domains and addresses at slice borders were missed or truncated). Slices now end at the next whitespace and cover the body completely. The unused look-around heuristics are removed, which also makes parsing of large bodies faster.
 - Detect the encoding of a body if decoding it with the declared charset loses bytes (declared charsets are often wrong, e.g. `us-ascii` for UTF-8 text), so non-ASCII indicators are not replaced by U+FFFD. Bodies larger than `decode.MAX_CHARSET_DETECTION_SIZE` are exempt to keep parsing fast.
+### Changes
+- Cache the validation of host names and IP addresses per `EmlParser` instance (bounded LRU), as bodies contain the same hosts over and over. `domain_force_tld` and `ip_force_routable` must therefore not be changed after construction.
 
 ## [v4.0.0]
 ### Breaking
