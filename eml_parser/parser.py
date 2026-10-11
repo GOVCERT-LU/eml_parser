@@ -25,6 +25,7 @@ from collections import Counter
 from html import unescape
 
 import publicsuffixlist
+import regex
 
 import eml_parser.decode
 import eml_parser.regexes
@@ -115,18 +116,26 @@ def find_header_start(data: bytes) -> int:
 class CustomPolicy(email.policy.EmailPolicy):
     """Custom parsing policy based on the default policy but relaxing some checks and early fixing invalid values."""
 
-    def __init__(self) -> None:
-        """Constructor."""
-        super().__init__(max_line_length=0, refold_source='none')
+    email_regex: regex.Pattern[str] = eml_parser.regexes.email_no_force_tld_regex
+
+    def __init__(self, email_regex: regex.Pattern[str] = eml_parser.regexes.email_no_force_tld_regex) -> None:
+        """Constructor.
+
+        Args:
+            email_regex (regex.Pattern[str], optional): Pattern used to extract e-mail addresses from malformed headers.
+        """
+        # Policies are immutable; the stdlib accepts any declared class attribute as keyword. The typeshed stubs do not know ours.
+        custom: dict[str, typing.Any] = {'email_regex': email_regex}
+        super().__init__(max_line_length=0, refold_source='none', **custom)
 
     def header_fetch_parse(self, name: str, value: str) -> str:
         """Early fix parsing issues and pass the name/value to the parent header_fetch_parse method for proper parsing."""
         header = name.lower()
 
         if header == 'message-id':
-            if '[' in value and not eml_parser.regexes.email_regex.match(value):
+            if '[' in value and not self.email_regex.match(value):
                 # try workaround for bad message-id formats
-                m = eml_parser.regexes.email_regex.search(value)
+                m = self.email_regex.search(value)
                 if m:
                     value = f'<{m.group(1)}>'
                 else:
@@ -147,7 +156,7 @@ class CustomPolicy(email.policy.EmailPolicy):
             except RecursionError:
                 # This can happen when the recursion gets too deep in in the stdlib recursive descent parser.
                 # In this case, the header is certainly pathological. We still try to extract some addresses.
-                m = eml_parser.regexes.email_regex.findall(value)
+                m = self.email_regex.findall(value)
                 return ', '.join(m)
 
         return super().header_fetch_parse(name, value)
@@ -205,7 +214,6 @@ class EmlParser:
         self.include_attachment_data = include_attachment_data
         # If no pconf was specified, default to empty dict
         self.pconf = pconf or {}
-        self.policy = policy or CustomPolicy()
         self.ignore_bad_start = ignore_bad_start
         self.email_force_tld = email_force_tld
         self.domain_force_tld = domain_force_tld
@@ -215,10 +223,8 @@ class EmlParser:
         self.include_href = include_href
         self._psl = publicsuffixlist.PublicSuffixList(accept_unknown=not self.domain_force_tld)
 
-        if self.email_force_tld:
-            eml_parser.regexes.email_regex = eml_parser.regexes.email_force_tld_regex
-        else:
-            eml_parser.regexes.email_regex = eml_parser.regexes.email_no_force_tld_regex
+        self.email_regex = eml_parser.regexes.email_force_tld_regex if email_force_tld else eml_parser.regexes.email_no_force_tld_regex
+        self.policy = policy or CustomPolicy(email_regex=self.email_regex)
 
         # If no whitelisting is required, set to emtpy list
         if 'whiteip' not in self.pconf:
@@ -315,7 +321,7 @@ class EmlParser:
             #
             logger.exception('We hit bug 27257!')
 
-            _from = eml_parser.decode.workaround_bug_27257(self.msg, 'from')
+            _from = eml_parser.decode.workaround_bug_27257(self.msg, 'from', self.email_regex)
             del self.msg['from']
 
             if _from:
@@ -334,7 +340,7 @@ class EmlParser:
             from_ = email.utils.parseaddr(msg_header_field)
 
             if (from_ and from_ == ('', '')) or not isinstance(from_, collections.abc.Sequence):
-                m = eml_parser.regexes.email_regex.search(msg_header_field)
+                m = self.email_regex.search(msg_header_field)
                 if m:
                     headers_struc['from'] = m.group(1)
                 else:
@@ -386,7 +392,7 @@ class EmlParser:
                 #   by list
                 #   with string
                 #   warning list
-                parsed_routing = eml_parser.routing.parserouting(received_line_flat)
+                parsed_routing = eml_parser.routing.parserouting(received_line_flat, self.email_regex)
 
                 # If required collect the IP of the gateway that have injected the mail.
                 # Iterate all parsed item and find IP
@@ -436,7 +442,7 @@ class EmlParser:
                         headers_struc['received_domain'].append(m)
 
                 # search for e-mail addresses
-                for mail_candidate in eml_parser.regexes.email_regex.findall(received_line_flat):
+                for mail_candidate in self.email_regex.findall(received_line_flat):
                     validated_mail_candidate = mail_candidate
                     if self.email_force_tld:
                         validated_mail_candidate = self.get_valid_domain_or_ip(mail_candidate)
@@ -511,7 +517,7 @@ class EmlParser:
                     else:
                         list_observed_urls_noscheme.append(url_match)
 
-                for match in eml_parser.regexes.email_regex.findall(body_slice):
+                for match in self.email_regex.findall(body_slice):
                     valid_email = self.get_valid_domain_or_ip(match.lower())
                     if valid_email:
                         list_observed_email[match.lower()] = 1
@@ -882,7 +888,7 @@ class EmlParser:
         try:
             field = email.utils.getaddresses(self.msg.get_all(header, []))
         except (IndexError, AttributeError):
-            field = email.utils.getaddresses(eml_parser.decode.workaround_bug_27257(self.msg, header))
+            field = email.utils.getaddresses(eml_parser.decode.workaround_bug_27257(self.msg, header, self.email_regex))
         except ValueError:
             _field = eml_parser.decode.workaround_field_value_parsing_errors(self.msg, header)
             field = []
@@ -905,7 +911,7 @@ class EmlParser:
                     # too and fall back to a best-effort regex extraction of e-mail addresses.
                     logger.exception('Field value parsing error while parsing "%s", falling back to regex extraction!', v)
 
-                    for m in eml_parser.regexes.email_regex.findall(v):
+                    for m in self.email_regex.findall(v):
                         field.append(('', m))
 
         return_field = []

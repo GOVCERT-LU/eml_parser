@@ -11,6 +11,7 @@ import logging
 
 import charset_normalizer
 import dateutil.parser
+import regex
 
 import eml_parser.regexes
 
@@ -118,12 +119,13 @@ def decode_string(string: bytes, encoding: str | None = None) -> str:
     return string.decode('latin-1')
 
 
-def workaround_bug_27257(msg: email.message.Message, header: str) -> list[str]:
+def workaround_bug_27257(msg: email.message.Message, header: str, email_regex: regex.Pattern[str] = eml_parser.regexes.email_no_force_tld_regex) -> list[str]:
     """Function to work around bug 27257 and just tries its best using the compat32 policy to extract any meaningful information, i.e. e-mail addresses.
 
     Args:
         msg (email.message.Message): An e-mail message object.
         header (str): The header field to decode.
+        email_regex (regex.Pattern[str], optional): Pattern used to extract e-mail addresses.
 
     Returns:
         list: Returns a list of strings which represent e-mail addresses.
@@ -132,7 +134,7 @@ def workaround_bug_27257(msg: email.message.Message, header: str) -> list[str]:
 
     for value in workaround_field_value_parsing_errors(msg, header):
         if value != '':
-            m = eml_parser.regexes.email_regex.findall(value)
+            m = email_regex.findall(value)
             if m:
                 return_value += list(set(m))
 

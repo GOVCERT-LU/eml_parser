@@ -3,6 +3,8 @@
 import re
 import typing
 
+import regex
+
 import eml_parser.decode
 import eml_parser.regexes
 
@@ -57,7 +59,7 @@ def get_domain_ip(line: str) -> list[str]:
     return list(set(m))
 
 
-def parserouting(line: str) -> dict[str, typing.Any]:
+def parserouting(line: str, email_regex: regex.Pattern[str] = eml_parser.regexes.email_no_force_tld_regex) -> dict[str, typing.Any]:
     """This method tries to parse an e-mail header received line and extract machine-readable information.
 
     Note that there are a large number of formats for these lines
@@ -66,6 +68,7 @@ def parserouting(line: str) -> dict[str, typing.Any]:
 
     Args:
         line (str): Received line to be parsed.
+        email_regex (regex.Pattern[str], optional): Pattern used to extract e-mail addresses from the 'for' field.
 
     Returns:
         dict: Returns a dict with the extracted information.
@@ -150,7 +153,7 @@ def parserouting(line: str) -> dict[str, typing.Any]:
             out['for'] = temp[0]
             out['from'] = f"""{out['from']} {' '.join(temp[1:])}"""
 
-        m = eml_parser.regexes.email_regex.findall(out['for'])
+        m = email_regex.findall(out['for'])
         if m:
             out['for'] = list(set(m))
         else:
