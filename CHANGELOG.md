@@ -16,6 +16,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - `EmlParser` no longer rebinds `eml_parser.regexes.email_regex` at construction time; the e-mail regex is per-instance state passed to `CustomPolicy`, `parserouting()` and `workaround_bug_27257()`, so parsers with different `email_force_tld` settings can coexist (also across threads).
 - Fix URLs without scheme (e.g. `www.example.com/path`) being completely missing from the result in the default (hashed) mode. They are now reported as `uri_noscheme_hash` (SHA-256 of the lower-cased value, like `uri_hash`). With `include_raw_body=True` they were already reported as `uri_noscheme`.
 - Fix `decode.robust_string2date()` filling in the missing parts of incomplete dates (e.g. `March 2024`, `Tue, 5 Mar` or `12:30`) from the current date, which made the result depend on the day of the analysis. Missing parts are now taken from `1970-01-01`.
+- Fix the reported `defect` list consisting of empty strings (`str()` of most stdlib defects is empty). The name of the defect class, e.g. `NoBoundaryInMultipartDefect`, is reported now, followed by the message if there is one.
 
 ## [v4.0.0]
 ### Breaking

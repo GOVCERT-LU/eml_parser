@@ -308,7 +308,8 @@ class EmlParser:
         if self.msg.defects:
             headers_struc['defect'] = []
             for exception in self.msg.defects:
-                headers_struc['defect'].append(str(exception))
+                # str() of most stdlib defects is empty, the class name identifies the problem
+                headers_struc['defect'].append(f'{type(exception).__name__}: {exception}' if str(exception) else type(exception).__name__)
 
         # parse and decode "from"
         # @TODO verify if this hack is necessary for other e-mail fields as well
