@@ -3,29 +3,10 @@
 import re
 import typing
 
+import regex
+
 import eml_parser.decode
 import eml_parser.regexes
-
-
-def noparenthesis(line: str) -> str:
-    """Remove nested parentheses, until no pairs of matching parentyheses are present.
-
-    Args:
-        line (str): Input text to search in for parentheses.
-
-    Returns:
-        str: Return a string with all text in matching parentheses removed. For example,
-        noparenthesis('a((b)c(d') == 'a(c(d'
-    """
-    fragments: list[list[str]] = [[]]
-    for ch in line:
-        if ch == '(':
-            fragments.append([ch])
-        else:
-            fragments[-1].append(ch)
-        if ch == ')' and len(fragments) > 1:
-            fragments.pop()
-    return ''.join(ch for w in fragments for ch in w)
 
 
 def cleanline(line: str) -> str:
@@ -57,7 +38,7 @@ def get_domain_ip(line: str) -> list[str]:
     return list(set(m))
 
 
-def parserouting(line: str) -> dict[str, typing.Any]:
+def parserouting(line: str, email_regex: regex.Pattern[str] = eml_parser.regexes.email_no_force_tld_regex) -> dict[str, typing.Any]:
     """This method tries to parse an e-mail header received line and extract machine-readable information.
 
     Note that there are a large number of formats for these lines
@@ -66,6 +47,7 @@ def parserouting(line: str) -> dict[str, typing.Any]:
 
     Args:
         line (str): Received line to be parsed.
+        email_regex (regex.Pattern[str], optional): Pattern used to extract e-mail addresses from the 'for' field.
 
     Returns:
         dict: Returns a dict with the extracted information.
@@ -79,7 +61,7 @@ def parserouting(line: str) -> dict[str, typing.Any]:
     npline = line.replace(')', ' ) ')  # normalise space # Re-space () ")by " exists often
     npline = npline.replace('(', ' ( ')  # normalise space # Re-space ()
     npline = npline.replace(';', ' ; ')  # normalise space # Re-space ;
-    npline = noparenthesis(npline)  # Remove any "()"
+    npline = eml_parser.decode.noparenthesis(npline)  # Remove any "()"
     npline = ' '.join(npline.split())  # normalise space
     npline = npline.strip('\n')  # Remove any new-line
     raw_find_data = eml_parser.regexes.date_regex.findall(npline)  # extract date on end line.
@@ -150,7 +132,7 @@ def parserouting(line: str) -> dict[str, typing.Any]:
             out['for'] = temp[0]
             out['from'] = f"""{out['from']} {' '.join(temp[1:])}"""
 
-        m = eml_parser.regexes.email_regex.findall(out['for'])
+        m = email_regex.findall(out['for'])
         if m:
             out['for'] = list(set(m))
         else:

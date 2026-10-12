@@ -10,12 +10,16 @@ import email.headerregistry
 import email.message
 import email.policy
 import email.utils
+import functools
 import hashlib
 import ipaddress
+import itertools
 import logging
 import os.path
 import pathlib
 import re
+import socket
+import string
 import typing
 import urllib.parse
 import uuid
@@ -23,7 +27,10 @@ from collections import Counter
 from html import unescape
 
 import publicsuffixlist
+import regex
 
+import eml_parser.anomalies
+import eml_parser.constants
 import eml_parser.decode
 import eml_parser.regexes
 import eml_parser.routing
@@ -66,7 +73,10 @@ except ImportError:
     magic = None
 else:
     if not hasattr(magic, 'open'):
-        logger.warning('You are using python-magic, though this module requires file-magic. Disabling magic usage due to incompatibilities.')
+        logger.warning(
+            'The installed "magic" module does not provide the file-magic compatible API (magic.open), '
+            'mime types will not be determined. Install file-magic or a python-magic version which provides it.'
+        )
 
         magic = None
 
@@ -76,21 +86,89 @@ __copyright__ = 'Copyright 2013-2014 Georges Toth, Copyright 2013-present GOVCER
 __license__ = 'AGPL v3+'
 
 
+@functools.cache
+def get_public_suffix_list(accept_unknown: bool) -> publicsuffixlist.PublicSuffixList:
+    """Return the public suffix list; it is parsed once per setting and shared, as parsing it takes about 40 ms and it is read-only afterwards.
+
+    Args:
+        accept_unknown: Whether names with an unknown top level domain are accepted.
+
+    Returns:
+        The parsed public suffix list.
+    """
+    return publicsuffixlist.PublicSuffixList(accept_unknown=accept_unknown)
+
+
+# Characters allowed in a header field name (RFC 5322 ftext): printable ASCII except space and colon.
+FIELD_NAME_BYTES = (string.ascii_letters + string.digits + string.punctuation.replace(':', '')).encode()
+
+
+def find_header_start(data: bytes) -> int:
+    """Find the first line which looks like a header field.
+
+    Plain bytes operations are used on purpose: this is much faster than a regular expression on large inputs
+    and every line is looked at only once.
+
+    Args:
+        data: Raw e-mail, possibly with garbage in front of the headers.
+
+    Returns:
+        Offset of the first line starting with a valid field name followed by a colon, or 0 if there is none.
+    """
+    pos = 0
+
+    while (colon := data.find(b':', pos)) != -1:
+        line_start = max(pos, data.rfind(b'\n', pos, colon) + 1)
+        field_name = data[line_start:colon].rstrip(b' \t')
+
+        if field_name and not field_name.translate(None, FIELD_NAME_BYTES):
+            return line_start
+
+        line_end = data.find(b'\n', colon)
+
+        if line_end == -1:
+            break
+
+        pos = line_end + 1
+
+    return 0
+
+
 class CustomPolicy(email.policy.EmailPolicy):
     """Custom parsing policy based on the default policy but relaxing some checks and early fixing invalid values."""
 
-    def __init__(self) -> None:
-        """Constructor."""
-        super().__init__(max_line_length=0, refold_source='none')
+    email_regex: regex.Pattern[str] = eml_parser.regexes.email_no_force_tld_regex
+
+    def __init__(self, email_regex: regex.Pattern[str] = eml_parser.regexes.email_no_force_tld_regex) -> None:
+        """Constructor.
+
+        Args:
+            email_regex (regex.Pattern[str], optional): Pattern used to extract e-mail addresses from malformed headers.
+        """
+        # Policies are immutable; the stdlib accepts any declared class attribute as keyword. The typeshed stubs do not know ours.
+        custom: dict[str, typing.Any] = {'email_regex': email_regex}
+        super().__init__(max_line_length=0, refold_source='none', **custom)
 
     def header_fetch_parse(self, name: str, value: str) -> str:
+        """Pass the name/value to the parent header_fetch_parse method for proper parsing, unless the value is too long to be parsed in reasonable time."""
+        if len(value) <= eml_parser.constants.MAX_PARSED_HEADER_SIZE:
+            return self.fetch_fixed_header(name, value)
+
+        # The recursive descent parsers of the stdlib are quadratic in the length of a value, a megabyte of words takes seconds.
+        logger.warning('Header field "%s" is %d characters long, it is not parsed.', name.lower(), len(value))
+        if name.lower() == 'date':
+            return eml_parser.decode.default_date
+
+        return str(email.policy.compat32.header_fetch_parse(name, value))
+
+    def fetch_fixed_header(self, name: str, value: str) -> str:
         """Early fix parsing issues and pass the name/value to the parent header_fetch_parse method for proper parsing."""
         header = name.lower()
 
         if header == 'message-id':
-            if '[' in value and not eml_parser.regexes.email_regex.match(value):
+            if '[' in value and not self.email_regex.match(value):
                 # try workaround for bad message-id formats
-                m = eml_parser.regexes.email_regex.search(value)
+                m = self.email_regex.search(value)
                 if m:
                     value = f'<{m.group(1)}>'
                 else:
@@ -111,7 +189,7 @@ class CustomPolicy(email.policy.EmailPolicy):
             except RecursionError:
                 # This can happen when the recursion gets too deep in in the stdlib recursive descent parser.
                 # In this case, the header is certainly pathological. We still try to extract some addresses.
-                m = eml_parser.regexes.email_regex.findall(value)
+                m = self.email_regex.findall(value)
                 return ', '.join(m)
 
         return super().header_fetch_parse(name, value)
@@ -150,7 +228,7 @@ class EmlParser:
                                     e.g. whitelist IPs, whitelist e-mail addresses, etc.
             policy (CustomPolicy, optional): Policy to use when parsing e-mails.
                                                     Default = CustomPolicy.
-            ignore_bad_start (bool, optional): Ignore invalid file start. This has a considerable performance impact.
+            ignore_bad_start (bool, optional): Ignore invalid file start, i.e. any lines in front of the first header field.
             email_force_tld (bool, optional): Only match e-mail addresses with a TLD, i.e. exclude something like
                                               john@doe. If enabled, it uses domain_force_tld and ip_force_routable settings
                                               to validate the host portion of the address. By default this is disabled.
@@ -169,7 +247,6 @@ class EmlParser:
         self.include_attachment_data = include_attachment_data
         # If no pconf was specified, default to empty dict
         self.pconf = pconf or {}
-        self.policy = policy or CustomPolicy()
         self.ignore_bad_start = ignore_bad_start
         self.email_force_tld = email_force_tld
         self.domain_force_tld = domain_force_tld
@@ -177,12 +254,16 @@ class EmlParser:
         self.parse_attachments = parse_attachments
         self.include_www = include_www
         self.include_href = include_href
-        self._psl = publicsuffixlist.PublicSuffixList(accept_unknown=not self.domain_force_tld)
+        self._psl = get_public_suffix_list(not self.domain_force_tld)
+        # A file extension which is a TLD (or becomes one) is a domain and not a file name, so the public suffix list decides.
+        self._file_extensions = frozenset(
+            ext for ext in eml_parser.constants.FILE_EXTENSIONS if self._psl.publicsuffix(f'x.{ext}', accept_unknown=False) is None
+        )
+        # The same hosts occur over and over in a body; the verdict only depends on settings which are constant for an instance.
+        self._cached_valid_domain_or_ip = functools.lru_cache(maxsize=32768)(self._get_valid_domain_or_ip)
 
-        if self.email_force_tld:
-            eml_parser.regexes.email_regex = eml_parser.regexes.email_force_tld_regex
-        else:
-            eml_parser.regexes.email_regex = eml_parser.regexes.email_no_force_tld_regex
+        self.email_regex = eml_parser.regexes.email_force_tld_regex if email_force_tld else eml_parser.regexes.email_no_force_tld_regex
+        self.policy = policy or CustomPolicy(email_regex=self.email_regex)
 
         # If no whitelisting is required, set to emtpy list
         if 'whiteip' not in self.pconf:
@@ -203,7 +284,7 @@ class EmlParser:
 
         Args:
             eml_file: Path to the file to be parsed. os.PathLike objects are supported.
-            ignore_bad_start: Ignore invalid file start for this run. This has a considerable performance impact.
+            ignore_bad_start: Ignore invalid file start for this run, i.e. any lines in front of the first header field.
 
         Returns:
             dict: A dictionary with the content of the EML parsed and broken down into
@@ -226,34 +307,71 @@ class EmlParser:
 
         Args:
             eml_file: Contents of the raw EML file passed to this function as string.
-            ignore_bad_start: Ignore invalid file start for this run. This has a considerable performance impact.
+            ignore_bad_start: Ignore invalid file start for this run, i.e. any lines in front of the first header field.
 
         Returns:
             dict: A dictionary with the content of the EML parsed and broken down into
                   key-value pairs.
         """
+        _eml_file = eml_file
+
         if self.ignore_bad_start or ignore_bad_start:
-            # Skip invalid start of file
-            # Note that this has a considerable performance impact, which is why it is disabled by default.
-            _eml_file = b''
-
-            if b':' not in eml_file.split(b'\n', 1):
-                start = True
-                for line in eml_file.split(b'\n'):
-                    if start and b':' not in line:
-                        continue
-
-                    start = False
-
-                    _eml_file += line
-            else:
-                _eml_file = eml_file
-        else:
-            _eml_file = eml_file
+            # Skip any garbage in front of the first header field.
+            # The data is only sliced, so line endings and the message body stay untouched.
+            _eml_file = eml_file[find_header_start(eml_file) :]
 
         self.msg = email.message_from_bytes(_eml_file, policy=self.policy)
+        self.repair_multipart(self.msg)
 
         return self.parse_email()
+
+    @staticmethod
+    def guess_boundary(payload: str, declared: str | None) -> str | None:
+        """Find the boundary of a multipart payload: the declared one if it occurs, else the first line which looks like a delimiter (`--something`)."""
+        if declared and f'--{declared}' in payload:
+            return declared
+
+        return next((m.group(1) for m in eml_parser.regexes.multipart_boundary_guess_regex.finditer(payload) if not m.group(1).endswith('--')), None)
+
+    def repair_multipart(self, msg: email.message.Message) -> None:
+        """Split multipart parts which the stdlib parser could not split because their boundary is missing or wrong.
+
+        The stdlib leaves the content of such a part as one opaque string, so the URLs, addresses and attachments in it would be invisible.
+        This is what malware authors and broken mailers produce. If no boundary can be found at all, the part is treated as plain text instead
+        of being ignored. The defects reported by the stdlib are kept. Parts created by the repair are checked as well.
+
+        Args:
+            msg (email.message.Message): The parsed message, modified in place.
+        """
+        parts = [msg]
+
+        while parts:
+            part = parts.pop()
+            payload = part.get_payload()
+
+            if part.is_multipart():
+                parts.extend(typing.cast('list[email.message.Message]', payload))
+            elif part.get_content_maintype() == 'multipart' and isinstance(payload, str):
+                boundary = self.guess_boundary(payload, part.get_boundary(failobj=None))
+
+                if boundary is None:
+                    part.replace_header('Content-Type', 'text/plain')
+                    continue
+
+                try:
+                    repaired = email.message_from_string(f'Content-Type: multipart/mixed; boundary="{boundary}"\n\n{payload}', policy=self.policy).get_payload()
+                except RecursionError:
+                    logger.warning('Multipart parts nested too deeply to repair, treating the part as text.')
+                    repaired = None
+
+                if not isinstance(repaired, list):
+                    # The stdlib did not split it either, e.g. because it decodes an encoded word in the boundary. Retrying would never end.
+                    part.replace_header('Content-Type', 'text/plain')
+                    continue
+
+                part.set_param('boundary', boundary)
+                part.set_payload(repaired)
+                parts.append(part)
 
     def parse_email(self) -> dict:
         """Parse an e-mail and return a dictionary containing the various parts of the e-mail broken down into key-value pairs.
@@ -278,7 +396,8 @@ class EmlParser:
         if self.msg.defects:
             headers_struc['defect'] = []
             for exception in self.msg.defects:
-                headers_struc['defect'].append(str(exception))
+                # str() of most stdlib defects is empty, the class name identifies the problem
+                headers_struc['defect'].append(f'{type(exception).__name__}: {exception}' if str(exception) else type(exception).__name__)
 
         # parse and decode "from"
         # @TODO verify if this hack is necessary for other e-mail fields as well
@@ -291,7 +410,7 @@ class EmlParser:
             #
             logger.exception('We hit bug 27257!')
 
-            _from = eml_parser.decode.workaround_bug_27257(self.msg, 'from')
+            _from = eml_parser.decode.workaround_bug_27257(self.msg, 'from', self.email_regex)
             del self.msg['from']
 
             if _from:
@@ -310,7 +429,7 @@ class EmlParser:
             from_ = email.utils.parseaddr(msg_header_field)
 
             if (from_ and from_ == ('', '')) or not isinstance(from_, collections.abc.Sequence):
-                m = eml_parser.regexes.email_regex.search(msg_header_field)
+                m = self.email_regex.search(msg_header_field)
                 if m:
                     headers_struc['from'] = m.group(1)
                 else:
@@ -362,7 +481,7 @@ class EmlParser:
                 #   by list
                 #   with string
                 #   warning list
-                parsed_routing = eml_parser.routing.parserouting(received_line_flat)
+                parsed_routing = eml_parser.routing.parserouting(received_line_flat, self.email_regex)
 
                 # If required collect the IP of the gateway that have injected the mail.
                 # Iterate all parsed item and find IP
@@ -412,7 +531,7 @@ class EmlParser:
                         headers_struc['received_domain'].append(m)
 
                 # search for e-mail addresses
-                for mail_candidate in eml_parser.regexes.email_regex.findall(received_line_flat):
+                for mail_candidate in self.email_regex.findall(received_line_flat):
                     validated_mail_candidate = mail_candidate
                     if self.email_force_tld:
                         validated_mail_candidate = self.get_valid_domain_or_ip(mail_candidate)
@@ -473,6 +592,7 @@ class EmlParser:
             # Parse any URLs and mail found in the body
             list_observed_urls: list[str] = []
             list_observed_urls_noscheme: list[str] = []
+            list_observed_unc: dict[str, int] = {}
             list_observed_email: typing.Counter[str] = Counter()
             list_observed_dom: typing.Counter[str] = Counter()
             list_observed_ip: typing.Counter[str] = Counter()
@@ -480,25 +600,36 @@ class EmlParser:
             # If we start directly a findall on 500K+ body we got time and memory issues...
             # if more than 4K.. lets cheat, we will cut around the thing we search "://, @, ."
             # in order to reduce regex complexity.
-            for body_slice in self.string_sliding_window_loop(body):
+            # Namespace declarations (Outlook HTML, SVG, XHTML) are identifiers, not links, and would be reported as indicators on nearly every mail.
+            for body_slice in self.string_sliding_window_loop(eml_parser.regexes.xmlns_declaration_regex.sub(' ', body)):
                 for url_match in self.get_uri_ondata(body_slice):
                     if ':/' in url_match[:10]:
                         list_observed_urls.append(url_match)
                     else:
                         list_observed_urls_noscheme.append(url_match)
 
-                for match in eml_parser.regexes.email_regex.findall(body_slice):
+                for share in eml_parser.regexes.unc_regex.finditer(body_slice):
+                    list_observed_unc[share.group(0).rstrip('.,;')] = 1
+
+                for match in self.email_regex.findall(body_slice):
                     valid_email = self.get_valid_domain_or_ip(match.lower())
                     if valid_email:
                         list_observed_email[match.lower()] = 1
 
                 for match in eml_parser.regexes.dom_regex.findall(body_slice):
+                    if self.is_file_name(match):
+                        continue
+
                     valid_domain = self.get_valid_domain_or_ip(match.lower())
                     if valid_domain:
                         list_observed_dom[match.lower()] = 1
 
                 for ip_regex in (eml_parser.regexes.ipv4_regex, eml_parser.regexes.ipv6_regex):
                     for match in ip_regex.findall(body_slice):
+                        if ':' in match and not any(char.isdigit() for char in match) and match.count(':') < 3:
+                            # "::" or a scope resolution like "Add::dead" is not an address
+                            continue
+
                         valid_ip = self.get_valid_domain_or_ip(match.lower())
                         if valid_ip in self.pconf['whiteip']:
                             continue
@@ -508,19 +639,44 @@ class EmlParser:
             # URLs do not necessarily appear as-is in the body, as they may contain escaped entities.
             # For this reason, we have to extract the domains again from each parsed URL.
             # Run once over the deduplicated URLs after slicing to keep the cost linear in the body size.
-            for url in set(list_observed_urls) | set(list_observed_urls_noscheme):
+            for url in dict.fromkeys([*list_observed_urls, *list_observed_urls_noscheme]):
                 for match in eml_parser.regexes.dom_regex.findall(url):
+                    if self.is_file_name(match):
+                        continue
+
                     valid_domain = self.get_valid_domain_or_ip(match.lower())
                     if valid_domain:
                         list_observed_dom[match.lower()] = 1
 
+                # http://3232235777/ is a valid URL for browsers but contains no dotted IP address
+                try:
+                    host = urllib.parse.urlparse(url if ':/' in url else '//' + url).hostname
+                except ValueError:
+                    host = None
+                obfuscated_ip = self.get_obfuscated_ip(host.rstrip('.')) if host else None
+                if obfuscated_ip and obfuscated_ip not in self.pconf['whiteip']:
+                    list_observed_ip[obfuscated_ip] = 1
+
+            # The host of a remote file share is the indicator: it is contacted (and authenticated to) when the path is opened.
+            for share_host in filter(None, map(self.get_share_host, list_observed_unc)):
+                try:
+                    ipaddress.ip_address(share_host)
+                except ValueError:
+                    list_observed_dom[share_host] = 1
+                else:
+                    if share_host not in self.pconf['whiteip']:
+                        list_observed_ip[share_host] = 1
+
             # Report uri,email and observed domain or hash if no raw body
             if self.include_raw_body:
                 if list_observed_urls:
-                    bodie['uri'] = list(set(list_observed_urls))
+                    bodie['uri'] = list(dict.fromkeys(list_observed_urls))
 
                 if list_observed_urls_noscheme:
-                    bodie['uri_noscheme'] = list(set(list_observed_urls_noscheme))
+                    bodie['uri_noscheme'] = list(dict.fromkeys(list_observed_urls_noscheme))
+
+                if list_observed_unc:
+                    bodie['unc'] = list(list_observed_unc)
 
                 if list_observed_email:
                     bodie['email'] = list(list_observed_email)
@@ -534,8 +690,14 @@ class EmlParser:
             else:
                 if list_observed_urls:
                     bodie['uri_hash'] = []
-                    for element in list_observed_urls:
+                    for element in dict.fromkeys(list_observed_urls):
                         bodie['uri_hash'].append(self.get_hash(element.lower(), 'sha256'))
+                if list_observed_urls_noscheme:
+                    bodie['uri_noscheme_hash'] = []
+                    for element in dict.fromkeys(list_observed_urls_noscheme):
+                        bodie['uri_noscheme_hash'].append(self.get_hash(element.lower(), 'sha256'))
+                if list_observed_unc:
+                    bodie['unc_hash'] = [self.get_hash(share.lower(), 'sha256') for share in list_observed_unc]
                 if list_observed_email:
                     bodie['email_hash'] = []
                     for element in list_observed_email:
@@ -597,7 +759,7 @@ class EmlParser:
                 # only include boundary key if there is a value set
                 bodie['boundary'] = boundary
 
-            uid = str(uuid.uuid1())
+            uid = str(uuid.uuid4())
             bodys[uid] = bodie
 
         bodys_struc = bodys
@@ -607,8 +769,10 @@ class EmlParser:
         # "a","titi"   --->    c: [truc]
         # "c","truc"
         #
-        for header_field_name in set(self.msg.keys()):
-            k = header_field_name.lower()  # Lot of lower, pre-compute...
+        # Iterate over the unique (case-insensitive) header names in the order of their first occurrence.
+        # A set would make the output order depend on PYTHONHASHSEED and would process names differing only
+        # in case (e.g. "X-Foo" and "x-foo") twice, duplicating their values, as get_all() is case-insensitive.
+        for k in dict.fromkeys(header_field_name.lower() for header_field_name in self.msg.keys()):
             decoded_values = []
 
             try:
@@ -625,8 +789,8 @@ class EmlParser:
                 # extract values using a relaxed policy
                 for _field in eml_parser.decode.workaround_field_value_parsing_errors(self.msg, k):
                     # check if this is a RFC2047 encoded field
-                    if eml_parser.regexes.email_regex_rfc2047.search(_field):
-                        decoded_values.append(eml_parser.decode.rfc2047_decode(_field))
+                    if eml_parser.regexes.email_regex_rfc2047.search(str(_field)):
+                        decoded_values.append(eml_parser.decode.rfc2047_decode(str(_field)))
                     else:
                         logger.error('ERROR: Field value parsing error, trying to work around this! - %s', _field)
 
@@ -638,10 +802,14 @@ class EmlParser:
 
         headers_struc['header'] = header
 
+        authentication = self.parse_authentication_results(header)
+        if authentication:
+            headers_struc['authentication'] = authentication
+
         # parse attachments
         if self.parse_attachments:
             try:
-                report_struc['attachment'] = self.traverse_multipart(self.msg, 0)
+                report_struc['attachment'] = self.traverse_multipart(self.msg, itertools.count())
             except (binascii.Error, AssertionError):
                 # we hit this exception if the payload contains invalid data
                 logger.exception('Exception occurred while parsing attachment data. Collected data will not be complete!')
@@ -670,72 +838,49 @@ class EmlParser:
         return report_struc
 
     @staticmethod
-    def string_sliding_window_loop(body: str, slice_step: int = 500, max_distance: int = 100) -> typing.Iterator[str]:
-        """Yield a more or less constant slice of a large string.
+    def string_sliding_window_loop(body: str, slice_step: int = 500, max_distance: int = 8192) -> typing.Iterator[str]:
+        """Split a large string into consecutive slices which are cut at whitespace.
 
-        If we directly do a *regex* findall on 500K+ body we get time and memory issues.
-        If more than the configured slice step, lets cheat, we will cut around the thing we search "://, @, ."
-        in order to reduce regex complexity.
-
-        In case we find a *://* at the first 8 characters of a sliced body window, we rewind the window by 16 characters.
-        If we find the same string at the end of a sliced body window we try to look for invalid URL characters up to *max_distance*
-        length, until which we give up and return the sliced body part. This is done in order to return a maximum possible
-        correct URLs.
-
-        The choice for 8 character is because *https://* is 8 characters, which is the maximum size we accept for schemes.
+        Running the regular expressions over a 500K+ body at once causes time and memory issues, so the body is processed in slices.
+        A slice is never cut in the middle of a token (URL, address, domain): it ends at the first whitespace found within
+        *max_distance* characters after *slice_step* (or at the end of the body). Together the slices cover the complete body without gaps or overlaps.
 
         Args:
             body: Body to slice into smaller pieces.
-            slice_step: Slice this number or characters.
-            max_distance: In case we find a *://* in a string window towards the end, we try our best to enlarge the window
-                            as to not cut off URLs. This variable sets the maximum permitted additional window size to consider.
+            slice_step: Preferred length of a slice.
+            max_distance: Maximum number of characters a slice is extended to reach the next whitespace. Tokens longer than
+                this are cut. The default is the usual request line limit of web servers, which no sane URL exceeds.
 
-        Returns:
-            typing.Iterator[str]: Sliced body string.
+        Yields:
+            str: Consecutive slices of the body.
         """
-        body_length = len(body)
+        start = 0
+        scanned = 0  # no whitespace was found before this position, so it is not searched again
 
-        if body_length <= slice_step:
-            yield body
+        while len(body) - start > slice_step:
+            end = start + slice_step
+            boundary = eml_parser.regexes.window_slice_regex.search(body, max(end, scanned), end + max_distance)
+            if boundary:
+                end = boundary.start()
+            elif len(body) - end <= max_distance:
+                # No whitespace, but the body ends within reach, so the last token is complete.
+                break
+            else:
+                scanned = end + max_distance
 
-        else:
-            ptr_start = 0
+            yield body[start:end]
+            start = end
 
-            for _ptr_end in range(slice_step, body_length + slice_step, slice_step):
-                ptr_end = _ptr_end
+        yield body[start:]
 
-                if ' ' in body[ptr_end - 1 : ptr_end]:
-                    while not (eml_parser.regexes.window_slice_regex.match(body[ptr_end - 1 : ptr_end]) or ptr_end > body_length):
-                        if ptr_end > body_length:
-                            ptr_end = body_length
-                            break
-
-                        ptr_end += 1
-
-                # Found a :// near the start of the slice, rewind
-                if ptr_start > 16 and '://' in body[ptr_start - 8 : ptr_start + 8]:
-                    ptr_start -= 16
-
-                # Found a :// near the end of the slice, rewind from that location
-                if ptr_end < body_length and '://' in body[ptr_end - 8 : ptr_end + 8]:
-                    pos = body.rfind('://', ptr_end - 8, ptr_end + 8)
-                    ptr_end = pos - 8
-
-                # Found a :// within the slice; try to expand the slice until we find an invalid
-                # URL character in order to avoid cutting off URLs
-                if '://' in body[ptr_start:ptr_end] and not body[ptr_end - 1 : ptr_end] == ' ':
-                    distance = 1
-
-                    while body[ptr_end - 1 : ptr_end] not in (' ', '>') and distance < max_distance and ptr_end <= body_length:
-                        distance += 1
-                        ptr_end += 1
-
-                yield body[ptr_start:ptr_end]
-
-                ptr_start = ptr_end
+    def is_file_name(self, domain: str) -> bool:
+        """Check whether a domain-like string is rather a file name, e.g. *invoice.pdf*."""
+        return domain.rpartition('.')[2].lower() in self._file_extensions
 
     def get_valid_domain_or_ip(self, data: str) -> str | None:
         """Function to determine if an IP address, Email address, or Domain is valid.
+
+        The result is cached per instance, so `domain_force_tld` and `ip_force_routable` must not be changed after construction.
 
         Args:
             data (str): Text input which should be validated.
@@ -743,6 +888,10 @@ class EmlParser:
         Returns:
             str: Returns a string of the validated IP address or the host.
         """
+        return self._cached_valid_domain_or_ip(data)
+
+    def _get_valid_domain_or_ip(self, data: str) -> str | None:
+        """Uncached implementation of `get_valid_domain_or_ip()`."""
         host = data.rpartition('@')[-1].strip(' \r\n\t[]')
         try:
             # Zone index support was added to ipaddress in Python 3.9
@@ -755,12 +904,85 @@ class EmlParser:
             else:
                 return str(valid_ip)
         except ValueError:
+            # A top level domain is never numeric (RFC 3696, section 2): this rejects invalid addresses ("999.1.1.1") and version numbers ("v1.20.30").
+            if host.rstrip('.').rpartition('.')[2].isdecimal():
+                return None
+
             # _psl uses self.domain_force_tld
             valid_domain = self._psl.publicsuffix(host)
             if valid_domain:
                 return host
 
         return None
+
+    @staticmethod
+    def parse_authentication_results(header: dict[str, list[str]]) -> dict[str, list[str]]:
+        """Extract the results of the e-mail authentication methods (SPF, DKIM, DMARC, ARC, ...) reported by the receiving servers.
+
+        The headers *Authentication-Results* (RFC 8601) and *Received-SPF* (RFC 7208) are evaluated. Comments are ignored and
+        so are properties like `header.d=` of a method. Note that these headers are only meaningful if they were added by
+        a server you trust; a sender can forge them, and mail from outside of your infrastructure may carry anything.
+
+        Args:
+            header: The parsed headers (lower-cased names, list of values).
+
+        Returns:
+            dict: The results per method, in the order of occurrence, e.g. `{'spf': ['pass'], 'dkim': ['pass', 'fail']}`.
+        """
+        results: dict[str, list[str]] = {}
+
+        for value in header.get('authentication-results', []):
+            for method, result in eml_parser.regexes.authentication_result_regex.findall(eml_parser.decode.noparenthesis(str(value), ' ')):
+                results.setdefault(method.lower(), []).append(result.lower())
+
+        for value in header.get('received-spf', []):
+            spf_result = eml_parser.regexes.received_spf_regex.match(str(value))
+            if spf_result:
+                results.setdefault('spf', []).append(spf_result.group(1).lower())
+
+        return results
+
+    def get_share_host(self, share: str) -> str | None:
+        """Get the host of a remote file share reference (see `regexes.unc_regex`) if it is a domain or an IP address.
+
+        A bare NetBIOS name such as *fileserver* is a host of the local network and no indicator; *localhost* is local as well.
+        Encoded IPv6 addresses (`2001-db8--1.ipv6-literal.net`) are decoded and numeric hosts (a decimal IPv4 address) are resolved like in the URLs.
+
+        Args:
+            share: A match of `regexes.unc_regex`.
+
+        Returns:
+            str: The domain or IP address, or None.
+        """
+        match = eml_parser.regexes.unc_regex.match(share)
+        if match is None:
+            return None
+
+        host = (match.group('unc_host') or match.group('url_host')).partition('@')[0].lower()  # `@SSL` and `@port` select WebDAV
+        if host.endswith('.ipv6-literal.net'):
+            host = host.removesuffix('.ipv6-literal.net').replace('-', ':')
+
+        if '.' in host or ':' in host:
+            return self.get_valid_domain_or_ip(host)
+
+        return self.get_obfuscated_ip(host)
+
+    def get_obfuscated_ip(self, host: str) -> str | None:
+        """Resolve a host which is an IPv4 address in a notation browsers accept, e.g. `3232235777`, `0xC0A80101`, `0300.0250.0.1` or `127.1`.
+
+        Args:
+            host (str): The host name of an URL.
+
+        Returns:
+            str: The address in dotted decimal notation (if it passes the IP validation of this instance) or None.
+        """
+        if not eml_parser.regexes.ipv4_obfuscated_regex.fullmatch(host):
+            return None
+
+        try:
+            return self.get_valid_domain_or_ip(socket.inet_ntoa(socket.inet_aton(host)))
+        except OSError:
+            return None
 
     def clean_found_uri(self, url: str) -> str | None:
         """Function for validating URLs from the input string.
@@ -774,17 +996,20 @@ class EmlParser:
         if '&' in url:
             url = unescape(url)
 
-        if '.' not in url and '[' not in url:
+        if '.' not in url and '[' not in url and not eml_parser.regexes.url_numeric_host_regex.match(url.lstrip(' \t\n\r\f\v\'"«»“”‘’')):
             # if we found a URL like e.g. http://afafasasfasfas; that makes no
-            # sense, thus skip it, but include http://[2001:db8::1]
+            # sense, thus skip it, but include http://[2001:db8::1] and http://3232235777 (a numeric host is an IPv4 address)
             return None
 
         try:
             # Remove leading spaces and quote characters
-            url = url.lstrip(' \t\n\r\f\v\'"«»“”‘’').replace('\r', '').replace('\n', '')
+            url = url.lstrip(' \t\n\r\f\v\'"«»“”‘’').replace('\r', '').replace('\n', '').replace('\t', '')
             url = urllib.parse.urlparse(url).geturl()
             scheme_url = url
-            if ':/' not in scheme_url:
+            if url.startswith('//'):
+                # protocol-relative URL, i.e. the scheme of the document is used
+                scheme_url = 'noscheme:' + url
+            elif ':/' not in scheme_url:
                 scheme_url = 'noscheme://' + url
 
             _hostname = urllib.parse.urlparse(scheme_url).hostname
@@ -794,7 +1019,10 @@ class EmlParser:
 
             host = _hostname.rstrip('.')
 
-            if self.get_valid_domain_or_ip(host) is None:
+            # Without a scheme, a host without a dot or with a file extension is a relative reference like "images/logo.png", not a host.
+            is_relative_reference = scheme_url.startswith('noscheme:') and ('.' not in host or self.is_file_name(host))
+
+            if is_relative_reference or (self.get_valid_domain_or_ip(host) is None and self.get_obfuscated_ip(host) is None):
                 return None
         except ValueError:
             logger.warning('Unable to parse URL - %s', url)
@@ -834,8 +1062,8 @@ class EmlParser:
                         list_observed_urls[clean_uri] = 1
 
         if self.include_href:
-            for found_url in eml_parser.regexes.url_regex_href.findall(body):
-                clean_uri = self.clean_found_uri(found_url)
+            for found_url in eml_parser.regexes.findall_href(body):
+                clean_uri = self.clean_found_uri(eml_parser.decode.normalize_attribute_url(found_url))
                 if clean_uri is not None:
                     list_observed_urls[clean_uri] = 1
 
@@ -856,7 +1084,7 @@ class EmlParser:
         try:
             field = email.utils.getaddresses(self.msg.get_all(header, []))
         except (IndexError, AttributeError):
-            field = email.utils.getaddresses(eml_parser.decode.workaround_bug_27257(self.msg, header))
+            field = email.utils.getaddresses(eml_parser.decode.workaround_bug_27257(self.msg, header, self.email_regex))
         except ValueError:
             _field = eml_parser.decode.workaround_field_value_parsing_errors(self.msg, header)
             field = []
@@ -871,7 +1099,7 @@ class EmlParser:
                     for _group in parsing_result['groups']:
                         for _address in _group.addresses:
                             field.append((_address.display_name, _address.addr_spec))
-                except (AttributeError, IndexError):
+                except (AttributeError, IndexError, ValueError):
                     # The stdlib address/header parser can itself raise on certain malformed
                     # values (e.g. an unquoted display name ending in a bare period, such as
                     # "Test.<test@example.com>"). The exact exception type raised for this
@@ -879,7 +1107,7 @@ class EmlParser:
                     # too and fall back to a best-effort regex extraction of e-mail addresses.
                     logger.exception('Field value parsing error while parsing "%s", falling back to regex extraction!', v)
 
-                    for m in eml_parser.regexes.email_regex.findall(v):
+                    for m in self.email_regex.findall(v):
                         field.append(('', m))
 
         return_field = []
@@ -893,6 +1121,26 @@ class EmlParser:
                     return_field.append(m[1].lower())
 
         return return_field
+
+    @staticmethod
+    def is_text_part(msg: email.message.Message, filename: str) -> bool:
+        """Check whether a part is text which is to be scanned like the body.
+
+        These are text parts (unless they are attachments) and attachments which carry links, i.e. scripts, shortcuts, web pages, SVG, ...
+        Data attachments (XML, JSON, CSV, ...) are not scanned, and neither are attachments larger than `MAX_TEXT_ATTACHMENT_SIZE`.
+        """
+        is_attachment = msg.get_content_disposition() == 'attachment'
+        is_text = (
+            (msg.get_content_maintype() == 'text' and not is_attachment)
+            or msg.get_content_type() in eml_parser.constants.TEXT_ATTACHMENT_CONTENT_TYPES
+            or filename.endswith(eml_parser.constants.TEXT_ATTACHMENT_EXTENSIONS)
+        )
+
+        if is_text and is_attachment and len(msg.get_payload()) > eml_parser.constants.MAX_TEXT_ATTACHMENT_SIZE:
+            logger.warning('Text attachment "%s" is larger than %d bytes, it is not scanned.', filename, eml_parser.constants.MAX_TEXT_ATTACHMENT_SIZE)
+            return False
+
+        return is_text
 
     def get_raw_body_text(
         self, msg: email.message.Message, boundary: str | None = None, depth: int = 0
@@ -931,24 +1179,10 @@ class EmlParser:
                 logger.exception('Exception occurred while trying to parse the content-disposition header. Collected data will not be complete.')
                 filename = ''
 
-            # pylint: disable=too-many-boolean-expressions
-            if (
-                ('content-disposition' not in msg and msg.get_content_maintype() == 'text')
-                or (filename.endswith(('.html', '.htm')))
-                or ('content-disposition' in msg and msg.get_content_disposition() == 'inline' and msg.get_content_maintype() == 'text')
-            ):
+            if self.is_text_part(msg, filename):
                 encoding = msg.get('content-transfer-encoding', '').lower()
 
-                charset = msg.get_content_charset()
-                if charset is None:
-                    raw_body_b = typing.cast('bytes', msg.get_payload(decode=True))
-                    raw_body_str = eml_parser.decode.decode_string(raw_body_b, None)
-                else:
-                    try:
-                        raw_body_str = typing.cast('bytes', msg.get_payload(decode=True)).decode(charset, 'ignore')
-                    except (LookupError, ValueError):
-                        logger.debug('An exception occurred while decoding the payload!', exc_info=True)
-                        raw_body_str = typing.cast('bytes', msg.get_payload(decode=True)).decode('ascii', 'ignore')
+                raw_body_str = eml_parser.decode.decode_body(typing.cast('bytes', msg.get_payload(decode=True)), msg.get_content_charset())
 
                 # In case we hit bug 27257 or any other parsing error, try to downgrade the used policy
                 try:
@@ -997,13 +1231,13 @@ class EmlParser:
 
         return hash_algo(_value).hexdigest()
 
-    def traverse_multipart(self, msg: email.message.Message, counter: int = 0, depth: int = 0) -> dict[str, typing.Any]:
+    def traverse_multipart(self, msg: email.message.Message, counter: collections.abc.Iterator[int], depth: int = 0) -> dict[str, typing.Any]:
         """Recursively traverses all e-mail message multi-part elements and returns in a parsed form as a dict.
 
         Args:
             msg (email.message.Message): An e-mail message object.
-            counter (int, optional): A counter which is used for generating attachments
-                file-names in case there are none found in the header. Default = 0.
+            counter (Iterator[int]): Iterator shared by all parts of one message, used for generating attachments
+                file-names in case there are none found in the header.
             depth: Parameter used to track the current recursion level.
 
         Returns:
@@ -1032,13 +1266,13 @@ class EmlParser:
 
         return attachments
 
-    def prepare_multipart_part_attachment(self, msg: email.message.Message, counter: int = 0) -> dict[str, typing.Any]:
+    def prepare_multipart_part_attachment(self, msg: email.message.Message, counter: collections.abc.Iterator[int]) -> dict[str, typing.Any]:
         """Extract meta-information from a multipart-part.
 
         Args:
             msg (email.message.Message): An e-mail message object.
-            counter (int, optional): A counter which is used for generating attachments
-                file-names in case there are none found in the header. Default = 0.
+            counter (Iterator[int]): Iterator shared by all parts of one message, used for generating attachments
+                file-names in case there are none found in the header.
 
         Returns:
             dict: Returns a dict with original multi-part headers as well as generated hash check-sums,
@@ -1063,25 +1297,32 @@ class EmlParser:
                 if len(payload) > 1:
                     logger.warning('More than one payload for "message/rfc822" part detected. This is not supported, please report!')
 
+                embedded_message = typing.cast('list[email.message.EmailMessage]', payload)[0]
                 try:
                     custom_policy: email.policy.Policy = email.policy.default.clone(max_line_length=0)
-                    data = typing.cast('list[email.message.EmailMessage]', payload)[0].as_bytes(policy=custom_policy)
+                    data = embedded_message.as_bytes(policy=custom_policy)
                 except UnicodeEncodeError:
                     custom_policy = email.policy.compat32.clone(max_line_length=0)
-                    data = typing.cast('list[email.message.EmailMessage]', payload)[0].as_bytes(policy=custom_policy)
+                    try:
+                        data = embedded_message.as_bytes(policy=custom_policy)
+                    except UnicodeEncodeError:
+                        # Text which cannot be encoded as declared (lone surrogates, a wrong charset): keep what can be.
+                        data = embedded_message.as_string(policy=custom_policy).encode('utf-8', 'replace')
 
                 file_size = len(data)
             else:
                 data = typing.cast('bytes', msg.get_payload(decode=True))
                 file_size = len(data)
 
+            part_number = next(counter)
+
             filename = msg.get_filename('')
             if filename == '':
-                filename = f'part-{counter:03d}'
+                filename = f'part-{part_number:03d}'
             else:
                 filename = eml_parser.decode.decode_field(filename)
 
-            file_id = str(uuid.uuid1())
+            file_id = str(uuid.uuid4())
             attachment[file_id] = {}
             attachment[file_id]['filename'] = filename
             attachment[file_id]['size'] = file_size
@@ -1095,6 +1336,10 @@ class EmlParser:
             attachment[file_id]['hash'] = self.get_file_hash(data)
 
             mime_type, mime_type_short = self.get_mime_type(data)
+
+            anomalies = eml_parser.anomalies.find_filename_anomalies(filename, data, mime_type_short)
+            if anomalies:
+                attachment[file_id]['anomaly'] = anomalies
 
             if not (mime_type is None or mime_type_short is None):
                 attachment[file_id]['mime_type'] = mime_type
@@ -1117,8 +1362,6 @@ class EmlParser:
                     ch[k] = [v]
 
             attachment[file_id]['content_header'] = ch
-
-            counter += 1
 
         return attachment
 

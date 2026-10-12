@@ -1,17 +1,19 @@
 """This module contains various string import, check and parse methods."""
 
 import datetime
+import decimal
 import email
 import email.errors
 import email.header
 import email.policy
 import email.utils
+import html
 import json
 import logging
-import typing
 
 import charset_normalizer
 import dateutil.parser
+import regex
 
 import eml_parser.regexes
 
@@ -48,6 +50,10 @@ import eml_parser.regexes
 logger = logging.getLogger(__name__)
 
 default_date = '1970-01-01T00:00:00+00:00'
+_DATEUTIL_DEFAULT = datetime.datetime(1970, 1, 1)  # noqa: DTZ001
+
+# The charset detection is slow, bodies larger than this are decoded with the declared charset only, even if that is wrong.
+MAX_CHARSET_DETECTION_SIZE = 256 * 1024
 
 
 def decode_field(field: str) -> str:
@@ -74,19 +80,62 @@ def decode_field(field: str) -> str:
             string += decode_string(_text, charset)
         elif isinstance(_text, bytes):
             # @TODO might be an idea to check with charset-normalizer here
-            string += _text.decode('utf-8', 'ignore')
+            string += _text.decode('utf-8', 'replace')
         else:
             string += _text
 
     return string
 
 
+def decode_body(data: bytes, charset: str | None) -> str:
+    """Decode a text body without dropping undecodable bytes.
+
+    Dropping bytes (the *ignore* error handler) glues the neighbouring characters together and can create indicators which are not in the message,
+    e.g. `http://good<invalid byte>.evil.com` would become `http://good.evil.com`. Keeping the replacement character U+FFFD would make it part of
+    URLs and e-mail addresses instead. Undecodable bytes are therefore replaced with a space, i.e. they act as a separator between indicators.
+
+    Args:
+        data (bytes): The body.
+        charset (str, optional): The charset declared in the Content-Type header. If it is missing or unknown, or if decoding with it
+            loses bytes, the encoding is detected.
+
+    Returns:
+        str: The decoded body.
+    """
+    if charset:
+        try:
+            text = _redetect_if_damaged(data, data.decode(charset, 'replace'))
+        except (LookupError, ValueError):
+            logger.debug('Unknown charset "%s", trying to detect the encoding', charset, exc_info=True)
+            text = decode_string(data)
+    else:
+        text = decode_string(data)
+
+    return text.replace('\ufffd', ' ')
+
+
+def _redetect_if_damaged(data: bytes, text: str) -> str:
+    """Return the detected decoding of data instead of text, if text lost bytes (U+FFFD) because the declared charset is wrong.
+
+    Declared charsets are often wrong (e.g. *us-ascii* for UTF-8 text). The detection is slow, so it is only run if needed and not for huge bodies.
+    """
+    damage = text.count('\ufffd')
+
+    if not damage or len(data) > MAX_CHARSET_DETECTION_SIZE:
+        return text
+
+    detected = decode_string(data)
+
+    return detected if detected.count('\ufffd') < damage else text
+
+
 def decode_string(string: bytes, encoding: str | None = None) -> str:
     """Try anything possible to parse an encoded bytes string and return the result.
 
     We do this using the encoding hint, if this fails, we try to detect the correct
-    encoding using the charset-normalizer module, if that failed we try latin-1, utf-8 and
-    as a last resort ascii.
+    encoding using the charset-normalizer module, if that failed we try utf-8 and as a
+    last resort latin-1, which can decode any byte sequence and thereby always preserves
+    the ASCII parts of the input.
     In any case we always return something.
 
     Args:
@@ -103,35 +152,53 @@ def decode_string(string: bytes, encoding: str | None = None) -> str:
         try:
             return string.decode(encoding)
         except (UnicodeDecodeError, LookupError):
-            pass
+            logger.debug('Unable to decode with the provided encoding hint "%s"', encoding, exc_info=True)
 
-    value = str(charset_normalizer.from_bytes(string).best())
+    best_match = charset_normalizer.from_bytes(string).best()
 
-    if value is None:
-        text = ''
+    if best_match is not None:
+        return str(best_match)
 
-        for e in ('latin1', 'utf-8'):
-            try:
-                text = string.decode(e)
-            except UnicodeDecodeError:
-                pass
-            else:
-                break
+    try:
+        return string.decode('utf-8')
+    except UnicodeDecodeError:
+        logger.debug('Unable to detect the encoding, falling back to latin-1', exc_info=True)
 
-        if text == '':
-            value = string.decode('ascii', 'ignore')
-        else:
-            value = text
+    return string.decode('latin-1')
+
+
+def normalize_attribute_url(value: str) -> str:
+    """Normalise the value of an HTML attribute containing an URL the way a browser does before using it.
+
+    Character references are resolved, tabs and line feeds (which browsers drop from URLs anywhere) are removed and backslashes
+    after the scheme are treated as slashes, so an obfuscated `ht&#9;tp:` followed by backslashes becomes a plain `http://` URL.
+
+    Args:
+        value (str): The raw attribute value, possibly with the opening quote.
+
+    Returns:
+        str: The normalised value.
+    """
+    if '&' in value:
+        value = html.unescape(value)
+
+    value = value.translate(eml_parser.regexes.url_drop_chars_table)
+
+    if eml_parser.regexes.url_backslash_scheme_regex.match(value):
+        # Backslashes are treated like slashes up to the query string or fragment.
+        end = min((pos for pos in (value.find('?'), value.find('#')) if pos != -1), default=len(value))
+        value = value[:end].replace('\\', '/') + value[end:]
 
     return value
 
 
-def workaround_bug_27257(msg: email.message.Message, header: str) -> list[str]:
+def workaround_bug_27257(msg: email.message.Message, header: str, email_regex: regex.Pattern[str] = eml_parser.regexes.email_no_force_tld_regex) -> list[str]:
     """Function to work around bug 27257 and just tries its best using the compat32 policy to extract any meaningful information, i.e. e-mail addresses.
 
     Args:
         msg (email.message.Message): An e-mail message object.
         header (str): The header field to decode.
+        email_regex (regex.Pattern[str], optional): Pattern used to extract e-mail addresses.
 
     Returns:
         list: Returns a list of strings which represent e-mail addresses.
@@ -140,7 +207,7 @@ def workaround_bug_27257(msg: email.message.Message, header: str) -> list[str]:
 
     for value in workaround_field_value_parsing_errors(msg, header):
         if value != '':
-            m = eml_parser.regexes.email_regex.findall(value)
+            m = email_regex.findall(value)
             if m:
                 return_value += list(set(m))
 
@@ -181,7 +248,8 @@ def robust_string2date(line: str) -> datetime.datetime:
     It is guaranteed to always return a valid datetime.datetime object.
     If first tries the built-in email module method for parsing the date according
     to related RFC's.
-    If this fails it returns, dateutil is tried. If that fails as well, a datetime.datetime
+    If this fails, dateutil is tried (missing parts of the date are taken from 1970-01-01 and not from the current date).
+    If that fails as well, a datetime.datetime
     object representing "1970-01-01 00:00:00 +0000" is returned.
     In case there is no timezone information in the parsed date, we set it to UTC.
 
@@ -203,8 +271,10 @@ def robust_string2date(line: str) -> datetime.datetime:
         logger.debug('Exception parsing date "%s"', line, exc_info=True)
 
         try:
-            date_ = dateutil.parser.parse(line)
-        except (AttributeError, ValueError, OverflowError):
+            # dateutil takes missing parts (e.g. the year) from the current date by default, which would make the
+            # result depend on the time of the analysis. Use a fixed default instead.
+            date_ = dateutil.parser.parse(line, default=_DATEUTIL_DEFAULT)
+        except (AttributeError, ValueError, OverflowError, decimal.InvalidOperation):
             # Now we are facing an invalid date.
             return datetime.datetime.fromisoformat(default_date)
 
@@ -214,15 +284,34 @@ def robust_string2date(line: str) -> datetime.datetime:
     return date_
 
 
-def json_serial(obj: typing.Any) -> str | None:
-    """JSON serializer for objects not serializable by default json code."""
+def json_serial(obj: object) -> str:
+    """JSON serializer for objects not serializable by default json code.
+
+    Supported are datetime objects (exported as ISO 8601 strings, converted to UTC if timezone aware and possible) and
+    ASCII bytes objects, i.e. the base64 encoded attachment data added by the *include_attachment_data* option.
+
+    Args:
+        obj: The object to serialize.
+
+    Returns:
+        str: The string representation of the object.
+
+    Raises:
+        TypeError: If the type of the object is not supported.
+        UnicodeDecodeError: If a bytes object is not ASCII, i.e. not base64.
+    """
     if isinstance(obj, datetime.datetime):
         if obj.tzinfo is not None:
-            serial = obj.astimezone(datetime.UTC).isoformat()
-        else:
-            serial = obj.isoformat()
+            try:
+                return obj.astimezone(datetime.UTC).isoformat()
+            except OverflowError:
+                # Dates close to datetime.min/max (e.g. 9999-12-31 23:59:59 -0500) can not be converted to UTC.
+                logger.debug('Unable to convert "%s" to UTC, exporting it with its original offset', obj, exc_info=True)
 
-        return serial
+        return obj.isoformat()
+
+    if isinstance(obj, bytes):
+        return obj.decode('ascii')
 
     raise TypeError(f'Type not serializable - {str(type(obj))}')
 
@@ -262,9 +351,37 @@ def rfc2047_decode(value: str) -> str:
             # need RFC2047 decoding, e.g. when the whole value is plain ASCII.
             parsed += k
         elif v is None:
-            parsed += k.decode('ascii', errors='ignore')
+            parsed += k.decode('ascii', errors='replace')
 
         else:
-            parsed += k.decode(v, errors='replace')
+            try:
+                parsed += k.decode(v, errors='replace')
+            except LookupError:
+                # Unknown charset name, e.g. "=?foo-bar?q?x?=". Never fail on attacker controlled input.
+                logger.debug('Unknown charset "%s" in RFC2047 encoded word, trying to detect the encoding', v, exc_info=True)
+                parsed += decode_string(k)
 
     return parsed
+
+
+def noparenthesis(line: str, replacement: str = '') -> str:
+    """Remove nested parentheses, until no pairs of matching parentyheses are present.
+
+    Args:
+        line (str): Input text to search in for parentheses.
+        replacement (str): Inserted in place of every removed pair, e.g. a space so that the text around it is not glued together.
+
+    Returns:
+        str: Return a string with all text in matching parentheses removed. For example,
+        noparenthesis('a((b)c(d') == 'a(c(d'
+    """
+    fragments: list[list[str]] = [[]]
+    for ch in line:
+        if ch == '(':
+            fragments.append([ch])
+        else:
+            fragments[-1].append(ch)
+        if ch == ')' and len(fragments) > 1:
+            fragments.pop()
+            fragments[-1].append(replacement)
+    return ''.join(ch for w in fragments for ch in w)

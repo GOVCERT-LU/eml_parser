@@ -44,9 +44,8 @@ content-type = "text/markdown"
 
 [dependency-groups]
 docs = [
-  "griffe-typingdoc>=0.3.0",
-  "mkdocs-material",
   "mkdocstrings[crystal,python]",
+  "zensical>=0.0.70",
 ]
 dev = [
   "mypy>=2.3",
@@ -97,7 +96,8 @@ strict_optional = true
 check_untyped_defs = false
 
 files = [
-  "eml_parser/**/*.py"
+  "eml_parser/**/*.py",
+  "scripts/**/*.py"
 ]
 
 [tool.pytest.ini_options]
@@ -113,6 +113,7 @@ target-version = "py311"
 include = [
   "pyproject.toml",
   "eml_parser/**/*.py",
+  "scripts/**/*.py",
   "tests/**/*.py"
 ]
 

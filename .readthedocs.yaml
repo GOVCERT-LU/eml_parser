@@ -19,6 +19,10 @@ build:
       - uv venv "${READTHEDOCS_VIRTUALENV_PATH}"
     install:
       - UV_PROJECT_ENVIRONMENT="${READTHEDOCS_VIRTUALENV_PATH}" uv sync --group docs
-
-mkdocs:
-  configuration: mkdocs.yml
+    build:
+      html:
+        - zensical build
+    post_build:
+      # Copy the built site into the directory Read the Docs publishes.
+      - mkdir -p $READTHEDOCS_OUTPUT/html/
+      - cp --recursive site/* $READTHEDOCS_OUTPUT/html/
