@@ -39,3 +39,7 @@ EXECUTABLE_MIME_TYPES = frozenset(
     application/x-mach-binary application/x-sharedlib application/x-pie-executable
     """.split()
 )
+
+# Header values longer than this are not run through the structured header parsers of the stdlib (their cost grows with the square of the length).
+# Real headers are far shorter: RFC 5322 recommends lines of 78 and limits them to 998 characters.
+MAX_PARSED_HEADER_SIZE = 8 * 1024

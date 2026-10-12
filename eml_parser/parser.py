@@ -147,6 +147,18 @@ class CustomPolicy(email.policy.EmailPolicy):
         super().__init__(max_line_length=0, refold_source='none', **custom)
 
     def header_fetch_parse(self, name: str, value: str) -> str:
+        """Pass the name/value to the parent header_fetch_parse method for proper parsing, unless the value is too long to be parsed in reasonable time."""
+        if len(value) <= eml_parser.constants.MAX_PARSED_HEADER_SIZE:
+            return self.fetch_fixed_header(name, value)
+
+        # The recursive descent parsers of the stdlib are quadratic in the length of a value, a megabyte of words takes seconds.
+        logger.warning('Header field "%s" is %d characters long, it is not parsed.', name.lower(), len(value))
+        if name.lower() == 'date':
+            return eml_parser.decode.default_date
+
+        return str(email.policy.compat32.header_fetch_parse(name, value))
+
+    def fetch_fixed_header(self, name: str, value: str) -> str:
         """Early fix parsing issues and pass the name/value to the parent header_fetch_parse method for proper parsing."""
         header = name.lower()
 
