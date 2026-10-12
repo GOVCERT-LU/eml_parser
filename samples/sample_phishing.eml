@@ -1,0 +1,34 @@
+Received: from mail.badhost.example (mail.badhost.example [203.0.113.7])
+	by mx.example.org (Postfix) with ESMTPS id 4F2A31
+	for <victim@example.org>; Mon, 05 Oct 2026 09:12:44 +0200
+Authentication-Results: mx.example.org;
+	spf=fail smtp.mailfrom=billing@pay-secure.example;
+	dkim=none;
+	dmarc=fail header.from=pay-secure.example
+From: "Billing" <billing@pay-secure.example>
+To: victim@example.org
+Subject: Invoice 4711 - action required
+Date: Mon, 05 Oct 2026 09:12:40 +0200
+Message-ID: <abc123@pay-secure.example>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="BOUND"
+
+--BOUND
+Content-Type: text/html; charset=utf-8
+
+<html><body xmlns="http://www.w3.org/1999/xhtml">
+<p>Please review <a href="http://3232235777/login">your invoice</a> or open \\files.evil.example\share\invoice.lnk</p>
+<form action="https://pay-secure.example/collect"><input name="card"></form>
+</body></html>
+--BOUND
+Content-Type: application/octet-stream; name="invoice.pdf.exe"
+Content-Disposition: attachment; filename="invoice.pdf.exe"
+Content-Transfer-Encoding: base64
+
+TVoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAABQRQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
+
+--BOUND--

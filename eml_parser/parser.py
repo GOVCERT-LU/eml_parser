@@ -73,7 +73,10 @@ except ImportError:
     magic = None
 else:
     if not hasattr(magic, 'open'):
-        logger.warning('You are using python-magic, though this module requires file-magic. Disabling magic usage due to incompatibilities.')
+        logger.warning(
+            'The installed "magic" module does not provide the file-magic compatible API (magic.open), '
+            'mime types will not be determined. Install file-magic or a python-magic version which provides it.'
+        )
 
         magic = None
 

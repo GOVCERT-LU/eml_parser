@@ -141,7 +141,7 @@ def findall_href(body: str) -> list:
         start = body.rfind('<', max(last_end, m.start(1) - URL_HREF_TAG_WINDOW), m.start(1))
         if start == -1:
             continue
-        segment = body[start:m.start(1)]
+        segment = body[start : m.start(1)]
         if '>' in segment:
             continue
         tname = _url_regex_href_tag_name.match(segment, 1)
@@ -154,6 +154,7 @@ def findall_href(body: str) -> list:
         found.append(m.group(2))
         last_end = m.end(2)
     return found
+
 
 # Characters which browsers remove from URLs, wherever they are (`ht&#9;tp://...` or a scheme broken over two lines is a valid URL).
 url_drop_chars_table = str.maketrans('', '', '\t\n\r')

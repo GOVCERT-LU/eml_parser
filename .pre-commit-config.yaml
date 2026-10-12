@@ -1,7 +1,7 @@
 # See https://pre-commit.com for more information
 # See https://pre-commit.com/hooks.html for more hooks
 default_language_version:
-  python: ">=3.10"
+  python: ">=3.11"
 
 repos:
   - repo: builtin
@@ -53,4 +53,11 @@ repos:
         require_serial: true
         language: python
         types: [ python ]
+        pass_filenames: false
+
+      - id: sync-docs
+        name: copy README and CHANGELOG to docs
+        entry: uv run scripts/sync_docs.py
+        language: unsupported
+        files: ^(README|CHANGELOG)\.md$
         pass_filenames: false
