@@ -162,9 +162,6 @@ url_drop_chars_table = str.maketrans('', '', '\t\n\r')
 # A (quoted) value starting with a scheme followed by slashes or backslashes, i.e. http:\\\\host\\path
 url_backslash_scheme_regex = re.compile(r"""[\"\']?[a-z][a-z0-9+.\-]*:[\\/]{2}""", re.IGNORECASE)
 
-date_regex = re.compile(r""";[ \w\s:,+\-()]+$""")
-cleanline_regex = re.compile(r"""(^[;\s]{0,}|[;\s]{0,}$)""")
-
 escape_special_regex_chars = re.compile(r"""([\^$\[\]()+?.])""")
 
 window_slice_regex = re.compile(r"""\s""")

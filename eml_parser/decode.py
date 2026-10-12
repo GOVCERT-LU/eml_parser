@@ -278,7 +278,7 @@ def robust_string2date(line: str) -> datetime.datetime:
             # Now we are facing an invalid date.
             return datetime.datetime.fromisoformat(default_date)
 
-    if date_.tzname() is None:
+    if date_.utcoffset() is None:
         return date_.replace(tzinfo=datetime.UTC)
 
     return date_
