@@ -1059,7 +1059,7 @@ class EmlParser:
                         list_observed_urls[clean_uri] = 1
 
         if self.include_href:
-            for found_url in eml_parser.regexes.url_regex_href.findall(body):
+            for found_url in eml_parser.regexes.findall_href(body):
                 clean_uri = self.clean_found_uri(eml_parser.decode.normalize_attribute_url(found_url))
                 if clean_uri is not None:
                     list_observed_urls[clean_uri] = 1

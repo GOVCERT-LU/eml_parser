@@ -91,21 +91,69 @@ url_regex_www = re.compile(
 
 
 # Search for URLs in the attributes of HTML tags: links and images, but also the targets of forms (phishing), frames, scripts, embedded objects and redirects.
-# regex overlaps with url_regex_simple, so simple URL content that starts with "<a " or "<img " still matches.
-url_regex_href = re.compile(
+# The scan overlaps with url_regex_simple, so simple URL content that starts with "<a " or "<img " still matches.
+#
+# Two-stage, linear in the length of the body: url_regex_href_attr locates the attribute values and findall_href() accepts a value only if
+# the nearest "<" opens a tag which carries that attribute (see URL_HREF_TAG_ATTRS), with no ">" in between. The tag opening is bounded
+# by URL_HREF_TAG_WINDOW, as neither a document nor a browser keeps a tag opening longer than that open. One value per tag opening is
+# accepted (the first in text order), and attribute keywords are not matched as substrings of longer names: <form formaction="u"> yields
+# nothing, as browsers do not treat the formaction attribute of a <form> as a fetch target.
+url_regex_href_attr = re.compile(
     r"""
-<(?:(?:a|area|link|base)[\s\/]+[^>]*?href
- |(?:img|script|iframe|frame|embed|source|audio|video|track|input|bgsound)[\s\/]+[^>]*?src
- |form[\s\/]+[^>]*?action
- |(?:button|input)[\s\/]+[^>]*?formaction
- |object[\s\/]+[^>]*?data
- |body[\s\/]+[^>]*?background
- |[a-z:]+[\s\/]+[^>]*?xlink:href)
-[\s\/]*=\s*
+(xlink:href|href|src|formaction|action|data|background)
+[\s/]*
+=
+\s*
 ((?:[\"][^\"]+)|[\'][^\']+|[^\s>]+)
 """,
     flags=re.IGNORECASE | re.VERBOSE,
 )
+
+# Tag names which carry each attribute, compared case-insensitively. Any other [a-z:] tag name carries xlink:href only.
+URL_HREF_TAG_ATTRS = {
+    'href': frozenset(('a', 'area', 'link', 'base')),
+    'src': frozenset(('img', 'script', 'iframe', 'frame', 'embed', 'source', 'audio', 'video', 'track', 'input', 'bgsound')),
+    'action': frozenset(('form',)),
+    'formaction': frozenset(('button', 'input')),
+    'data': frozenset(('object',)),
+    'background': frozenset(('body',)),
+}
+
+# Maximum size of the tag opening (from "<" to the attribute) which findall_href() verifies.
+URL_HREF_TAG_WINDOW = 16384
+
+_url_regex_href_tag_name = re.compile(r'[a-z:]+', flags=re.IGNORECASE)
+_url_regex_href_ws_or_slash = ' \t\r\n\f\v/'
+
+
+def findall_href(body: str) -> list:
+    """Find the URL values of HTML attributes (href, src, action, formaction, data, background, and xlink:href).
+
+    Args:
+        body (str): Text input which should be searched for attribute URLs.
+
+    Returns:
+        list: The attribute values (quotes included), in order of appearance.
+    """
+    found: list = []
+    last_end = 0
+    for m in url_regex_href_attr.finditer(body):
+        start = body.rfind('<', max(last_end, m.start(1) - URL_HREF_TAG_WINDOW), m.start(1))
+        if start == -1:
+            continue
+        segment = body[start:m.start(1)]
+        if '>' in segment:
+            continue
+        tname = _url_regex_href_tag_name.match(segment, 1)
+        if tname is None or tname.end() >= len(segment) or segment[tname.end()] not in _url_regex_href_ws_or_slash:
+            continue
+        name = tname.group()
+        attr = m.group(1).lower()
+        if attr != 'xlink:href' and name.lower() not in URL_HREF_TAG_ATTRS[attr]:
+            continue
+        found.append(m.group(2))
+        last_end = m.end(2)
+    return found
 
 # Characters which browsers remove from URLs, wherever they are (`ht&#9;tp://...` or a scheme broken over two lines is a valid URL).
 url_drop_chars_table = str.maketrans('', '', '\t\n\r')
