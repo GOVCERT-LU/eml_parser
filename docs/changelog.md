@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Fixes
+- Fix `regexes.email_regex_rfc2047` having a super-linear run time: a header value consisting of `=?` repeated 20 KB took 77 s to scan, which allowed a crafted header to stall the parser. The pattern is linear now. It also no longer accepts `|` as the encoding of an encoded word (`[B|Q|b|q]`).
+- Fix the order of `received_email`, `received_domain`, `received_ip` and `received_foremail` being random between runs (depending on `PYTHONHASHSEED`) as they were built from a `set`, and the same for the addresses returned by `decode.workaround_bug_27257()`. They are returned in order of first appearance now.
+- Fix the header cache in `CustomPolicy` suppressing log warnings: the warnings about an unfixable `Message-ID` or an unparseable `Date` were emitted inside the cached method, so they were only logged once per unique header value and silent for every later message. The warnings are logged on every access now, and the `Date` warning reports the parse error instead of a traceback.
+### Changes
+- Cache the result of the header parsing in `CustomPolicy`: the `email` module parses a header again on every access (`get()`, `get_all()`, `items()`), and about two thirds of all parses were repeats. The cache is bounded to 1024 entries.
+- Only run the IPv6 pattern (`regexes.findall_ipv6()`) on text containing `::` or at least six colons, as no address can exist without. Together with the header cache, parsing is about twice as fast (800 mails, 6.7 s against 3.1 s, same output).
+- Remove code that did nothing or was needlessly long: the `re` fallback in `regexes` (the `regex` module is a hard dependency), the `re.MULTILINE` flag of patterns without anchors, the redundant lookups of the `Date` header, ordered sets built with `Counter` and loops that only fill a list (the hashes of the IOCs, the lists of attachments and bodies). The output is unchanged.
+
 ## [v4.2.0]
 ### Fixes
 - Fix `decode.robust_string2date()` replacing the UTC offset of dates parsed by dateutil with UTC: dateutil returns an offset without a name (`tzname()` is `None`) and every such date was treated as a date without time zone, so `Mon, 5 Oct 2026 09:12:44.123 +0200` (fractional seconds, which the `email` module does not parse) was reported two hours off. Only dates without an offset are set to UTC now.

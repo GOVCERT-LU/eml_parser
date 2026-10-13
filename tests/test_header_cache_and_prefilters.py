@@ -1,3 +1,4 @@
+import logging
 import time
 
 import pytest
@@ -18,12 +19,12 @@ Body
 
 class TestHeaderCache:
     def test_repeated_header_access_hits_the_cache(self) -> None:
-        eml_parser.parser.CustomPolicy.fetch_fixed_header.cache_clear()
+        eml_parser.parser.CustomPolicy._fetch_fixed_header.cache_clear()  # noqa: SLF001
         parser = eml_parser.parser.EmlParser()
 
         result = parser.decode_email_bytes(MAIL)
 
-        info = eml_parser.parser.CustomPolicy.fetch_fixed_header.cache_info()
+        info = eml_parser.parser.CustomPolicy._fetch_fixed_header.cache_info()  # noqa: SLF001
         assert info.hits > 0
         assert result['header']['from'] == 'alice@example.com'
         assert result['header']['header']['subject'] == ['Test']
@@ -35,6 +36,21 @@ class TestHeaderCache:
 
         assert relaxed.fetch_fixed_header('Message-ID', value) == '<user@localhost>'
         assert strict.fetch_fixed_header('Message-ID', value) == ''
+
+    def test_warnings_are_logged_on_every_access(self, caplog: pytest.LogCaptureFixture) -> None:
+        eml_parser.parser.CustomPolicy._fetch_fixed_header.cache_clear()  # noqa: SLF001
+        caplog.set_level(logging.WARNING)
+        parser = eml_parser.parser.EmlParser()
+        mail = b'From: a@example.com\nMessage-ID: <[x]\n\nbody'
+
+        parser.decode_email_bytes(mail)
+        warning = 'Header field "message-id" is in an invalid format and cannot be fixed, it will be dropped.'
+        count = caplog.text.count(warning)
+        assert count > 0
+
+        # The same value is already in the cache, so the second parse must still be warned about.
+        parser.decode_email_bytes(mail)
+        assert caplog.text.count(warning) == 2 * count
 
 
 class TestIpv6Prefilter:

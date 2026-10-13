@@ -160,12 +160,22 @@ class CustomPolicy(email.policy.EmailPolicy):
 
         return str(email.policy.compat32.header_fetch_parse(name, value))
 
-    @functools.lru_cache(maxsize=1024)  # noqa: B019 - the cache is bounded, so it keeps at most 1024 policies alive
     def fetch_fixed_header(self, name: str, value: str) -> str:
         """Early fix parsing issues and pass the name/value to the parent header_fetch_parse method for proper parsing.
 
-        The stdlib parses a header again on every access (`get()`, `get_all()`, `items()`), which are several per header, so the results are cached.
+        The stdlib parses a header again on every access (`get()`, `get_all()`, `items()`), which are several per header, so the results are cached in `_fetch_fixed_header`.
+        The warning is logged here, once per access, because the cached method must stay pure and would otherwise only warn on the first occurrence of a value.
         """
+        result, warning = self._fetch_fixed_header(name, value)
+
+        if warning is not None:
+            logger.warning(warning)
+
+        return result
+
+    @functools.lru_cache(maxsize=1024)  # noqa: B019 - the cache is bounded, so it keeps at most 1024 policies alive
+    def _fetch_fixed_header(self, name: str, value: str) -> tuple[str, str | None]:
+        """Cached pure variant of `fetch_fixed_header` which reports its warning as the second return value instead of logging it."""
         header = name.lower()
 
         if header == 'message-id':
@@ -175,27 +185,25 @@ class CustomPolicy(email.policy.EmailPolicy):
                 if m:
                     value = f'<{m.group(1)}>'
                 else:
-                    value = ''
-                    logger.warning('Header field "message-id" is in an invalid format and cannot be fixed, it will be dropped.')
+                    return '', 'Header field "message-id" is in an invalid format and cannot be fixed, it will be dropped.'
         elif header == 'date':
             try:
                 value = super().header_fetch_parse(name, value)
-            except TypeError:
-                logger.warning('Error parsing date.', exc_info=True)
-                return eml_parser.decode.default_date
+            except TypeError as exc:
+                return eml_parser.decode.default_date, f'Error parsing date: {exc!s}.'
 
-            return eml_parser.decode.robust_string2date(value).isoformat()
+            return eml_parser.decode.robust_string2date(value).isoformat(), None
 
         elif header in ('sender', 'resent-sender', 'to', 'resent-to', 'cc', 'resent-cc', 'bcc', 'resent-bcc', 'from', 'resent-from', 'reply-to'):
             try:
-                return super().header_fetch_parse(name, value)
+                return super().header_fetch_parse(name, value), None
             except RecursionError:
                 # This can happen when the recursion gets too deep in in the stdlib recursive descent parser.
                 # In this case, the header is certainly pathological. We still try to extract some addresses.
                 m = self.email_regex.findall(value)
-                return ', '.join(m)
+                return ', '.join(m), None
 
-        return super().header_fetch_parse(name, value)
+        return super().header_fetch_parse(name, value), None
 
 
 class EmlParser:
