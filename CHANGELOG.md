@@ -3,7 +3,7 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [v4.2.1]
 ### Fixes
 - Fix `regexes.email_regex_rfc2047` having a super-linear run time: a header value consisting of `=?` repeated 20 KB took 77 s to scan, which allowed a crafted header to stall the parser. The pattern is linear now. It also no longer accepts `|` as the encoding of an encoded word (`[B|Q|b|q]`).
 - Fix the order of `received_email`, `received_domain`, `received_ip` and `received_foremail` being random between runs (depending on `PYTHONHASHSEED`) as they were built from a `set`, and the same for the addresses returned by `decode.workaround_bug_27257()`. They are returned in order of first appearance now.
