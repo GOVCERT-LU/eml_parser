@@ -209,7 +209,7 @@ def workaround_bug_27257(msg: email.message.Message, header: str, email_regex: r
         if value != '':
             m = email_regex.findall(value)
             if m:
-                return_value += list(set(m))
+                return_value += list(dict.fromkeys(m))
 
     return return_value
 

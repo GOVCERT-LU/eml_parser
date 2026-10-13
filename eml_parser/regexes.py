@@ -2,10 +2,7 @@
 
 """This module contains a number of regular expressions used by this Library."""
 
-try:
-    import regex as re
-except ImportError:
-    import re
+import regex as re
 
 __author__ = 'Toth Georges, Jung Paul'
 __email__ = 'georges@trypill.org, georges.toth@govcert.etat.lu'
@@ -16,15 +13,16 @@ __license__ = 'AGPL v3+'
 # W3C HTML5 standard recommended regex for e-mail validation
 # It also implements the 64 character limit on the local part (RFC 5321, section 2.4), with a safety factor.
 # This mitigates an issue with quadratic complexity when searching for e-mail addresses in very long strings.
-email_no_force_tld_regex = re.compile(r"""([a-zA-Z0-9.!#$%&'*+\-/=?^_`{|}~]{1,128}@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*)""", re.MULTILINE)
-email_force_tld_regex = re.compile(r"""([a-zA-Z0-9.!#$%&'*+\-/=?^_`{|}~]{1,128}@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)+)""", re.MULTILINE)
+email_no_force_tld_regex = re.compile(r"""([a-zA-Z0-9.!#$%&'*+\-/=?^_`{|}~]{1,128}@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*)""")
+email_force_tld_regex = re.compile(r"""([a-zA-Z0-9.!#$%&'*+\-/=?^_`{|}~]{1,128}@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)+)""")
 email_regex = email_no_force_tld_regex
 
 
 # regex for detecting RFC2047 encodings - used from https://dmorgan.info/posts/encoded-word-syntax/
-email_regex_rfc2047 = re.compile(r"""=\?{1}([\w\S]+)\?{1}([B|Q|b|q])\?{1}([\w\S]+)\?{1}=""")
+# Only used to find out whether a value contains an encoded word. The parts must not contain "?" (or white space), otherwise the pattern is quadratic or worse for a value like "=?=?=?=?...".
+email_regex_rfc2047 = re.compile(r"""=\?[^\s?]+\?[BbQq]\?[^\s?]+\?=""")
 
-recv_dom_regex = re.compile(r"""(?:(?:from|by)\s+)([a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]{2,})+)""", re.MULTILINE)
+recv_dom_regex = re.compile(r"""(?:(?:from|by)\s+)([a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]{2,})+)""")
 
 dom_regex = re.compile(r"""(?:^|[\s(/<>|@'=])([a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]{2,})+)(?=$|[\?\s#&/<>')])""", re.MULTILINE)
 
@@ -38,6 +36,24 @@ _IPV6_ADDRESS = r"""((?:[0-9a-f]{1,4}:){6}(?:[0-9a-f]{1,4}:[0-9a-f]{1,4}|(?:(?:[
 # An address must not directly follow a word character, a dot or a colon (exception: the "IPv6:" tag of address literals) nor be followed by a word character
 # or a colon and hex digit, otherwise parts of longer sequences such as "std::vector" or "1:2:3:4:5:6:7:8:9" would be reported.
 ipv6_regex = re.compile(r"""(?:(?<![0-9A-Za-z_.:])|(?<=ipv6:))""" + _IPV6_ADDRESS + r"""(?![0-9A-Za-z_])(?!:[0-9a-f])""", flags=re.IGNORECASE)
+
+
+def findall_ipv6(text: str) -> list[str]:
+    """Find IPv6 addresses, skipping the (expensive) pattern for text which cannot contain one.
+
+    An address has either a "::" or at least seven colons (six with an embedded IPv4 address), so most of the text is rejected by two cheap checks.
+
+    Args:
+        text (str): Text input which should be searched for IPv6 addresses.
+
+    Returns:
+        list: The addresses, in order of appearance.
+    """
+    if '::' in text or text.count(':') >= 6:
+        return ipv6_regex.findall(text)
+
+    return []
+
 
 # simple version for searching for URLs
 # character set based on http://tools.ietf.org/html/rfc3986

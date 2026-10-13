@@ -23,7 +23,6 @@ import string
 import typing
 import urllib.parse
 import uuid
-from collections import Counter
 from html import unescape
 
 import publicsuffixlist
@@ -161,8 +160,12 @@ class CustomPolicy(email.policy.EmailPolicy):
 
         return str(email.policy.compat32.header_fetch_parse(name, value))
 
+    @functools.lru_cache(maxsize=1024)  # noqa: B019 - the cache is bounded, so it keeps at most 1024 policies alive
     def fetch_fixed_header(self, name: str, value: str) -> str:
-        """Early fix parsing issues and pass the name/value to the parent header_fetch_parse method for proper parsing."""
+        """Early fix parsing issues and pass the name/value to the parent header_fetch_parse method for proper parsing.
+
+        The stdlib parses a header again on every access (`get()`, `get_all()`, `items()`), which are several per header, so the results are cached.
+        """
         header = name.lower()
 
         if header == 'message-id':
@@ -453,11 +456,9 @@ class EmlParser:
 
         # parse and decode Date
         # If date field is present
-        if 'date' in self.msg and self.msg.get('date') is not None:
-            headers_struc['date'] = datetime.datetime.fromisoformat(typing.cast('str', self.msg.get('date')))
-        else:
-            # If date field is absent...
-            headers_struc['date'] = datetime.datetime.fromisoformat(eml_parser.decode.default_date)
+        # (the default date is used if the field is absent)
+        date_value: str | None = self.msg.get('date')
+        headers_struc['date'] = datetime.datetime.fromisoformat(eml_parser.decode.default_date if date_value is None else date_value)
 
         # mail receiver path / parse any domain, e-mail
         # @TODO parse case where domain is specified but in parentheses only an IP
@@ -471,7 +472,7 @@ class EmlParser:
             for received_line in self.msg.get_all('received', []):
                 line = str(received_line).lower()
 
-                received_line_flat = re.sub(r'(\r|\n|\s|\t)+', ' ', line, flags=re.UNICODE)
+                received_line_flat = re.sub(r'\s+', ' ', line)
 
                 # Parse and split routing headers.
                 # Return dict of list
@@ -510,7 +511,7 @@ class EmlParser:
                 headers_struc['received'].append(parsed_routing)
 
                 # Parse IPs in "received headers"
-                ips_in_received_line = eml_parser.regexes.ipv6_regex.findall(received_line_flat) + eml_parser.regexes.ipv4_regex.findall(received_line_flat)
+                ips_in_received_line = eml_parser.regexes.findall_ipv6(received_line_flat) + eml_parser.regexes.ipv4_regex.findall(received_line_flat)
                 for ip in ips_in_received_line:
                     if ip in self.pconf['whiteip']:
                         continue
@@ -551,9 +552,9 @@ class EmlParser:
                         headers_struc['received_foremail'].append(itemfor)
 
         # Uniq data found
-        headers_struc['received_email'] = list(set(headers_struc['received_email']))
-        headers_struc['received_domain'] = list(set(headers_struc['received_domain']))
-        headers_struc['received_ip'] = list(set(headers_struc['received_ip']))
+        headers_struc['received_email'] = list(dict.fromkeys(headers_struc['received_email']))
+        headers_struc['received_domain'] = list(dict.fromkeys(headers_struc['received_domain']))
+        headers_struc['received_ip'] = list(dict.fromkeys(headers_struc['received_ip']))
 
         # Clean up if empty
         if not headers_struc['received_email']:
@@ -563,7 +564,7 @@ class EmlParser:
             if not headers_struc['received_foremail']:
                 del headers_struc['received_foremail']
             else:
-                headers_struc['received_foremail'] = list(set(headers_struc['received_foremail']))
+                headers_struc['received_foremail'] = list(dict.fromkeys(headers_struc['received_foremail']))
 
         if not headers_struc['received_domain']:
             del headers_struc['received_domain']
@@ -593,9 +594,9 @@ class EmlParser:
             list_observed_urls: list[str] = []
             list_observed_urls_noscheme: list[str] = []
             list_observed_unc: dict[str, int] = {}
-            list_observed_email: typing.Counter[str] = Counter()
-            list_observed_dom: typing.Counter[str] = Counter()
-            list_observed_ip: typing.Counter[str] = Counter()
+            list_observed_email: dict[str, int] = {}
+            list_observed_dom: dict[str, int] = {}
+            list_observed_ip: dict[str, int] = {}
 
             # If we start directly a findall on 500K+ body we got time and memory issues...
             # if more than 4K.. lets cheat, we will cut around the thing we search "://, @, ."
@@ -624,17 +625,16 @@ class EmlParser:
                     if valid_domain:
                         list_observed_dom[match.lower()] = 1
 
-                for ip_regex in (eml_parser.regexes.ipv4_regex, eml_parser.regexes.ipv6_regex):
-                    for match in ip_regex.findall(body_slice):
-                        if ':' in match and not any(char.isdigit() for char in match) and match.count(':') < 3:
-                            # "::" or a scope resolution like "Add::dead" is not an address
-                            continue
+                for match in eml_parser.regexes.ipv4_regex.findall(body_slice) + eml_parser.regexes.findall_ipv6(body_slice):
+                    if ':' in match and not any(char.isdigit() for char in match) and match.count(':') < 3:
+                        # "::" or a scope resolution like "Add::dead" is not an address
+                        continue
 
-                        valid_ip = self.get_valid_domain_or_ip(match.lower())
-                        if valid_ip in self.pconf['whiteip']:
-                            continue
-                        if valid_ip:
-                            list_observed_ip[valid_ip] = 1
+                    valid_ip = self.get_valid_domain_or_ip(match.lower())
+                    if valid_ip in self.pconf['whiteip']:
+                        continue
+                    if valid_ip:
+                        list_observed_ip[valid_ip] = 1
 
             # URLs do not necessarily appear as-is in the body, as they may contain escaped entities.
             # For this reason, we have to extract the domains again from each parsed URL.
@@ -689,30 +689,19 @@ class EmlParser:
 
             else:
                 if list_observed_urls:
-                    bodie['uri_hash'] = []
-                    for element in dict.fromkeys(list_observed_urls):
-                        bodie['uri_hash'].append(self.get_hash(element.lower(), 'sha256'))
+                    bodie['uri_hash'] = [self.get_hash(element.lower(), 'sha256') for element in dict.fromkeys(list_observed_urls)]
                 if list_observed_urls_noscheme:
-                    bodie['uri_noscheme_hash'] = []
-                    for element in dict.fromkeys(list_observed_urls_noscheme):
-                        bodie['uri_noscheme_hash'].append(self.get_hash(element.lower(), 'sha256'))
+                    bodie['uri_noscheme_hash'] = [self.get_hash(element.lower(), 'sha256') for element in dict.fromkeys(list_observed_urls_noscheme)]
                 if list_observed_unc:
                     bodie['unc_hash'] = [self.get_hash(share.lower(), 'sha256') for share in list_observed_unc]
                 if list_observed_email:
-                    bodie['email_hash'] = []
-                    for element in list_observed_email:
-                        # Email already lowered
-                        bodie['email_hash'].append(self.get_hash(element, 'sha256'))
+                    # Email already lowered
+                    bodie['email_hash'] = [self.get_hash(element, 'sha256') for element in list_observed_email]
                 if list_observed_dom:
-                    bodie['domain_hash'] = []
-                    # for uri in list(set(list_observed_dom)):
-                    for element in list_observed_dom:
-                        bodie['domain_hash'].append(self.get_hash(element, 'sha256'))
+                    bodie['domain_hash'] = [self.get_hash(element, 'sha256') for element in list_observed_dom]
                 if list_observed_ip:
-                    bodie['ip_hash'] = []
-                    for element in list_observed_ip:
-                        # IP (v6) already lowered
-                        bodie['ip_hash'].append(self.get_hash(element, 'sha256'))
+                    # IP (v6) already lowered
+                    bodie['ip_hash'] = [self.get_hash(element, 'sha256') for element in list_observed_ip]
 
             # For mail without multipart we will only get the "content....something" headers
             # all other headers are in "header"
@@ -821,15 +810,9 @@ class EmlParser:
             if not report_struc['attachment']:
                 del report_struc['attachment']
             else:
-                newattach = []
-                for attachment in report_struc['attachment']:
-                    newattach.append(report_struc['attachment'][attachment])
-                report_struc['attachment'] = newattach
+                report_struc['attachment'] = list(report_struc['attachment'].values())
 
-        newbody = []
-        for _, body in bodys_struc.items():
-            newbody.append(body)
-        report_struc['body'] = newbody
+        report_struc['body'] = list(bodys_struc.values())
         # End of dirty hack
 
         # Get all other bulk headers
@@ -1046,7 +1029,7 @@ class EmlParser:
         Returns:
             list: Returns a list of URLs found in the input string.
         """
-        list_observed_urls: typing.Counter[str] = Counter()
+        list_observed_urls: dict[str, int] = {}
 
         if self.include_www:
             for found_url in eml_parser.regexes.url_regex_www.findall(body):
