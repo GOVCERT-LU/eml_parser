@@ -1,6 +1,6 @@
 """This module contains various string import, check and parse methods."""
 
-import datetime
+import datetime as dt
 import decimal
 import email
 import email.errors
@@ -50,7 +50,7 @@ import eml_parser.regexes
 logger = logging.getLogger(__name__)
 
 default_date = '1970-01-01T00:00:00+00:00'
-_DATEUTIL_DEFAULT = datetime.datetime(1970, 1, 1)  # noqa: DTZ001
+_DATEUTIL_DEFAULT = dt.datetime(1970, 1, 1)  # noqa: DTZ001
 
 # The charset detection is slow, bodies larger than this are decoded with the declared charset only, even if that is wrong.
 MAX_CHARSET_DETECTION_SIZE = 256 * 1024
@@ -242,7 +242,7 @@ def workaround_field_value_parsing_errors(msg: email.message.Message, header: st
     return return_value
 
 
-def robust_string2date(line: str) -> datetime.datetime:
+def robust_string2date(line: str) -> dt.datetime:
     """Parses a date string to a datetime.datetime object using different methods.
 
     It is guaranteed to always return a valid datetime.datetime object.
@@ -263,7 +263,7 @@ def robust_string2date(line: str) -> datetime.datetime:
 
     # if the input is empty, we return a default date
     if line == '':
-        return datetime.datetime.fromisoformat(default_date)
+        return dt.datetime.fromisoformat(default_date)
 
     try:
         date_ = email.utils.parsedate_to_datetime(line)
@@ -276,10 +276,10 @@ def robust_string2date(line: str) -> datetime.datetime:
             date_ = dateutil.parser.parse(line, default=_DATEUTIL_DEFAULT)
         except (AttributeError, ValueError, OverflowError, decimal.InvalidOperation):
             # Now we are facing an invalid date.
-            return datetime.datetime.fromisoformat(default_date)
+            return dt.datetime.fromisoformat(default_date)
 
     if date_.utcoffset() is None:
-        return date_.replace(tzinfo=datetime.UTC)
+        return date_.replace(tzinfo=dt.UTC)
 
     return date_
 
@@ -300,10 +300,10 @@ def json_serial(obj: object) -> str:
         TypeError: If the type of the object is not supported.
         UnicodeDecodeError: If a bytes object is not ASCII, i.e. not base64.
     """
-    if isinstance(obj, datetime.datetime):
+    if isinstance(obj, dt.datetime):
         if obj.tzinfo is not None:
             try:
-                return obj.astimezone(datetime.UTC).isoformat()
+                return obj.astimezone(dt.UTC).isoformat()
             except OverflowError:
                 # Dates close to datetime.min/max (e.g. 9999-12-31 23:59:59 -0500) can not be converted to UTC.
                 logger.debug('Unable to convert "%s" to UTC, exporting it with its original offset', obj, exc_info=True)

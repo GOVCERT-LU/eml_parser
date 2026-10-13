@@ -1,4 +1,4 @@
-import datetime
+import datetime as dt
 import pathlib
 
 import eml_parser.parser
@@ -38,7 +38,7 @@ class TestRouting:
                     'from': ['mta1.example.com', '192.168.1.100'],
                     'src': 'Received: from mta1.example.com (mta1.example.com [192.168.1.100]) (using TLSv1 with cipher ADH-AES256-SHA (256/256 bits)) (No client certificate requested) by mta.example2.com (Postfix) with ESMTPS id 6388F684168 for <info@example.com>; Fri, 26 Apr 2013 13:15:55 +0200 (CEST)',
                     'with': 'esmtps id 6388f684168',
-                    'date': datetime.datetime(2013, 4, 26, 13, 15, 55, tzinfo=datetime.timezone(datetime.timedelta(0, 7200))),
+                    'date': dt.datetime(2013, 4, 26, 13, 15, 55, tzinfo=dt.timezone(dt.timedelta(0, 7200))),
                 },
             ),
             'test2': (
@@ -49,7 +49,7 @@ class TestRouting:
                     'for': ['someone@here-from-there.com'],
                     'src': 'Received: by f321.i.example.com with local (envelope-from <b8u3hkqlkj@example.com>) id 1khYpb-0001XE-KE for someone@here-from-there.com; Tue, 24 Nov 2020 16:58:07 +0300',
                     'with': 'local (envelope-from <b8u3hkqlkj@example.com>) id 1khypb-0001xe-ke',
-                    'date': datetime.datetime(2020, 11, 24, 16, 58, 7, tzinfo=datetime.timezone(datetime.timedelta(seconds=10800))),
+                    'date': dt.datetime(2020, 11, 24, 16, 58, 7, tzinfo=dt.timezone(dt.timedelta(seconds=10800))),
                 },
             ),
             'test3': (

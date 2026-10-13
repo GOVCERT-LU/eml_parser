@@ -1,6 +1,6 @@
 """Tests for headers which are too long for the stdlib header parsers."""
 
-import datetime
+import datetime as dt
 import time
 
 import pytest
@@ -41,4 +41,4 @@ def test_long_address_header_still_yields_the_addresses() -> None:
 
 def test_huge_date_is_the_default_date() -> None:
     """A date can not be that long, it is invalid."""
-    assert _parse(b'Date: ' + b'Mon ' * 20_000)['date'] == datetime.datetime.fromisoformat(eml_parser.decode.default_date)
+    assert _parse(b'Date: ' + b'Mon ' * 20_000)['date'] == dt.datetime.fromisoformat(eml_parser.decode.default_date)

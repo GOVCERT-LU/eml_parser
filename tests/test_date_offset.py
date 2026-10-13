@@ -1,4 +1,4 @@
-import datetime
+import datetime as dt
 
 import pytest
 
@@ -20,4 +20,4 @@ def test_offset_of_dateutil_dates_is_kept(line: str, expected: str) -> None:
 
 
 def test_date_without_offset_is_utc() -> None:
-    assert eml_parser.decode.robust_string2date('Mon, 5 Oct 2026 09:12:44.123').utcoffset() == datetime.timedelta(0)
+    assert eml_parser.decode.robust_string2date('Mon, 5 Oct 2026 09:12:44.123').utcoffset() == dt.timedelta(0)

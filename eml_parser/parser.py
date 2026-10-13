@@ -4,7 +4,7 @@ import base64
 import binascii
 import collections
 import collections.abc
-import datetime
+import datetime as dt
 import email
 import email.headerregistry
 import email.message
@@ -466,7 +466,7 @@ class EmlParser:
         # If date field is present
         # (the default date is used if the field is absent)
         date_value: str | None = self.msg.get('date')
-        headers_struc['date'] = datetime.datetime.fromisoformat(eml_parser.decode.default_date if date_value is None else date_value)
+        headers_struc['date'] = dt.datetime.fromisoformat(eml_parser.decode.default_date if date_value is None else date_value)
 
         # mail receiver path / parse any domain, e-mail
         # @TODO parse case where domain is specified but in parentheses only an IP

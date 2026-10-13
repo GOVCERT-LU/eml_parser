@@ -1,4 +1,4 @@
-import datetime
+import datetime as dt
 
 import pytest
 
@@ -28,4 +28,4 @@ def test_unparsable_dates_still_return_the_default(line: str) -> None:
 
 def test_absurd_number_is_an_invalid_date() -> None:
     """dateutil raises decimal.InvalidOperation for huge numbers of minutes or seconds."""
-    assert eml_parser.decode.robust_string2date('99999999999999999999999999999m') == datetime.datetime.fromisoformat(eml_parser.decode.default_date)
+    assert eml_parser.decode.robust_string2date('99999999999999999999999999999m') == dt.datetime.fromisoformat(eml_parser.decode.default_date)

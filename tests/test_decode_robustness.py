@@ -1,5 +1,5 @@
 import base64
-import datetime
+import datetime as dt
 import email.message
 import json
 import types
@@ -81,7 +81,7 @@ class TestExportToJson:
         assert base64.b64decode(exported['attachment'][0]['raw']) == b'\x00\x01binary'
 
     def test_datetime_is_still_exported_as_utc(self) -> None:
-        moment = datetime.datetime(2026, 1, 2, 3, 4, 5, tzinfo=datetime.timezone(datetime.timedelta(hours=2)))
+        moment = dt.datetime(2026, 1, 2, 3, 4, 5, tzinfo=dt.timezone(dt.timedelta(hours=2)))
 
         assert json.loads(eml_parser.decode.export_to_json({'date': moment})) == {'date': '2026-01-02T01:04:05+00:00'}
 
@@ -94,15 +94,15 @@ class TestJsonSerialExtremeDates:
     @pytest.mark.parametrize(
         ('moment', 'expected'),
         [
-            (datetime.datetime(9999, 12, 31, 23, 59, 59, tzinfo=datetime.timezone(datetime.timedelta(hours=-5))), '9999-12-31T23:59:59-05:00'),
-            (datetime.datetime(1, 1, 1, 0, 0, 0, tzinfo=datetime.timezone(datetime.timedelta(hours=5))), '0001-01-01T00:00:00+05:00'),
+            (dt.datetime(9999, 12, 31, 23, 59, 59, tzinfo=dt.timezone(dt.timedelta(hours=-5))), '9999-12-31T23:59:59-05:00'),
+            (dt.datetime(1, 1, 1, 0, 0, 0, tzinfo=dt.timezone(dt.timedelta(hours=5))), '0001-01-01T00:00:00+05:00'),
         ],
     )
-    def test_dates_which_cannot_be_converted_to_utc_keep_their_offset(self, moment: datetime.datetime, expected: str) -> None:
+    def test_dates_which_cannot_be_converted_to_utc_keep_their_offset(self, moment: dt.datetime, expected: str) -> None:
         assert eml_parser.decode.json_serial(moment) == expected
 
     def test_naive_datetime_is_unchanged(self) -> None:
-        assert eml_parser.decode.json_serial(datetime.datetime.fromisoformat('2026-01-02T03:04:05')) == '2026-01-02T03:04:05'
+        assert eml_parser.decode.json_serial(dt.datetime.fromisoformat('2026-01-02T03:04:05')) == '2026-01-02T03:04:05'
 
     def test_hostile_date_header_can_be_exported(self) -> None:
         raw_email = b'From: a@example.com\r\nDate: Fri, 31 Dec 9999 23:59:59 -0500\r\n\r\nbody'

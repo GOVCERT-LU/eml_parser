@@ -1,4 +1,4 @@
-import datetime
+import datetime as dt
 import email.policy
 import email.utils
 import json
@@ -72,7 +72,7 @@ def recursive_compare(element_a: dict[str, str], element_b: dict[str, str]) -> N
 def json_serial(obj: typing.Any) -> str | None:
     """JSON serializer for objects not serializable by default json code"""
 
-    if isinstance(obj, datetime.datetime):
+    if isinstance(obj, dt.datetime):
         serial = obj.isoformat()
         return serial
 
