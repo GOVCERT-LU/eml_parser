@@ -43,3 +43,20 @@ EXECUTABLE_MIME_TYPES = frozenset(
 # Header values longer than this are not run through the structured header parsers of the stdlib (their cost grows with the square of the length).
 # Real headers are far shorter: RFC 5322 recommends lines of 78 and limits them to 998 characters.
 MAX_PARSED_HEADER_SIZE = 8 * 1024
+
+# Defence in depth against messages made of huge numbers of header fields (MSL-2026-030). Structured parsing of a header field costs up to
+# about 0.6 ms (address and Received fields), so even with linear parsing a message of small fields keeps a worker busy in proportion to its
+# size. At most this many header fields and this many bytes of header values, counted over the message and all its MIME parts in order, are
+# run through the structured header parsers. The fields beyond are kept with their raw value, like values longer than MAX_PARSED_HEADER_SIZE,
+# and the message gets a HeaderParsingLimitDefect. Real messages have from a few dozen to a few hundred header fields.
+MAX_PARSED_HEADER_FIELDS = 10_000
+MAX_PARSED_HEADER_BYTES = 2 * 1024 * 1024
+
+# The first occurrence of these fields in the message and in each MIME part is always parsed, whatever the limits above: the analysis relies on
+# them and the MIME structure is built from the Content-* fields, so junk fields in front of them must not push them out of the limits.
+ALWAYS_PARSED_HEADERS = frozenset(
+    """
+    from sender reply-to to cc bcc subject date message-id in-reply-to return-path
+    mime-version content-type content-disposition content-transfer-encoding content-id content-description
+    """.split()
+)

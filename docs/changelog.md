@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Fixes
+- Fix the collection of all header fields being quadratic in the number of fields (MSL-2026-030, reported by YUN GU (DrNbnonono)): `Message.get_all()` was called once per header name and scans every field each time, so a compliant 1 MiB message of 21 000 small fields took 44 s to parse, against 11 ms for the same 1 MiB in one field. The fields are grouped by name in one pass now (21 000 fields: 1.2 s). The output is unchanged.
+### Changes
+- Limit the structured parsing of header fields per message as defence in depth: structured parsing costs up to about 0.6 ms per address or `Received` field, so a message of many small fields kept a worker busy in proportion to its size even with linear parsing. At most `constants.MAX_PARSED_HEADER_FIELDS` (10 000) fields and `constants.MAX_PARSED_HEADER_BYTES` (2 MiB) of values, counted over the message and all its MIME parts, are parsed. The values beyond are kept raw in the output, like values longer than `constants.MAX_PARSED_HEADER_SIZE`, and the message reports a `HeaderParsingLimitDefect` in `header.defect`. The first occurrence of the sender, recipient, subject, date, message id and `Content-*` fields of the message and of each part (`constants.ALWAYS_PARSED_HEADERS`) is always parsed, so junk fields in front of them cannot hide them. Real messages have a few dozen to a few hundred fields; 40 000 `Cc` fields took 30 s and take 7.7 s now.
+### Tests
+- Add performance scaling tests (`tests/test_performance_scaling.py`) which fail if the parsing cost grows faster than linearly with the number of header fields, body indicators, MIME parts, attachments or nesting levels, by counting function calls (deterministic) and measuring CPU time. They are marked `slow` and only run with `pytest --run-slow` (option added in `tests/conftest.py`).
+
 ## [v4.2.1]
 ### Fixes
 - Fix `regexes.email_regex_rfc2047` having a super-linear run time: a header value consisting of `=?` repeated 20 KB took 77 s to scan, which allowed a crafted header to stall the parser. The pattern is linear now. It also no longer accepts `|` as the encoding of an encoded word (`[B|Q|b|q]`).

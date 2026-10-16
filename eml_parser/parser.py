@@ -6,6 +6,7 @@ import collections
 import collections.abc
 import datetime as dt
 import email
+import email.errors
 import email.headerregistry
 import email.message
 import email.policy
@@ -133,6 +134,16 @@ def find_header_start(data: bytes) -> int:
     return 0
 
 
+class HeaderParsingLimitDefect(email.errors.HeaderDefect):
+    """The message has more header fields or header bytes than are parsed in structured form, see `EmlParser.limit_header_parsing`."""
+
+
+class UnparsedHeaderValue(str):
+    """A raw header value which is kept as it is instead of being run through the structured header parsers of the stdlib."""
+
+    __slots__ = ()
+
+
 class CustomPolicy(email.policy.EmailPolicy):
     """Custom parsing policy based on the default policy but relaxing some checks and early fixing invalid values."""
 
@@ -149,12 +160,23 @@ class CustomPolicy(email.policy.EmailPolicy):
         super().__init__(max_line_length=0, refold_source='none', **custom)
 
     def header_fetch_parse(self, name: str, value: str) -> str:
-        """Pass the name/value to the parent header_fetch_parse method for proper parsing, unless the value is too long to be parsed in reasonable time."""
+        """Pass the name/value to the parent header_fetch_parse method for proper parsing, unless the value is too long to be parsed in reasonable time.
+
+        Values beyond the header parsing limits of the message (`UnparsedHeaderValue`, see `EmlParser.limit_header_parsing`) are not parsed either.
+        """
+        if isinstance(value, UnparsedHeaderValue):
+            return self.unparsed_header_value(name, value)
+
         if len(value) <= eml_parser.constants.MAX_PARSED_HEADER_SIZE:
             return self.fetch_fixed_header(name, value)
 
         # The recursive descent parsers of the stdlib are quadratic in the length of a value, a megabyte of words takes seconds.
         logger.warning('Header field "%s" is %d characters long, it is not parsed.', name.lower(), len(value))
+        return self.unparsed_header_value(name, value)
+
+    @staticmethod
+    def unparsed_header_value(name: str, value: str) -> str:
+        """The raw value of a header field which is not run through the structured header parsers."""
         if name.lower() == 'date':
             return eml_parser.decode.default_date
 
@@ -333,6 +355,7 @@ class EmlParser:
 
         self.msg = email.message_from_bytes(_eml_file, policy=self.policy)
         self.repair_multipart(self.msg)
+        self.limit_header_parsing(self.msg)
 
         return self.parse_email()
 
@@ -383,6 +406,57 @@ class EmlParser:
                 part.set_param('boundary', boundary)
                 part.set_payload(repaired)
                 parts.append(part)
+
+    @staticmethod
+    def limit_header_parsing(msg: email.message.Message) -> None:
+        """Keep the header fields beyond the parsing limits of a message with their raw value, without structured parsing.
+
+        Defence in depth against messages made of huge numbers of header fields: the header fields of the message and of all its MIME parts are
+        counted in order, and once `constants.MAX_PARSED_HEADER_FIELDS` fields or `constants.MAX_PARSED_HEADER_BYTES` bytes of values are reached,
+        the remaining values are marked as `UnparsedHeaderValue`. They stay in the output as raw text, so no evidence is lost, but they cost no
+        more than copying them. The first occurrence of each field in `constants.ALWAYS_PARSED_HEADERS` is parsed in every part regardless, so that
+        junk fields in front of them cannot hide the sender, the subject or the MIME structure. A `HeaderParsingLimitDefect` is added to the
+        defects of the message, as exceeding the limits is a strong sign of a crafted message.
+
+        Args:
+            msg (email.message.Message): The parsed message, modified in place.
+        """
+        fields = 0
+        size = 0
+        unparsed = 0
+        parts = collections.deque([msg])
+
+        # Iterative breadth first walk (the message's own fields first), Message.walk() recurses and fails on deeply nested parts.
+        while parts:
+            part = parts.popleft()
+
+            if part.is_multipart():
+                parts.extend(typing.cast('list[email.message.Message]', part.get_payload()))
+
+            # Message has no public interface to replace a value in place without reordering or scanning the fields again.
+            headers: list[tuple[str, str]] = part._headers  # type: ignore[attr-defined]  # noqa: SLF001
+            always_parsed = set(eml_parser.constants.ALWAYS_PARSED_HEADERS)
+
+            for i, (name, value) in enumerate(headers):
+                fields += 1
+                if len(value) <= eml_parser.constants.MAX_PARSED_HEADER_SIZE:
+                    size += len(value)
+
+                lower_name = name.lower()
+                if lower_name in always_parsed:
+                    always_parsed.discard(lower_name)
+                elif fields > eml_parser.constants.MAX_PARSED_HEADER_FIELDS or size > eml_parser.constants.MAX_PARSED_HEADER_BYTES:
+                    headers[i] = (name, UnparsedHeaderValue(value))
+                    unparsed += 1
+
+        if unparsed:
+            description = (
+                f'{fields} header fields with {size} bytes of values exceed the parsing limits of '
+                f'{eml_parser.constants.MAX_PARSED_HEADER_FIELDS} fields and {eml_parser.constants.MAX_PARSED_HEADER_BYTES} bytes, '
+                f'{unparsed} values are kept unparsed'
+            )
+            logger.warning('%s.', description)
+            msg.defects.append(HeaderParsingLimitDefect(description))
 
     def parse_email(self) -> dict:
         """Parse an e-mail and return a dictionary containing the various parts of the e-mail broken down into key-value pairs.
@@ -766,14 +840,21 @@ class EmlParser:
         # "a","titi"   --->    c: [truc]
         # "c","truc"
         #
-        # Iterate over the unique (case-insensitive) header names in the order of their first occurrence.
-        # A set would make the output order depend on PYTHONHASHSEED and would process names differing only
-        # in case (e.g. "X-Foo" and "x-foo") twice, duplicating their values, as get_all() is case-insensitive.
-        for k in dict.fromkeys(header_field_name.lower() for header_field_name in self.msg.keys()):
+        # Group the raw header fields by lower-cased name in a single pass over the header list, then iterate
+        # over the groups in the order of each name's first occurrence (dicts keep insertion order).
+        # Grouping case-insensitively keeps names differing only in case (e.g. "X-Foo" and "x-foo") in one
+        # entry, and a stable order keeps the output independent of PYTHONHASHSEED.
+        # Do not call get_all() per name here: each call scans the whole header list, which makes collection
+        # quadratic in the number of header fields and lets a message with many small fields stall the parser.
+        raw_fields_by_name: dict[str, list[tuple[str, str]]] = {}
+        for raw_name, raw_value in self.msg.raw_items():
+            raw_fields_by_name.setdefault(raw_name.lower(), []).append((raw_name, raw_value))
+
+        for k, raw_fields in raw_fields_by_name.items():
             decoded_values = []
 
             try:
-                for value in self.msg.get_all(k, []):
+                for value in (self.msg.policy.header_fetch_parse(n, v) for n, v in raw_fields):
                     if value:
                         decoded_values.append(value)
             except (IndexError, AttributeError, TypeError):
