@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [v4.3.0]
 ### Fixes
 - Fix the collection of all header fields being quadratic in the number of fields (MSL-2026-030, reported by YUN GU (DrNbnonono)): `Message.get_all()` was called once per header name and scans every field each time, so a compliant 1 MiB message of 21 000 small fields took 44 s to parse, against 11 ms for the same 1 MiB in one field. The fields are grouped by name in one pass now (21 000 fields: 1.2 s). The output is unchanged.
 ### Changes
