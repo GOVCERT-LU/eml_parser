@@ -24,7 +24,14 @@ email_regex_rfc2047 = re.compile(r"""=\?[^\s?]+\?[BbQq]\?[^\s?]+\?=""")
 
 recv_dom_regex = re.compile(r"""(?:(?:from|by)\s+)([a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]{2,})+)""")
 
-dom_regex = re.compile(r"""(?:^|[\s(/<>|@'=])([a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]{2,})+)(?=$|[\?\s#&/<>')])""", re.MULTILINE)
+# Only the last label (the TLD) needs two characters, so hosts like www.a.example.com are found. A trailing dot (FQDN or end of sentence) is not
+# part of the match, and a domain may be followed by a port, a closing bracket or quote, or common punctuation such as "," ";" "!".
+# An HTML entity (`other.example&#46;com`) does not end a domain; the domains of such URLs are taken from the decoded URLs instead.
+# The labels are matched possessively and the length of the TLD is checked afterwards, which keeps the search linear for input like "a.a.a.a...".
+dom_regex = re.compile(
+    r"""(?:^|[\s(/<>|@'"=\[*“‘«])([a-zA-Z0-9-]++(?:\.[a-zA-Z0-9-]++)++)(?<!\.[a-zA-Z0-9-])\.?(?=$|[\?\s#/<>')\]"*,;!”’»]|&(?!#?[a-zA-Z0-9]{1,32};)|:(?:\d|\s|$))""",
+    re.MULTILINE,
+)
 
 # An address must not be part of a longer dotted number or word ("1.2.3.4.5", "v1.2.3.4") nor be the first labels of a host name ("1.2.3.4.nip.io").
 # The boundaries are ASCII only on purpose, as text in e.g. CJK scripts is often not separated by whitespace. A sentence ending dot is fine.
