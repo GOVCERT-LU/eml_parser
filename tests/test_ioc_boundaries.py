@@ -61,3 +61,41 @@ def test_file_name_in_url_path_is_not_a_domain() -> None:
     body = eml_parser.parser.EmlParser(include_raw_body=True).decode_email_bytes(raw)['body'][0]
 
     assert body['domain'] == ['evil.example.com']
+
+
+@pytest.mark.parametrize(
+    ('text', 'expected'),
+    [
+        ('http://evil.example.com:8080/x', 'evil.example.com'),
+        ('see www.a.example.com/x', 'www.a.example.com'),
+        ('see http://a.b.example.com/', 'a.b.example.com'),
+        ('see http://evil.example.com./x', 'evil.example.com'),
+        ('Please visit evil.example.com.', 'evil.example.com'),
+        ('visit evil.example.com, then', 'evil.example.com'),
+        ('visit evil.example.com; then', 'evil.example.com'),
+        ('visit evil.example.com! now', 'evil.example.com'),
+        ('visit evil.example.com: now', 'evil.example.com'),
+        ('visit "evil.example.com" now', 'evil.example.com'),
+        ('visit [evil.example.com] now', 'evil.example.com'),
+        ('visit *evil.example.com* now', 'evil.example.com'),
+        ('visit “evil.example.com” now', 'evil.example.com'),
+        ('visit «evil.example.com» now', 'evil.example.com'),
+    ],
+)
+def test_domain_boundaries(text: str, expected: str) -> None:
+    """Ports, one character labels, a trailing dot and common punctuation around a domain do not hide it."""
+    assert eml_parser.regexes.dom_regex.findall(text) == [expected]
+
+
+@pytest.mark.parametrize('text', ['e.g. this', 'i.e. that', 'at 10 a.m. and', 'U.S.A', 'src="other.example&#46;com"', 'a.b'])
+def test_domain_boundaries_negative(text: str) -> None:
+    """A one character last label is not a TLD and an HTML entity does not end a domain."""
+    assert eml_parser.regexes.dom_regex.findall(text) == []
+
+
+def test_domain_boundaries_in_body() -> None:
+    """The domain of a URL with a port and a domain at the end of a sentence are reported."""
+    raw = b'From: a@example.com\r\n\r\nLog in at http://login.example.com:8443/ or visit evil.example.net.'
+    body = eml_parser.parser.EmlParser(include_raw_body=True).decode_email_bytes(raw)['body'][0]
+
+    assert set(body['domain']) == {'login.example.com', 'evil.example.net'}
