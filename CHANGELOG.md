@@ -3,7 +3,7 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [v4.4.0]
 ### Fixes
 - Fix `regexes.dom_regex` missing domains in the body (#93, reported by 4ktLuffy): a domain followed by a port (`http://evil.example.com:8080/x`), a trailing dot (`Please visit evil.example.com.`), a comma, semicolon, colon, exclamation mark, double quote, bracket or non-ASCII text, or with a single character label (`www.a.example.com`) was not reported. The pattern was a list of the characters allowed around a domain; like `regexes.ipv4_regex` it now defines the ASCII characters which must not touch a domain, so any other character ends it, including an HTML entity such as `&nbsp;`. An encoded dot (`other.example&#46;com`) does not end a domain, and the local part of an address (`john.doe@`) is not one.
 - Fix IP addresses being reported as domains in the body when every part had at least two digits (`192.168.189.66`, but not `1.2.3.4`), and version numbers and sizes (`8.9.1a`, `10.0pt`) being reported as domains. The last label of a domain consists of letters only or is punycode (`xn--p1ai`) now, like in `routing`.
