@@ -61,3 +61,83 @@ def test_file_name_in_url_path_is_not_a_domain() -> None:
     body = eml_parser.parser.EmlParser(include_raw_body=True).decode_email_bytes(raw)['body'][0]
 
     assert body['domain'] == ['evil.example.com']
+
+
+@pytest.mark.parametrize(
+    'text',
+    [
+        'http://evil.example.com:8080/x',
+        'user:pw@evil.example.com:8080',
+        'see http://evil.example.com./x',
+        'Please visit evil.example.com.',
+        'visit evil.example.com... now',
+        'visit evil.example.com, then',
+        'visit evil.example.com; then',
+        'visit evil.example.com! now',
+        'visit evil.example.com: now',
+        'see evil.example.com?x',
+        'x=evil.example.com&y',
+        'visit "evil.example.com" now',
+        'visit [evil.example.com] now',
+        'visit {evil.example.com} now',
+        'visit *evil.example.com* now',
+        'visit `evil.example.com` now',
+        'visit “evil.example.com” now',
+        'visit «evil.example.com» now',
+        'visit evil.example.com&nbsp;now',
+        'visit evil.example.com&amp;x',
+        '&lt;evil.example.com&gt;',
+        '访问evil.example.com立即',
+    ],
+)
+def test_domain_boundaries(text: str) -> None:
+    """Ports, a trailing dot, punctuation, entities and non-ASCII text around a domain do not hide it."""
+    assert eml_parser.regexes.dom_regex.findall(text) == ['evil.example.com']
+
+
+@pytest.mark.parametrize('text', ['www.a.example.com', 'a.b.example.com', 'x.co', 'x.xn--p1ai'])
+def test_domain_with_one_character_label(text: str) -> None:
+    """Only the last label needs two characters, punycode included."""
+    assert eml_parser.regexes.dom_regex.findall(f'see {text}/x') == [text]
+
+
+@pytest.mark.parametrize(
+    'text',
+    [
+        'e.g. this',
+        'i.e. that',
+        'at 10 a.m. and',
+        'U.S.A',
+        'a.b',
+        'see 192.168.189.66 now',
+        'from [192.168.189.66] by',
+        'release 2024.10.25',
+        'font-size: 10.0pt;',
+        'sendmail 8.9.1a',
+        'foo_bar.example',
+        'mail vince.j.kaminski@',
+        'src="other.example&#46;com"',
+        'src="other.example&#x2E;com"',
+        'src="other&period;example.com"',
+        'u=https%3A%2F%2Fevil.example.com%2F',
+    ],
+)
+def test_domain_boundaries_negative(text: str) -> None:
+    """Abbreviations, IP addresses, version numbers, sizes, local parts and tokens glued to an encoded dot or "%" are not domains."""
+    assert eml_parser.regexes.dom_regex.findall(text) == []
+
+
+def test_domain_boundaries_in_body() -> None:
+    """The domain of a URL with a port, a domain ending a sentence and a domain followed by an entity are reported, IP addresses are not."""
+    raw = b'From: a@example.com\r\nContent-Type: text/html\r\n\r\n<p>Log in at http://login.example.com:8443/ or visit evil.example.net.</p><p>[192.168.1.10] www.a.example.org&nbsp;now</p>'
+    body = eml_parser.parser.EmlParser(include_raw_body=True).decode_email_bytes(raw)['body'][0]
+
+    assert set(body['domain']) == {'login.example.com', 'evil.example.net', 'www.a.example.org'}
+
+
+def test_domain_of_encoded_redirect_target() -> None:
+    """The domain of a percent-encoded URL in the query of a redirector is reported."""
+    raw = b'From: a@example.com\r\n\r\nhttps://eur01.safelinks.protection.outlook.com/?url=https%3A%2F%2Fevil.example.com%2Flogin&data=05'
+    body = eml_parser.parser.EmlParser(include_raw_body=True).decode_email_bytes(raw)['body'][0]
+
+    assert set(body['domain']) == {'eur01.safelinks.protection.outlook.com', 'evil.example.com'}

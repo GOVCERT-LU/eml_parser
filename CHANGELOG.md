@@ -3,6 +3,16 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Fixes
+- Fix `regexes.dom_regex` missing domains in the body (#93, reported by 4ktLuffy): a domain followed by a port (`http://evil.example.com:8080/x`), a trailing dot (`Please visit evil.example.com.`), a comma, semicolon, colon, exclamation mark, double quote, bracket or non-ASCII text, or with a single character label (`www.a.example.com`) was not reported. The pattern was a list of the characters allowed around a domain; like `regexes.ipv4_regex` it now defines the ASCII characters which must not touch a domain, so any other character ends it, including an HTML entity such as `&nbsp;`. An encoded dot (`other.example&#46;com`) does not end a domain, and the local part of an address (`john.doe@`) is not one.
+- Fix IP addresses being reported as domains in the body when every part had at least two digits (`192.168.189.66`, but not `1.2.3.4`), and version numbers and sizes (`8.9.1a`, `10.0pt`) being reported as domains. The last label of a domain consists of letters only or is punycode (`xn--p1ai`) now, like in `routing`.
+- Fix `regexes.dom_regex` being quadratic in the length of a token of short labels (480 KB of `ab.ab.` took 5 s, 320 KB of `a-a.a-a.` 2.5 s). The labels are matched possessively and the last label is checked afterwards, which makes the search linear (25 ms). The body is searched in slices of at most about 8 KiB, which limited the impact to a constant factor.
+### Changes
+- The domains of URLs are also taken from the percent-decoded URL, so the target of a redirector (`https://safelinks.example/?url=https%3A%2F%2Fevil.example.com%2F`) is reported.
+### Tests
+- Add tests for the boundaries of domains, and scaling tests for `regexes.dom_regex` on long tokens (`REGEX_SHAPES` in `tests/test_performance_scaling.py`), which measure the patterns on their own as the slicing of the body hides super-linear patterns when parsing a message.
+
 ## [v4.3.0]
 ### Fixes
 - Fix the collection of all header fields being quadratic in the number of fields (MSL-2026-030, reported by YUN GU (DrNbnonono)): `Message.get_all()` was called once per header name and scans every field each time, so a compliant 1 MiB message of 21 000 small fields took 44 s to parse, against 11 ms for the same 1 MiB in one field. The fields are grouped by name in one pass now (21 000 fields: 1.2 s). The output is unchanged.

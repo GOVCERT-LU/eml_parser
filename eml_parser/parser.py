@@ -721,8 +721,9 @@ class EmlParser:
             # URLs do not necessarily appear as-is in the body, as they may contain escaped entities.
             # For this reason, we have to extract the domains again from each parsed URL.
             # Run once over the deduplicated URLs after slicing to keep the cost linear in the body size.
+            # The URLs are percent-decoded, as the target of a redirector is usually encoded (`?url=https%3A%2F%2Fevil.example%2F`).
             for url in dict.fromkeys([*list_observed_urls, *list_observed_urls_noscheme]):
-                for match in eml_parser.regexes.dom_regex.findall(url):
+                for match in eml_parser.regexes.dom_regex.findall(urllib.parse.unquote(url)):
                     if self.is_file_name(match):
                         continue
 
