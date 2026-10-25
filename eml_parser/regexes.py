@@ -24,7 +24,15 @@ email_regex_rfc2047 = re.compile(r"""=\?[^\s?]+\?[BbQq]\?[^\s?]+\?=""")
 
 recv_dom_regex = re.compile(r"""(?:(?:from|by)\s+)([a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]{2,})+)""")
 
-dom_regex = re.compile(r"""(?:^|[\s(/<>|@'=])([a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]{2,})+)(?=$|[\?\s#&/<>')])""", re.MULTILINE)
+# A domain is a dotted token which is not part of a longer one: like for ipv4_regex the boundaries are defined by the ASCII characters which
+# must not touch it, so any punctuation, port, quote, bracket, entity (`&nbsp;`) or non-ASCII text around it ends it, as does a trailing dot.
+# It must not follow "%" (`%2Fevil.example`, the domains of encoded URLs are taken from the decoded URLs), be the local part of an address,
+# or touch an encoded dot (`other.example&#46;com`). The last label consists of letters only or is punycode, which rejects IP addresses,
+# version numbers and sizes (`10.0pt`). The labels are matched possessively and the TLD is checked afterwards, which keeps the search linear.
+_ENCODED_DOT = r"""&(?i:\#0*46|\#x0*2e|period);"""
+dom_regex = re.compile(
+    rf"""(?<![A-Za-z0-9_.%-])(?<!{_ENCODED_DOT})[A-Za-z0-9-]++(?:\.[A-Za-z0-9-]++)++(?<=\.(?:[A-Za-z]{{2,63}}|xn--[A-Za-z0-9-]{{1,59}}))(?![_@]|{_ENCODED_DOT})"""
+)
 
 # An address must not be part of a longer dotted number or word ("1.2.3.4.5", "v1.2.3.4") nor be the first labels of a host name ("1.2.3.4.nip.io").
 # The boundaries are ASCII only on purpose, as text in e.g. CJK scripts is often not separated by whitespace. A sentence ending dot is fine.

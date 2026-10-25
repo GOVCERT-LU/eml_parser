@@ -64,6 +64,13 @@ The failure message lists the measurement per size and the growth exponent per s
 the shape's property makes the parser do more work per unit than before, e.g. a loop over all header fields for each
 header field. Profile the largest message of the shape to find the code whose call count grows faster than the size.
 
+Regular expressions
+-------------------
+The body is searched in slices of at most about 8 KiB (``EmlParser.string_sliding_window_loop()``), which caps the cost of a
+pattern that is super-linear in the length of a single token, so such a pattern is hardly visible when parsing a message.
+The patterns in ``REGEX_SHAPES`` are therefore also measured on their own, on one long token, by CPU time only (a search is
+a single C-level call).
+
 Adding a shape
 --------------
 Add an entry to ``SHAPES`` that varies exactly one property. Keep the smallest size large enough that fixed per-message
@@ -89,6 +96,7 @@ import pytest
 import eml_parser
 import eml_parser.constants
 import eml_parser.parser
+import eml_parser.regexes
 
 # Growth exponent limits: 1.0 is linear, 2.0 is quadratic. N log N stays below 1.1 at the sizes used here.
 MAX_CALL_EXPONENT = 1.3
@@ -275,6 +283,20 @@ SHAPES: dict[str, Shape] = {
 }
 
 
+# Regular expressions on one long token built from a repeated unit, see "Regular expressions" in the module docstring.
+REGEX_SIZES = (200_000, 800_000)
+
+REGEX_SHAPES: dict[str, tuple[typing.Any, str]] = {
+    # labels of two characters: the former dom_regex took 5 s for 480 KB
+    'dom-regex-two-character-labels': (eml_parser.regexes.dom_regex, 'ab.'),
+    'dom-regex-hyphenated-labels': (eml_parser.regexes.dom_regex, 'a-a.'),
+    'dom-regex-one-character-labels': (eml_parser.regexes.dom_regex, 'a.'),
+    # the last label is checked after the labels were matched, a failing check must not restart the search inside the token
+    'dom-regex-numeric-tld': (eml_parser.regexes.dom_regex, 'a.1'),
+    'dom-regex-encoded-dots': (eml_parser.regexes.dom_regex, 'a.a&#46;'),
+}
+
+
 # ---------------------------------------------------------------------------------------------------------------------
 # Measurement
 # ---------------------------------------------------------------------------------------------------------------------
@@ -361,15 +383,15 @@ def _cpu_time_limit(seconds: float) -> typing.Iterator[None]:
         signal.signal(signal.SIGPROF, previous)
 
 
-def _cpu_time(shape: Shape, raw: bytes, header_cache: typing.Any, budget: float = math.inf) -> tuple[float, bool]:
-    """Best CPU time of CPU_REPETITIONS parses of raw. Returns the time and whether the budget stopped the run."""
+def _cpu_time(run: typing.Callable[[], object], header_cache: typing.Any, budget: float = math.inf) -> tuple[float, bool]:
+    """Best CPU time of CPU_REPETITIONS calls of run. Returns the time and whether the budget stopped the run."""
     best = math.inf
     for _ in range(CPU_REPETITIONS):
         with _quiet_parse_environment(header_cache):
             start = time.process_time()
             try:
                 with _cpu_time_limit(budget):
-                    _parse(shape, raw)
+                    run()
             except _BudgetExceeded:
                 return time.process_time() - start, True
             best = min(best, time.process_time() - start)
@@ -418,9 +440,9 @@ def test_parsing_cost_scales_linearly(name: str, header_cache: typing.Any, monke
 
     # 2. CPU time, smallest to largest size.
     size_ratio = sizes[-1] / sizes[0]
-    small, _ = _cpu_time(shape, messages[0], header_cache)
+    small, _ = _cpu_time(lambda: _parse(shape, messages[0]), header_cache)
     # Generous budget: the allowed growth, doubled for timing noise, plus a second for very small timings.
-    large, stopped = _cpu_time(shape, messages[-1], header_cache, budget=2 * small * size_ratio**MAX_CPU_EXPONENT + 1)
+    large, stopped = _cpu_time(lambda: _parse(shape, messages[-1]), header_cache, budget=2 * small * size_ratio**MAX_CPU_EXPONENT + 1)
     exponent = _exponent(large / small, size_ratio)
     timing = [f'{sizes[0]:,} {shape.unit}: {small * 1000:,.0f} ms CPU', f'{sizes[-1]:,} {shape.unit}: {large * 1000:,.0f} ms CPU']
     if stopped:
@@ -429,4 +451,27 @@ def test_parsing_cost_scales_linearly(name: str, header_cache: typing.Any, monke
         f'{name}: the CPU time grows super-linearly with the number of {shape.unit} although the call count does not, '
         f'which points at C-level work such as a backtracking regular expression '
         f'(exponent {"> " if stopped else ""}{exponent:.2f}, 1.0 linear, 2.0 quadratic, limit {MAX_CPU_EXPONENT}):\n  ' + '\n  '.join(timing)
+    )
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize('name', list(REGEX_SHAPES))
+def test_regex_cost_scales_linearly(name: str) -> None:
+    pattern, unit = REGEX_SHAPES[name]
+    small_text, large_text = (unit * n for n in REGEX_SIZES)
+    size_ratio = REGEX_SIZES[-1] / REGEX_SIZES[0]
+
+    small, _ = _cpu_time(lambda: pattern.findall(small_text), None)
+    # A signal cannot interrupt a search, so the budget is enforced by the timeout of the regex module.
+    budget = 2 * small * size_ratio**MAX_CPU_EXPONENT + 1
+    try:
+        large, stopped = _cpu_time(lambda: pattern.findall(large_text, timeout=budget), None)
+    except TimeoutError:
+        large, stopped = budget, True
+    exponent = _exponent(large / small, size_ratio)
+
+    assert not stopped and exponent <= MAX_CPU_EXPONENT, (
+        f'{name}: the CPU time grows super-linearly with the length of the token {unit!r}... '
+        f'(exponent {"> " if stopped else ""}{exponent:.2f}, 1.0 linear, 2.0 quadratic, limit {MAX_CPU_EXPONENT}): '
+        f'{REGEX_SIZES[0]:,} units {small * 1000:,.0f} ms, {REGEX_SIZES[-1]:,} units {"stopped after " if stopped else ""}{large * 1000:,.0f} ms CPU'
     )
