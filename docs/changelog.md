@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [v4.5.0]
 ### Features
 - Add the `part_hook` callback to `EmlParser`: when set, it is invoked for every part of the e-mail (text parts and attachments) at the point where its hash is computed, receiving a `PartData` with the part's content. The bytes handed to the hook are exactly the bytes that were hashed, and `PartData.sha256` matches the hash stored in the parse result (`body[].hash` or `attachment[].hash['sha256']`), so a consumer can inspect the part without the plaintext ending up in the returned structure. The hook is independent of `include_raw_body` and `include_attachment_data`, text attachments are delivered once per representation (as `body` and as `attachment`), and exceptions raised by the hook are not caught.
 
