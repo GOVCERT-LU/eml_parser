@@ -1,8 +1,8 @@
+import itertools
 import pathlib
 
-import pytest
-
 import eml_parser.parser
+import tests.table
 
 samples_dir = pathlib.Path(__file__).resolve().parent.parent / 'samples'
 
@@ -15,20 +15,27 @@ def build_message(prefix: bytes, line_ending: bytes) -> bytes:
 
 
 class TestIgnoreBadStart:
-    @pytest.mark.parametrize('line_ending', [b'\n', b'\r\n'])
-    @pytest.mark.parametrize(
-        'prefix', [b'garbage line\nmore garbage\n', b'+OK message follows\r\n', b'\r\n\r\n', b'   leading whitespace line\n', b'Dear Bob, note: see below\n']
+    # every garbage prefix with both line endings
+    LEADING_GARBAGE_IS_SKIPPED_AND_STRUCTURE_IS_KEPT_CASES = list(
+        itertools.product(
+            [b'garbage line\nmore garbage\n', b'+OK message follows\r\n', b'\r\n\r\n', b'   leading whitespace line\n', b'Dear Bob, note: see below\n'],
+            [b'\n', b'\r\n'],
+        )
     )
-    def test_leading_garbage_is_skipped_and_structure_is_kept(self, prefix: bytes, line_ending: bytes) -> None:
-        parser = eml_parser.EmlParser(ignore_bad_start=True, include_raw_body=True)
 
-        result = parser.decode_email_bytes(build_message(prefix, line_ending))
+    def test_leading_garbage_is_skipped_and_structure_is_kept(self) -> None:
+        def check(prefix: bytes, line_ending: bytes) -> None:
+            parser = eml_parser.EmlParser(ignore_bad_start=True, include_raw_body=True)
 
-        assert result['header']['subject'] == 'hi'
-        assert result['header']['from'] == 'a@b.com'
-        assert result['header']['header']['subject'] == ['hi']
-        assert result['body'][0]['content'].strip() == MESSAGE_BODY.strip()
-        assert result['body'][0]['uri'] == ['http://evil.example.com/x']
+            result = parser.decode_email_bytes(build_message(prefix, line_ending))
+
+            assert result['header']['subject'] == 'hi'
+            assert result['header']['from'] == 'a@b.com'
+            assert result['header']['header']['subject'] == ['hi']
+            assert result['body'][0]['content'].strip() == MESSAGE_BODY.strip()
+            assert result['body'][0]['uri'] == ['http://evil.example.com/x']
+
+        tests.table.assert_all_cases(check, self.LEADING_GARBAGE_IS_SKIPPED_AND_STRUCTURE_IS_KEPT_CASES)
 
     def test_garbage_prefix_does_not_change_the_body_hash(self) -> None:
         parser = eml_parser.EmlParser(ignore_bad_start=True)

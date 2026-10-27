@@ -26,6 +26,7 @@ import urllib.parse
 import uuid
 from html import unescape
 
+import idna
 import publicsuffixlist
 import regex
 
@@ -633,15 +634,8 @@ class EmlParser:
                     else:
                         logger.debug('Invalid IP in received line - "%s"', ip)
 
-                # search for domain
-                for m in eml_parser.regexes.recv_dom_regex.findall(received_line_flat):
-                    try:
-                        _ = ipaddress.ip_address(m)  # type of findall is list[str], so this is correct
-                    except ValueError:
-                        # we find IPs using the previous IP crawler, hence we ignore them
-                        # here.
-                        # iff the regex fails, we add the entry
-                        headers_struc['received_domain'].append(m)
+                # search for domain (the last label contains a letter, so IPs are never matched; they are found above)
+                headers_struc['received_domain'] += eml_parser.regexes.recv_dom_regex.findall(received_line_flat)
 
                 # search for e-mail addresses
                 for mail_candidate in self.email_regex.findall(received_line_flat):
@@ -752,8 +746,18 @@ class EmlParser:
             # For this reason, we have to extract the domains again from each parsed URL.
             # Run once over the deduplicated URLs after slicing to keep the cost linear in the body size.
             # The URLs are percent-decoded, as the target of a redirector is usually encoded (`?url=https%3A%2F%2Fevil.example%2F`).
+            # The host is also added in the ASCII form a browser resolves, which covers non-ASCII host names (`пример.рф`, `аpple.com`).
             for url in dict.fromkeys([*list_observed_urls, *list_observed_urls_noscheme]):
-                for match in eml_parser.regexes.dom_regex.findall(urllib.parse.unquote(url)):
+                try:
+                    host = urllib.parse.urlparse(url if ':/' in url else '//' + url).hostname
+                except ValueError:
+                    host = None
+                ascii_host = self.get_ascii_host(host.rstrip('.')) if host else None
+
+                domain_candidates = eml_parser.regexes.dom_regex.findall(urllib.parse.unquote(url))
+                if ascii_host and eml_parser.regexes.dom_regex.fullmatch(ascii_host):
+                    domain_candidates.append(ascii_host)
+                for match in domain_candidates:
                     if self.is_file_name(match):
                         continue
 
@@ -762,11 +766,7 @@ class EmlParser:
                         list_observed_dom[match.lower()] = 1
 
                 # http://3232235777/ is a valid URL for browsers but contains no dotted IP address
-                try:
-                    host = urllib.parse.urlparse(url if ':/' in url else '//' + url).hostname
-                except ValueError:
-                    host = None
-                obfuscated_ip = self.get_obfuscated_ip(host.rstrip('.')) if host else None
+                obfuscated_ip = self.get_obfuscated_ip(ascii_host) if ascii_host else None
                 if obfuscated_ip and obfuscated_ip not in self.pconf['whiteip']:
                     list_observed_ip[obfuscated_ip] = 1
 
@@ -1084,6 +1084,42 @@ class EmlParser:
 
         return self.get_obfuscated_ip(host)
 
+    @staticmethod
+    def get_ascii_host(host: str) -> str | None:
+        """Convert the host name of an URL to the ASCII form a browser resolves (domain to ASCII of the WHATWG URL standard).
+
+        The host is percent-decoded and mapped with UTS #46, non-transitional like browsers: upper case and full width characters
+        are folded, ignored characters such as U+200B or U+00AD are dropped and the ideographic full stop separates labels.
+        Non-ASCII labels are converted to punycode (`аpple.com` with a Cyrillic "а" is `xn--pple-43d.com`, `faß.de` is
+        `xn--fa-hia.de`). Unlike the `idna` codecs, symbols such as emoji are accepted, as browsers do (`💩.la` is `xn--ls8h.la`).
+
+        Args:
+            host (str): The host name of an URL.
+
+        Returns:
+            str: The host name in ASCII, or None if a browser rejects it (a disallowed or forbidden code point, a misplaced joiner,
+            a label violating the bidi rule or starting with a combining mark).
+        """
+        if not host.isascii() or '%' in host:
+            try:
+                labels = idna.uts46_remap(urllib.parse.unquote(host), std3_rules=False, transitional=False).split('.')
+                for position, label in enumerate(labels):
+                    if label.isascii():
+                        continue
+
+                    idna.check_initial_combiner(label)
+                    idna.check_bidi(label)
+                    if not all(idna.valid_contextj(label, index) for index, char in enumerate(label) if char in '\u200c\u200d'):
+                        return None
+
+                    labels[position] = f'xn--{label.encode("punycode").decode("ascii")}'
+            except idna.IDNAError:
+                return None
+
+            host = '.'.join(labels)
+
+        return None if eml_parser.regexes.forbidden_domain_char_regex.search(host) else host
+
     def get_obfuscated_ip(self, host: str) -> str | None:
         """Resolve a host which is an IPv4 address in a notation browsers accept, e.g. `3232235777`, `0xC0A80101`, `0300.0250.0.1` or `127.1`.
 
@@ -1113,9 +1149,14 @@ class EmlParser:
         if '&' in url:
             url = unescape(url)
 
-        if '.' not in url and '[' not in url and not eml_parser.regexes.url_numeric_host_regex.match(url.lstrip(' \t\n\r\f\v\'"«»“”‘’')):
+        if (
+            not any(dot in url for dot in '.\u3002\uff0e\uff61')
+            and '[' not in url
+            and not eml_parser.regexes.url_numeric_host_regex.match(url.lstrip(' \t\n\r\f\v\'"«»“”‘’'))
+        ):
             # if we found a URL like e.g. http://afafasasfasfas; that makes no
             # sense, thus skip it, but include http://[2001:db8::1] and http://3232235777 (a numeric host is an IPv4 address)
+            # Browsers also separate the labels of a host by the ideographic and full width full stops (http://example。com).
             return None
 
         try:

@@ -5,6 +5,7 @@ import pytest
 
 import eml_parser.parser
 import eml_parser.regexes
+import tests.table
 
 MAIL = b"""From: Alice <alice@example.com>
 To: Bob <bob@example.org>
@@ -54,34 +55,43 @@ class TestHeaderCache:
 
 
 class TestIpv6Prefilter:
-    @pytest.mark.parametrize(
-        'text',
-        [
-            'plain text without any colon',
-            'time 09:12:44 and 10:11:12:13',
-            'std::vector and Add::dead',
-            'from [IPv6:2001:db8::1] by mx.example.org',
-            'full 2001:db8:0:0:0:0:0:1 form',
-            'mapped 2001:db8:0:0:0:0:192.0.2.1 form',
-            '::1 and ::',
-            '1:2:3:4:5:6:7:8:9',
-        ],
-    )
-    def test_same_result_as_the_pattern(self, text: str) -> None:
-        assert eml_parser.regexes.findall_ipv6(text) == eml_parser.regexes.ipv6_regex.findall(text)
+    SAME_RESULT_AS_THE_PATTERN_CASES = [
+        'plain text without any colon',
+        'time 09:12:44 and 10:11:12:13',
+        'std::vector and Add::dead',
+        'from [IPv6:2001:db8::1] by mx.example.org',
+        'full 2001:db8:0:0:0:0:0:1 form',
+        'mapped 2001:db8:0:0:0:0:192.0.2.1 form',
+        '::1 and ::',
+        '1:2:3:4:5:6:7:8:9',
+    ]
+
+    def test_same_result_as_the_pattern(self) -> None:
+        def check(text: str) -> None:
+            assert eml_parser.regexes.findall_ipv6(text) == eml_parser.regexes.ipv6_regex.findall(text)
+
+        tests.table.assert_all_cases(check, self.SAME_RESULT_AS_THE_PATTERN_CASES)
 
     def test_finds_addresses(self) -> None:
         assert eml_parser.regexes.findall_ipv6('from [IPv6:2001:db8::1] by mx') == ['2001:db8::1']
 
 
 class TestRfc2047Regex:
-    @pytest.mark.parametrize('value', ['=?utf-8?B?SGVsbG8=?=', '=?iso-8859-1?q?caf=E9?=', 'prefix =?UTF-8?Q?x?= suffix'])
-    def test_encoded_words(self, value: str) -> None:
-        assert eml_parser.regexes.email_regex_rfc2047.search(value)
+    ENCODED_WORDS_CASES = ['=?utf-8?B?SGVsbG8=?=', '=?iso-8859-1?q?caf=E9?=', 'prefix =?UTF-8?Q?x?= suffix']
 
-    @pytest.mark.parametrize('value', ['plain', '=?utf-8?x?abc?=', '=?utf-8?|?abc?=', '=?utf-8?B?', 'a ?= b'])
-    def test_no_encoded_words(self, value: str) -> None:
-        assert eml_parser.regexes.email_regex_rfc2047.search(value) is None
+    def test_encoded_words(self) -> None:
+        def check(value: str) -> None:
+            assert eml_parser.regexes.email_regex_rfc2047.search(value)
+
+        tests.table.assert_all_cases(check, self.ENCODED_WORDS_CASES)
+
+    NO_ENCODED_WORDS_CASES = ['plain', '=?utf-8?x?abc?=', '=?utf-8?|?abc?=', '=?utf-8?B?', 'a ?= b']
+
+    def test_no_encoded_words(self) -> None:
+        def check(value: str) -> None:
+            assert eml_parser.regexes.email_regex_rfc2047.search(value) is None
+
+        tests.table.assert_all_cases(check, self.NO_ENCODED_WORDS_CASES)
 
     def test_linear_on_hostile_input(self) -> None:
         start = time.perf_counter()

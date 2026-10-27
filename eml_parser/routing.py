@@ -24,7 +24,7 @@ _DATE = regex.compile(r"""[\w\s:,+.\-]+""")
 # (`1.b9.b1afe75`), versions (`v82.22`, `8.12.0.beta16`) and the like are no hosts. A name followed by `/<digit>` is a mailer version
 # (`8.12.0.beta16/8.12.0`). The labels are matched possessively (a label only if another one follows, labels do not start with a hyphen): the last label can only be the TLD, and
 # backtracking would make the scan quadratic on long runs of `a.a.a.`. An optional `*.` is dropped, the domain of user@host is a host, user.name@host is not.
-_HOST = regex.compile(r"""(?<![\w.\-/])(?:\*\.)?((?:\w[\w\-]*\.(?=\w))++(?:[^\W\d_]{2,}|xn--[\w\-]+))(?![\w\-@]|\.\w|/\d)""")
+_HOST = regex.compile(rf"""(?<![\w.\-/])(?:\*\.)?({eml_parser.regexes.RECEIVED_HOST_LABELS}{eml_parser.regexes.RECEIVED_HOST_TLD})(?![\w\-@]|\.\w|/\d)""")
 
 # The tokens which matter for the structure of a received line. Parentheses delimit comments, which are skipped when looking for the keywords.
 # A keyword is a whole word, i.e. it is not part of a host name or an address (toby, before, nearby, ...).

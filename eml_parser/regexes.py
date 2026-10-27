@@ -10,11 +10,21 @@ __copyright__ = 'Copyright 2013-2014 Georges Toth, Copyright 2013-present GOVCER
 __license__ = 'AGPL v3+'
 
 # regex compilation
+# A character which continues a word: a letter, mark, digit or format character (U+200B, U+00AD, ... which browsers drop from host names)
+# of any script that separates words by spaces. An ASCII token touching one is the fragment of a longer word ("аpple.com" with a Cyrillic
+# "а", "bücher.de", "hans.müller@"), not an indicator of its own. Text in scripts which do not put a space between a word and an adjacent
+# ASCII token ends a token: CJK and Thai have no word spacing, Korean particles attach to the preceding word ("evil.example.com에서").
+_WORD_CHAR = r"""(?:(?![\p{scx=Han}\p{scx=Hiragana}\p{scx=Katakana}\p{scx=Bopomofo}\p{scx=Hangul}\p{scx=Thai}\p{scx=Lao}\p{scx=Khmer}\p{scx=Myanmar}\p{scx=Tibetan}])[\p{L}\p{M}\p{N}\p{Cf}])"""
+
 # W3C HTML5 standard recommended regex for e-mail validation
 # It also implements the 64 character limit on the local part (RFC 5321, section 2.4), with a safety factor.
-# This mitigates an issue with quadratic complexity when searching for e-mail addresses in very long strings.
-email_no_force_tld_regex = re.compile(r"""([a-zA-Z0-9.!#$%&'*+\-/=?^_`{|}~]{1,128}@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*)""")
-email_force_tld_regex = re.compile(r"""([a-zA-Z0-9.!#$%&'*+\-/=?^_`{|}~]{1,128}@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)+)""")
+# An address starts where no local part character or word character precedes it and must not be followed by a word character,
+# so a longer local part or a non-ASCII address yields no fragment. The parts are matched possessively, which keeps the search linear.
+_EMAIL_LOCAL_CHAR = r"""[a-zA-Z0-9.!#$%&'*+\-/=?^_`{|}~]"""
+_EMAIL_START = rf"""(?<!{_EMAIL_LOCAL_CHAR}|{_WORD_CHAR})({_EMAIL_LOCAL_CHAR}{{1,128}}+@[a-zA-Z0-9-]++"""
+_EMAIL_END = rf""")(?!\.?{_WORD_CHAR})"""
+email_no_force_tld_regex = re.compile(rf"""{_EMAIL_START}(?:\.[a-zA-Z0-9-]++)*+{_EMAIL_END}""")
+email_force_tld_regex = re.compile(rf"""{_EMAIL_START}(?:\.[a-zA-Z0-9-]++)++{_EMAIL_END}""")
 email_regex = email_no_force_tld_regex
 
 
@@ -22,16 +32,29 @@ email_regex = email_no_force_tld_regex
 # Only used to find out whether a value contains an encoded word. The parts must not contain "?" (or white space), otherwise the pattern is quadratic or worse for a value like "=?=?=?=?...".
 email_regex_rfc2047 = re.compile(r"""=\?[^\s?]+\?[BbQq]\?[^\s?]+\?=""")
 
-recv_dom_regex = re.compile(r"""(?:(?:from|by)\s+)([a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]{2,})+)""")
+# A host name in a received line, shared with `routing._HOST` (see there): possessively matched labels of word characters and hyphens,
+# and a last label of letters or punycode.
+RECEIVED_HOST_LABELS = r"""(?:\w[\w\-]*\.(?=\w))++"""
+RECEIVED_HOST_TLD = r"""(?:[^\W\d_]{2,}|xn--[\w\-]+)"""
 
-# A domain is a dotted token which is not part of a longer one: like for ipv4_regex the boundaries are defined by the ASCII characters which
-# must not touch it, so any punctuation, port, quote, bracket, entity (`&nbsp;`) or non-ASCII text around it ends it, as does a trailing dot.
+# The host name following "from" or "by". Right after the keyword the last label may also be an internal name of letters, digits and
+# inner hyphens containing a letter (`exchsrv.cr2`, `198.64.154.101-generic`); a numeric one is part of an IP address or an id.
+# A name followed by a word character, "@" (the local part of an address), "?" or U+FFFD (a character qmail or the decoding replaced),
+# another label or "/<digit>" (a mailer version) is the fragment of a longer token and not reported.
+recv_dom_regex = re.compile(
+    rf"""(?:from|by)\s+(?:\*\.)?({RECEIVED_HOST_LABELS}(?:{RECEIVED_HOST_TLD}|(?=[\w\-]*[^\W\d_])[^\W_](?:[^\W_]|-(?=[^\W_]))+))(?![\w\-@?\ufffd]|\.\w|/\d)"""
+)
+
+# A domain is a dotted token which is not part of a longer one: the boundaries are defined by the characters which must not touch it,
+# so any punctuation, port, quote, bracket, entity (`&nbsp;`) or text in a script without word spacing around it ends it, as does a
+# trailing dot. A word character (`_WORD_CHAR`) next to it makes it the fragment of a longer word, which is not reported.
 # It must not follow "%" (`%2Fevil.example`, the domains of encoded URLs are taken from the decoded URLs), be the local part of an address,
 # or touch an encoded dot (`other.example&#46;com`). The last label consists of letters only or is punycode, which rejects IP addresses,
 # version numbers and sizes (`10.0pt`). The labels are matched possessively and the TLD is checked afterwards, which keeps the search linear.
+# Non-ASCII host names are taken from the URLs (`EmlParser.get_ascii_host()`), as browsers resolve them.
 _ENCODED_DOT = r"""&(?i:\#0*46|\#x0*2e|period);"""
 dom_regex = re.compile(
-    rf"""(?<![A-Za-z0-9_.%-])(?<!{_ENCODED_DOT})[A-Za-z0-9-]++(?:\.[A-Za-z0-9-]++)++(?<=\.(?:[A-Za-z]{{2,63}}|xn--[A-Za-z0-9-]{{1,59}}))(?![_@]|{_ENCODED_DOT})"""
+    rf"""(?<![_.%-]|{_WORD_CHAR})(?<!{_ENCODED_DOT})[A-Za-z0-9-]++(?:\.[A-Za-z0-9-]++)++(?<=\.(?:[A-Za-z]{{2,63}}|xn--[A-Za-z0-9-]{{1,59}}))(?![_@]|\.?{_WORD_CHAR}|{_ENCODED_DOT})"""
 )
 
 # An address must not be part of a longer dotted number or word ("1.2.3.4.5", "v1.2.3.4") nor be the first labels of a host name ("1.2.3.4.nip.io").
@@ -195,6 +218,9 @@ ipv4_obfuscated_regex = re.compile(r"""[0-9a-fA-FxX.]+""")
 
 # URL whose host is a plain number (decimal or hexadecimal), e.g. http://3232235777/ or http://user@0xC0A80101:8080/
 url_numeric_host_regex = re.compile(r"""[a-z][a-z0-9+.\-]*://(?:[^/?#@]*@)?(?:0x[0-9a-f]+|[0-9]+)(?:[:/?#]|$)""", re.IGNORECASE)
+
+# Code points a browser rejects in a host name (forbidden domain code points of the WHATWG URL standard)
+forbidden_domain_char_regex = re.compile(r"""[\x00-\x20#%/:<>?@\[\\\]^|\x7f]""")
 
 # A line which looks like a MIME multipart delimiter (RFC 2046, section 5.1.1), used to guess the boundary of broken multipart messages.
 multipart_boundary_guess_regex = re.compile(r"""^--([0-9A-Za-z'()+_,./:=?\-]{1,69}[0-9A-Za-z'()+_,./:=?\-])[ \t]*\r?$""", re.MULTILINE)

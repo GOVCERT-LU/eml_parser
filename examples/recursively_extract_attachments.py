@@ -7,7 +7,7 @@
 
 import argparse
 import base64
-import datetime
+import datetime as dt
 import email.header
 import pathlib
 
@@ -16,7 +16,7 @@ import eml_parser
 
 def json_serial(obj):
     """JSON serializer for objects not serializable by default json code"""
-    if isinstance(obj, datetime.datetime):
+    if isinstance(obj, dt.datetime):
         serial = obj.isoformat()
         return serial
     if isinstance(obj, email.header.Header):

@@ -20,7 +20,7 @@
 #
 
 import argparse
-import datetime
+import datetime as dt
 import email.policy
 import json
 
@@ -34,7 +34,7 @@ __license__ = 'AGPL v3+'
 
 def json_serial(obj):
     """JSON serializer for objects not serializable by default json code"""
-    if isinstance(obj, datetime.datetime):
+    if isinstance(obj, dt.datetime):
         serial = obj.isoformat()
         return serial
     if isinstance(obj, email.header.Header):
