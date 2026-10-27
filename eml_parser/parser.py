@@ -4,6 +4,7 @@ import base64
 import binascii
 import collections
 import collections.abc
+import dataclasses
 import datetime as dt
 import email
 import email.errors
@@ -20,7 +21,6 @@ import os.path
 import pathlib
 import re
 import socket
-import string
 import typing
 import urllib.parse
 import uuid
@@ -86,6 +86,26 @@ __copyright__ = 'Copyright 2013-2014 Georges Toth, Copyright 2013-present GOVCER
 __license__ = 'AGPL v3+'
 
 
+@dataclasses.dataclass(frozen=True)
+class PartData:
+    """Data of one e-mail part, handed to the `part_hook` callback of `EmlParser`.
+
+    The bytes in `data` are exactly the bytes the parser hashed for this part, so
+    `sha256` equals `hashlib.sha256(data).hexdigest()` and matches the hash stored in
+    the parse result (`body[].hash` or `attachment[].hash['sha256']`). A consumer
+    can therefore correlate a scan hit with the part in the
+    result without the plaintext ever appearing in it.
+    """
+
+    kind: str  # 'body' for a text part, 'attachment' for a part parsed as attachment
+    data: bytes  # the part content, exactly the bytes that were hashed
+    sha256: str  # SHA-256 of `data`, hex encoded
+    content_type: str | None  # content type of the part, e.g. 'text/html'
+    filename: str | None  # attachment file name, if any
+    content_headers: dict[str, list[str]]  # part headers, lower-cased names
+    boundary: str | None  # boundary of the enclosing multipart, if any
+
+
 @functools.cache
 def get_public_suffix_list(accept_unknown: bool) -> publicsuffixlist.PublicSuffixList:
     """Return the public suffix list; it is parsed once per setting and shared, as parsing it takes about 40 ms and it is read-only afterwards.
@@ -97,10 +117,6 @@ def get_public_suffix_list(accept_unknown: bool) -> publicsuffixlist.PublicSuffi
         The parsed public suffix list.
     """
     return publicsuffixlist.PublicSuffixList(accept_unknown=accept_unknown)
-
-
-# Characters allowed in a header field name (RFC 5322 ftext): printable ASCII except space and colon.
-FIELD_NAME_BYTES = (string.ascii_letters + string.digits + string.punctuation.replace(':', '')).encode()
 
 
 def find_header_start(data: bytes) -> int:
@@ -121,7 +137,7 @@ def find_header_start(data: bytes) -> int:
         line_start = max(pos, data.rfind(b'\n', pos, colon) + 1)
         field_name = data[line_start:colon].rstrip(b' \t')
 
-        if field_name and not field_name.translate(None, FIELD_NAME_BYTES):
+        if field_name and not field_name.translate(None, eml_parser.constants.FIELD_NAME_BYTES):
             return line_start
 
         line_end = data.find(b'\n', colon)
@@ -247,6 +263,8 @@ class EmlParser:
         parse_attachments: bool = True,
         include_www: bool = True,
         include_href: bool = True,
+        *,
+        part_hook: typing.Callable[[PartData], None] | None = None,
     ) -> None:
         """Initialisation.
 
@@ -274,6 +292,17 @@ class EmlParser:
                                                 in-lined, will always be parsed.
             include_www (bool, optional): Include potential URLs starting with www
             include_href (bool, optional): Include potential URLs in HREFs matching non-simple regular expressions
+            part_hook (Callable[[PartData], None], optional): Callback invoked for every part of
+                                                               the e-mail (text parts and attachments) with the
+                                                               part's data, at the point where its hash is computed.
+                                                               The data is passed exactly as hashed (see `PartData`), so
+                                                               it can be scanned without the plaintext
+                                                               ending up in the returned structure. The callback is
+                                                               invoked independently of `include_raw_body` and
+                                                               `include_attachment_data`, and text attachments are
+                                                               delivered once per representation (as `body` and as
+                                                               `attachment`), like in the result itself. Exceptions
+                                                               raised by the callback are not caught. Default is None.
 
         """
         self.include_raw_body = include_raw_body
@@ -287,6 +316,7 @@ class EmlParser:
         self.parse_attachments = parse_attachments
         self.include_www = include_www
         self.include_href = include_href
+        self.part_hook = part_hook
         self._psl = get_public_suffix_list(not self.domain_force_tld)
         # A file extension which is a TLD (or becomes one) is a domain and not a file name, so the public suffix list decides.
         self._file_extensions = frozenset(
@@ -792,7 +822,7 @@ class EmlParser:
             # "a","toto"           a: [toto,titi]
             # "a","titi"   --->    c: [truc]
             # "c","truc"
-            ch: dict[str, list] = {}
+            ch: dict[str, list[str]] = {}
             for header_key, header_value in body_multhead:
                 # make sure we are working with strings only
                 v = str(header_value)
@@ -825,7 +855,21 @@ class EmlParser:
                 bodie['content_type'] = header_val.split(';', 1)[0].strip()
 
             # Hash the body
-            bodie['hash'] = hashlib.sha256(body.encode('utf-8')).hexdigest()
+            body_data = body.encode('utf-8')
+            bodie['hash'] = hashlib.sha256(body_data).hexdigest()
+
+            if self.part_hook is not None:
+                self.part_hook(
+                    PartData(
+                        kind='body',
+                        data=body_data,
+                        sha256=bodie['hash'],
+                        content_type=bodie.get('content_type'),
+                        filename=None,
+                        content_headers=ch,
+                        boundary=boundary,
+                    )
+                )
 
             if boundary is not None:
                 # only include boundary key if there is a value set
@@ -1435,6 +1479,19 @@ class EmlParser:
                     ch[k] = [v]
 
             attachment[file_id]['content_header'] = ch
+
+            if self.part_hook is not None:
+                self.part_hook(
+                    PartData(
+                        kind='attachment',
+                        data=data,
+                        sha256=attachment[file_id]['hash']['sha256'],
+                        content_type=msg.get_content_type(),
+                        filename=filename,
+                        content_headers=ch,
+                        boundary=None,
+                    )
+                )
 
         return attachment
 

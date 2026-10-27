@@ -1,5 +1,7 @@
 """Static tables used by the parser."""
 
+import string
+
 # Common file name extensions: a bare "invoice.pdf" in a text is a file name, not a domain. An extension which is a TLD (zip, mov, sh, py, ...)
 # is not a file name for the parser, whether it is listed here or not (the public suffix list decides), so this table does not go stale.
 FILE_EXTENSIONS = frozenset(
@@ -60,3 +62,6 @@ ALWAYS_PARSED_HEADERS = frozenset(
     mime-version content-type content-disposition content-transfer-encoding content-id content-description
     """.split()
 )
+
+# Characters allowed in a header field name (RFC 5322 ftext): printable ASCII except space and colon.
+FIELD_NAME_BYTES = (string.ascii_letters + string.digits + string.punctuation.replace(':', '')).encode()

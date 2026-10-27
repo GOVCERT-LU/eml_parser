@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Features
+- Add the `part_hook` callback to `EmlParser`: when set, it is invoked for every part of the e-mail (text parts and attachments) at the point where its hash is computed, receiving a `PartData` with the part's content. The bytes handed to the hook are exactly the bytes that were hashed, and `PartData.sha256` matches the hash stored in the parse result (`body[].hash` or `attachment[].hash['sha256']`), so a consumer can inspect the part without the plaintext ending up in the returned structure. The hook is independent of `include_raw_body` and `include_attachment_data`, text attachments are delivered once per representation (as `body` and as `attachment`), and exceptions raised by the hook are not caught.
+
 ## [v4.4.0]
 ### Fixes
 - Fix `regexes.dom_regex` missing domains in the body (#93, reported by 4ktLuffy): a domain followed by a port (`http://evil.example.com:8080/x`), a trailing dot (`Please visit evil.example.com.`), a comma, semicolon, colon, exclamation mark, double quote, bracket or non-ASCII text, or with a single character label (`www.a.example.com`) was not reported. The pattern was a list of the characters allowed around a domain; like `regexes.ipv4_regex` it now defines the ASCII characters which must not touch a domain, so any other character ends it, including an HTML entity such as `&nbsp;`. An encoded dot (`other.example&#46;com`) does not end a domain, and the local part of an address (`john.doe@`) is not one.
