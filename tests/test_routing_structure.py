@@ -1,6 +1,7 @@
 import pytest
 
 import eml_parser.routing
+import tests.table
 
 TAIL = '; Mon, 5 Oct 2026 09:12:44 +0200'
 
@@ -9,27 +10,29 @@ def parse(line: str) -> dict:
     return eml_parser.routing.parserouting(line)
 
 
-@pytest.mark.parametrize(
-    ('line', 'expected_from', 'expected_by'),
-    [
-        # a host name ending in a keyword must not start a section
-        ('from toby (toby.example.com [192.0.2.1]) by mx.example.org with ESMTP' + TAIL, ['toby.example.com', '192.0.2.1'], ['mx.example.org']),
-        ('from before.example.org (x [192.0.2.7]) by mx.example.org' + TAIL, ['before.example.org', '192.0.2.7'], ['mx.example.org']),
-        ('from ruby.example.org ([192.0.2.8]) by nearby.example.org with ESMTP' + TAIL, ['ruby.example.org', '192.0.2.8'], ['nearby.example.org']),
-        # keywords in comments are not keywords
-        ('from a.example.com (a.example.com [192.0.2.1]) (using TLS by default) by b.example.com' + TAIL, ['a.example.com', '192.0.2.1'], ['b.example.com']),
-        ('from a.example.com ([192.0.2.1]) by b.example.com (Postfix, from userid 1000) with ESMTP' + TAIL, ['a.example.com', '192.0.2.1'], ['b.example.com']),
-        # an unbalanced opening parenthesis does not swallow the rest
-        ('from a.example.com (a.example.com [192.0.2.1] by b.example.com with ESMTP' + TAIL, ['a.example.com', '192.0.2.1'], ['b.example.com']),
-        # upper case
-        ('FROM A.EXAMPLE.COM (A.EXAMPLE.COM [192.0.2.1]) BY B.EXAMPLE.COM WITH ESMTP' + TAIL, ['a.example.com', '192.0.2.1'], ['b.example.com']),
-    ],
-)
-def test_sections(line: str, expected_from: list[str], expected_by: list[str]) -> None:
-    result = parse(line)
+SECTIONS_CASES = [
+    # a host name ending in a keyword must not start a section
+    ('from toby (toby.example.com [192.0.2.1]) by mx.example.org with ESMTP' + TAIL, ['toby.example.com', '192.0.2.1'], ['mx.example.org']),
+    ('from before.example.org (x [192.0.2.7]) by mx.example.org' + TAIL, ['before.example.org', '192.0.2.7'], ['mx.example.org']),
+    ('from ruby.example.org ([192.0.2.8]) by nearby.example.org with ESMTP' + TAIL, ['ruby.example.org', '192.0.2.8'], ['nearby.example.org']),
+    # keywords in comments are not keywords
+    ('from a.example.com (a.example.com [192.0.2.1]) (using TLS by default) by b.example.com' + TAIL, ['a.example.com', '192.0.2.1'], ['b.example.com']),
+    ('from a.example.com ([192.0.2.1]) by b.example.com (Postfix, from userid 1000) with ESMTP' + TAIL, ['a.example.com', '192.0.2.1'], ['b.example.com']),
+    # an unbalanced opening parenthesis does not swallow the rest
+    ('from a.example.com (a.example.com [192.0.2.1] by b.example.com with ESMTP' + TAIL, ['a.example.com', '192.0.2.1'], ['b.example.com']),
+    # upper case
+    ('FROM A.EXAMPLE.COM (A.EXAMPLE.COM [192.0.2.1]) BY B.EXAMPLE.COM WITH ESMTP' + TAIL, ['a.example.com', '192.0.2.1'], ['b.example.com']),
+]
 
-    assert result['from'] == expected_from
-    assert result['by'] == expected_by
+
+def test_sections() -> None:
+    def check(line: str, expected_from: list[str], expected_by: list[str]) -> None:
+        result = parse(line)
+
+        assert result['from'] == expected_from
+        assert result['by'] == expected_by
+
+    tests.table.assert_all_cases(check, SECTIONS_CASES)
 
 
 def test_hosts_are_in_order_of_appearance() -> None:
@@ -38,19 +41,21 @@ def test_hosts_are_in_order_of_appearance() -> None:
     assert result['from'] == ['mail.example.com', '192.0.2.1', '2001:db8::1']
 
 
-@pytest.mark.parametrize(
-    ('line', 'expected_by'),
-    [
-        # version numbers are no host names
-        ('from a.example.com by mx.example.org (Exim 4.96) id 1' + TAIL, ['mx.example.org']),
-        ('from a.example.com by mx.example.org (8.12.2/8.12.2/20020902/$Revision: 1.30 $) with SMTP' + TAIL, ['mx.example.org']),
-        # the domain of an address in angle brackets is no relay
-        ('from a.example.com by mx.example.org (envelope-from <s@sender.example>) id 1' + TAIL, ['mx.example.org']),
-        ('from a.example.com by mx.example.org with SMTP id <B001@msg.example>' + TAIL, ['mx.example.org']),
-    ],
-)
-def test_by_contains_only_relays(line: str, expected_by: list[str]) -> None:
-    assert parse(line)['by'] == expected_by
+BY_CONTAINS_ONLY_RELAYS_CASES = [
+    # version numbers are no host names
+    ('from a.example.com by mx.example.org (Exim 4.96) id 1' + TAIL, ['mx.example.org']),
+    ('from a.example.com by mx.example.org (8.12.2/8.12.2/20020902/$Revision: 1.30 $) with SMTP' + TAIL, ['mx.example.org']),
+    # the domain of an address in angle brackets is no relay
+    ('from a.example.com by mx.example.org (envelope-from <s@sender.example>) id 1' + TAIL, ['mx.example.org']),
+    ('from a.example.com by mx.example.org with SMTP id <B001@msg.example>' + TAIL, ['mx.example.org']),
+]
+
+
+def test_by_contains_only_relays() -> None:
+    def check(line: str, expected_by: list[str]) -> None:
+        assert parse(line)['by'] == expected_by
+
+    tests.table.assert_all_cases(check, BY_CONTAINS_ONLY_RELAYS_CASES)
 
 
 def test_ident_host_of_sendmail_is_kept() -> None:
@@ -80,23 +85,28 @@ def test_for_addresses_are_in_order_of_appearance() -> None:
     assert result['for'] == ['z@example.com', 'a@example.com']
 
 
-@pytest.mark.parametrize(
-    ('line', 'expected'),
-    [
-        ('from a.example.com by b.example.com' + TAIL + ' (CEST)', '2026-10-05T09:12:44+02:00'),
-        ('from a.example.com by b.example.com; Mon, 5 Oct 2026 09:12:44.123 -0500', '2026-10-05T09:12:44.123000-05:00'),
-        ('from a.example.com by b.example.com; 5 Oct 2026 07:12:44 -0000', '2026-10-05T07:12:44+00:00'),
-    ],
-)
-def test_date(line: str, expected: str) -> None:
-    assert parse(line)['date'].isoformat() == expected
+DATE_CASES = [
+    ('from a.example.com by b.example.com' + TAIL + ' (CEST)', '2026-10-05T09:12:44+02:00'),
+    ('from a.example.com by b.example.com; Mon, 5 Oct 2026 09:12:44.123 -0500', '2026-10-05T09:12:44.123000-05:00'),
+    ('from a.example.com by b.example.com; 5 Oct 2026 07:12:44 -0000', '2026-10-05T07:12:44+00:00'),
+]
 
 
-@pytest.mark.parametrize(
-    'line', ['from a.example.com by b.example.com', 'from a.example.com by b.example.com; not a date', 'from a.example.com by b.example.com;']
-)
-def test_no_date_is_invented(line: str) -> None:
-    assert 'date' not in parse(line)
+def test_date() -> None:
+    def check(line: str, expected: str) -> None:
+        assert parse(line)['date'].isoformat() == expected
+
+    tests.table.assert_all_cases(check, DATE_CASES)
+
+
+NO_DATE_IS_INVENTED_CASES = ['from a.example.com by b.example.com', 'from a.example.com by b.example.com; not a date', 'from a.example.com by b.example.com;']
+
+
+def test_no_date_is_invented() -> None:
+    def check(line: str) -> None:
+        assert 'date' not in parse(line)
+
+    tests.table.assert_all_cases(check, NO_DATE_IS_INVENTED_CASES)
 
 
 def test_merged_and_unparsable_lines() -> None:
@@ -114,41 +124,45 @@ def test_parsing_time_is_linear(filler: str) -> None:
     assert result['by'] == ['b.example.com'] or 'by' not in result
 
 
-@pytest.mark.parametrize(
-    ('text', 'expected'),
-    [('', ''), ('  ; x ;  ', 'x'), ('; ; x　;', 'x'), ('x', 'x')],
-)
-def test_cleanline_unicode_whitespace(text: str, expected: str) -> None:
-    assert eml_parser.routing.cleanline(text) == expected
+CLEANLINE_UNICODE_WHITESPACE_CASES = [('', ''), ('  ; x ;  ', 'x'), ('; ; x　;', 'x'), ('x', 'x')]
 
 
-@pytest.mark.parametrize(
-    ('line', 'expected_by'),
-    [
-        # a comment directly behind the host name
-        (
-            'from a.example.com by notes.example.com(Lotus SMTP MTA v4.6.5 (863.2 5-20-1999)) id 86256895.00832fb3 ; Wed, 1 Mar 2000 17:52:54 -0600',
-            ['notes.example.com'],
-        ),
-        # a host in brackets
-        (
-            'from elpmime02.example.com ([192.0.2.90]) by [mail.example.com] (GroupWise SMTP/MIME daemon 4.1 v3) ; Mon, 19 Jun 2000 17:21:00 -0700',
-            ['mail.example.com'],
-        ),
-        # ids and versions are no hosts: mailer message ids and versions
-        (
-            'from a.example.com by imo-m10.mx.example.net (mail_out_v31_r1.9.) id 2.73.172b0394 (2519) for <ken@example.com>; Tue, 4 Dec 2001 13:02:04 -0500',
-            ['imo-m10.mx.example.net'],
-        ),
-        ('from a.example.com by mx.example.com (v82.22) with ESMTP id MAILINYE410-1115115900; Thu, 15 Nov 2001 11:59:00 -0500', ['mx.example.com']),
-        (
-            'from a.example.com by mx.example.com (8.10.1/8.10.1/external_corp-1.08) with ESMTP id g0mgoa021678; Tue, 22 Jan 2002 10:24:10 -0600',
-            ['mx.example.com'],
-        ),
-    ],
-)
-def test_by_in_real_world_formats(line: str, expected_by: list[str]) -> None:
-    assert parse(line)['by'] == expected_by
+def test_cleanline_unicode_whitespace() -> None:
+    def check(text: str, expected: str) -> None:
+        assert eml_parser.routing.cleanline(text) == expected
+
+    tests.table.assert_all_cases(check, CLEANLINE_UNICODE_WHITESPACE_CASES)
+
+
+BY_IN_REAL_WORLD_FORMATS_CASES = [
+    # a comment directly behind the host name
+    (
+        'from a.example.com by notes.example.com(Lotus SMTP MTA v4.6.5 (863.2 5-20-1999)) id 86256895.00832fb3 ; Wed, 1 Mar 2000 17:52:54 -0600',
+        ['notes.example.com'],
+    ),
+    # a host in brackets
+    (
+        'from elpmime02.example.com ([192.0.2.90]) by [mail.example.com] (GroupWise SMTP/MIME daemon 4.1 v3) ; Mon, 19 Jun 2000 17:21:00 -0700',
+        ['mail.example.com'],
+    ),
+    # ids and versions are no hosts: mailer message ids and versions
+    (
+        'from a.example.com by imo-m10.mx.example.net (mail_out_v31_r1.9.) id 2.73.172b0394 (2519) for <ken@example.com>; Tue, 4 Dec 2001 13:02:04 -0500',
+        ['imo-m10.mx.example.net'],
+    ),
+    ('from a.example.com by mx.example.com (v82.22) with ESMTP id MAILINYE410-1115115900; Thu, 15 Nov 2001 11:59:00 -0500', ['mx.example.com']),
+    (
+        'from a.example.com by mx.example.com (8.10.1/8.10.1/external_corp-1.08) with ESMTP id g0mgoa021678; Tue, 22 Jan 2002 10:24:10 -0600',
+        ['mx.example.com'],
+    ),
+]
+
+
+def test_by_in_real_world_formats() -> None:
+    def check(line: str, expected_by: list[str]) -> None:
+        assert parse(line)['by'] == expected_by
+
+    tests.table.assert_all_cases(check, BY_IN_REAL_WORLD_FORMATS_CASES)
 
 
 def test_line_in_brackets() -> None:
@@ -160,34 +174,38 @@ def test_line_in_brackets() -> None:
     assert result['by'] == ['motgate4.example.org']
 
 
-@pytest.mark.parametrize(
-    'tail',
-    [
-        '; tue, 15 aug 2000 gmt',  # no time
-        '; wed, 21 feb 2001 19:29: 59 -0500',  # blank in the time
-        '; tue, 15 aug 2000 08:57:09 -04= 00',  # left over of a quoted-printable line break, dateutil would ignore it and return a wrong zone
-        '; of, 15 ssa 2000 09:40:38 -0600',
-    ],
-)
-def test_garbage_is_not_a_date(tail: str) -> None:
-    assert 'date' not in parse('from a.example.com by b.example.com' + tail)
+GARBAGE_IS_NOT_A_DATE_CASES = [
+    '; tue, 15 aug 2000 gmt',  # no time
+    '; wed, 21 feb 2001 19:29: 59 -0500',  # blank in the time
+    '; tue, 15 aug 2000 08:57:09 -04= 00',  # left over of a quoted-printable line break, dateutil would ignore it and return a wrong zone
+    '; of, 15 ssa 2000 09:40:38 -0600',
+]
 
 
-@pytest.mark.parametrize(
-    ('text', 'expected'),
-    [
-        ('mail10.m.example.net', ['mail10.m.example.net']),  # single character labels
-        ('mail_gw1.example.com', ['mail_gw1.example.com']),  # underscore, used by Exchange and Lotus servers
-        ('a.example.com, b.example.org;', ['a.example.com', 'b.example.org']),  # separated by comma
-        ('*.example.com', ['example.com']),  # wildcard
-        ('user.name@mx.example.com', ['mx.example.com']),  # local part of an address
-        ('id 1.b9.b1afe75 id x.bd.69a6d55', []),  # message ids
-        ('(8.12.0.beta16/8.12.0 v82.22 Exim 4.96)', []),  # versions
-        ('xn--mx-example.xn--p1ai', ['xn--mx-example.xn--p1ai']),  # punycode TLD
-    ],
-)
-def test_get_domain_ip_host_names(text: str, expected: list[str]) -> None:
-    assert eml_parser.routing.get_domain_ip(text) == expected
+def test_garbage_is_not_a_date() -> None:
+    def check(tail: str) -> None:
+        assert 'date' not in parse('from a.example.com by b.example.com' + tail)
+
+    tests.table.assert_all_cases(check, GARBAGE_IS_NOT_A_DATE_CASES)
+
+
+GET_DOMAIN_IP_HOST_NAMES_CASES = [
+    ('mail10.m.example.net', ['mail10.m.example.net']),  # single character labels
+    ('mail_gw1.example.com', ['mail_gw1.example.com']),  # underscore, used by Exchange and Lotus servers
+    ('a.example.com, b.example.org;', ['a.example.com', 'b.example.org']),  # separated by comma
+    ('*.example.com', ['example.com']),  # wildcard
+    ('user.name@mx.example.com', ['mx.example.com']),  # local part of an address
+    ('id 1.b9.b1afe75 id x.bd.69a6d55', []),  # message ids
+    ('(8.12.0.beta16/8.12.0 v82.22 Exim 4.96)', []),  # versions
+    ('xn--mx-example.xn--p1ai', ['xn--mx-example.xn--p1ai']),  # punycode TLD
+]
+
+
+def test_get_domain_ip_host_names() -> None:
+    def check(text: str, expected: list[str]) -> None:
+        assert eml_parser.routing.get_domain_ip(text) == expected
+
+    tests.table.assert_all_cases(check, GET_DOMAIN_IP_HOST_NAMES_CASES)
 
 
 def test_unclosed_parenthesis_does_not_hide_the_date() -> None:

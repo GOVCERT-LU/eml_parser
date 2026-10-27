@@ -1,32 +1,34 @@
 """Tests for the attachment anomalies."""
 
-import pytest
-
 import eml_parser.anomalies
 import eml_parser.parser
+import tests.table
 
 RLO = chr(0x202E)  # right-to-left override
 ZWSP = chr(0x200B)  # zero width space
 PE = b'MZ' + b'\x00' * 58 + b'\x40\x00\x00\x00' + b'PE\x00\x00' + b'\x00' * 20
 
 
-@pytest.mark.parametrize(
-    ('filename', 'data', 'expected'),
-    [
-        ('report.pdf', b'%PDF-1.4', []),
-        ('setup.exe', PE, []),
-        ('invoice.pdf.exe', PE, ['filename-double-extension']),
-        (f'invoice{RLO}fdp.exe', b'x', ['filename-bidi-control']),
-        (f'invoice{ZWSP}.pdf', b'x', ['filename-control-chars']),
-        ('invoice.pdf.', b'x', ['filename-trailing-dot-or-space']),
-        (f'invoice.pdf{" " * 20}.exe', b'x', ['filename-double-extension', 'filename-padding']),
-        ('invoice.pdf', PE, ['extension-content-mismatch']),
-        ('invoice', b'\x7fELF\x02\x01', ['extension-content-mismatch']),
-    ],
-)
-def test_find_filename_anomalies(filename: str, data: bytes, expected: list[str]) -> None:
+FIND_FILENAME_ANOMALIES_CASES = [
+    ('report.pdf', b'%PDF-1.4', []),
+    ('setup.exe', PE, []),
+    ('invoice.pdf.exe', PE, ['filename-double-extension']),
+    (f'invoice{RLO}fdp.exe', b'x', ['filename-bidi-control']),
+    (f'invoice{ZWSP}.pdf', b'x', ['filename-control-chars']),
+    ('invoice.pdf.', b'x', ['filename-trailing-dot-or-space']),
+    (f'invoice.pdf{" " * 20}.exe', b'x', ['filename-double-extension', 'filename-padding']),
+    ('invoice.pdf', PE, ['extension-content-mismatch']),
+    ('invoice', b'\x7fELF\x02\x01', ['extension-content-mismatch']),
+]
+
+
+def test_find_filename_anomalies() -> None:
     """Each trick is detected, harmless files are not."""
-    assert eml_parser.anomalies.find_filename_anomalies(filename, data) == expected
+
+    def check(filename: str, data: bytes, expected: list[str]) -> None:
+        assert eml_parser.anomalies.find_filename_anomalies(filename, data) == expected
+
+    tests.table.assert_all_cases(check, FIND_FILENAME_ANOMALIES_CASES)
 
 
 def test_detected_mime_type_counts() -> None:

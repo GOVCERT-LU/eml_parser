@@ -28,6 +28,7 @@ dependencies = [
   "charset-normalizer",
   "publicsuffixlist",
   "regex>=2026",
+  "idna>=3.20",
 ]
 dynamic = ["version"]
 

@@ -10,6 +10,8 @@ is started with ``--run-slow``, so the regular CI job (``pytest -v tests``) is n
 
 import pytest
 
+import eml_parser.parser
+
 
 def pytest_addoption(parser: pytest.Parser) -> None:
     parser.addoption('--run-slow', action='store_true', default=False, help='also run tests marked as slow (e.g. performance scaling tests)')
@@ -27,3 +29,14 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
     for item in items:
         if 'slow' in item.keywords:
             item.add_marker(skip_slow)
+
+
+def pytest_unconfigure() -> None:
+    """Close the detector which file-magic caches for the main thread in `magic.threadlocal`.
+
+    It is closed in `__del__`, which at interpreter shutdown runs after the globals of the module are cleared and then fails with
+    "Exception ignored in: MagicDetect.__del__ ... TypeError: 'NoneType' object is not callable".
+    """
+    cache = getattr(eml_parser.parser.magic, 'threadlocal', None)
+    if cache is not None and hasattr(cache, 'magic_instance'):
+        del cache.magic_instance

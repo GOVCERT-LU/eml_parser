@@ -294,6 +294,17 @@ REGEX_SHAPES: dict[str, tuple[typing.Any, str]] = {
     # the last label is checked after the labels were matched, a failing check must not restart the search inside the token
     'dom-regex-numeric-tld': (eml_parser.regexes.dom_regex, 'a.1'),
     'dom-regex-encoded-dots': (eml_parser.regexes.dom_regex, 'a.a&#46;'),
+    # a word character (any script) next to a label makes the token a fragment, which must not restart the search inside the token
+    'dom-regex-mixed-script-labels': (eml_parser.regexes.dom_regex, 'a\u0430.'),
+    'dom-regex-format-characters': (eml_parser.regexes.dom_regex, 'a\u200b.'),
+    # the local part is limited to 128 characters, a longer one must not be searched again from every position
+    'email-regex-local-part-without-at': (eml_parser.regexes.email_regex, 'a.'),
+    'email-regex-addresses': (eml_parser.regexes.email_regex, 'a@a.'),
+    'email-regex-mixed-script-addresses': (eml_parser.regexes.email_force_tld_regex, 'aü@a.a'),
+    # a host name after "from"/"by" whose last label fails its check (numeric, a fragment) must not restart the search inside the name
+    'recv-dom-regex-host-names': (eml_parser.regexes.recv_dom_regex, 'from a.'),
+    'recv-dom-regex-numeric-last-label': (eml_parser.regexes.recv_dom_regex, 'from a.1'),
+    'recv-dom-regex-fragments': (eml_parser.regexes.recv_dom_regex, 'by a1_'),
 }
 
 

@@ -2,55 +2,71 @@
 
 import hashlib
 
-import pytest
-
 import eml_parser.parser
 import eml_parser.regexes
+import tests.table
+
+REMOTE_SHARE_IS_FOUND_CASES = [
+    (r'\\attacker.example.com\share\a.png', 'attacker.example.com'),
+    (r'open "\\fileserver\public\doc.docx" now', 'fileserver'),
+    (r'\\evil.example.net@SSL\DavWWWRoot\x.lnk', 'evil.example.net@SSL'),
+    (r'\\evil.example.net@8080\x\y', 'evil.example.net@8080'),
+    (r'\\?\UNC\srv.example.com\share\f', 'srv.example.com'),
+    ('file://10.1.2.3/share/x.lnk', '10.1.2.3'),
+    ('file:////evil.example.org/s/x', 'evil.example.org'),
+    ('smb://203.0.113.9/c$', '203.0.113.9'),
+]
 
 
-@pytest.mark.parametrize(
-    ('text', 'host'),
-    [
-        (r'\\attacker.example.com\share\a.png', 'attacker.example.com'),
-        (r'open "\\fileserver\public\doc.docx" now', 'fileserver'),
-        (r'\\evil.example.net@SSL\DavWWWRoot\x.lnk', 'evil.example.net@SSL'),
-        (r'\\evil.example.net@8080\x\y', 'evil.example.net@8080'),
-        (r'\\?\UNC\srv.example.com\share\f', 'srv.example.com'),
-        ('file://10.1.2.3/share/x.lnk', '10.1.2.3'),
-        ('file:////evil.example.org/s/x', 'evil.example.org'),
-        ('smb://203.0.113.9/c$', '203.0.113.9'),
-    ],
-)
-def test_remote_share_is_found(text: str, host: str) -> None:
+def test_remote_share_is_found() -> None:
     """UNC paths (also the WebDAV forms) and file/smb URLs with a host."""
-    match = eml_parser.regexes.unc_regex.search(text)
 
-    assert match is not None
-    assert (match.group('unc_host') or match.group('url_host')) == host
+    def check(text: str, host: str) -> None:
+        match = eml_parser.regexes.unc_regex.search(text)
+
+        assert match is not None
+        assert (match.group('unc_host') or match.group('url_host')) == host
+
+    tests.table.assert_all_cases(check, REMOTE_SHARE_IS_FOUND_CASES)
 
 
-@pytest.mark.parametrize(
-    'text', [r'C:\\Users\\Bob', r'"\\\\Users\\Bob"', r'regex \\d+\\w', r'path\\host\share', 'file:///C:/x.txt', 'file:/relative', r'\\host']
-)
-def test_local_and_escaped_paths_are_ignored(text: str) -> None:
+LOCAL_AND_ESCAPED_PATHS_ARE_IGNORED_CASES = [
+    r'C:\\Users\\Bob',
+    r'"\\\\Users\\Bob"',
+    r'regex \\d+\\w',
+    r'path\\host\share',
+    'file:///C:/x.txt',
+    'file:/relative',
+    r'\\host',
+]
+
+
+def test_local_and_escaped_paths_are_ignored() -> None:
     """Escaped text, drive paths, local file URLs and a bare host are not remote shares."""
-    assert eml_parser.regexes.unc_regex.search(text) is None
+
+    def check(text: str) -> None:
+        assert eml_parser.regexes.unc_regex.search(text) is None
+
+    tests.table.assert_all_cases(check, LOCAL_AND_ESCAPED_PATHS_ARE_IGNORED_CASES)
 
 
-@pytest.mark.parametrize(
-    ('share', 'expected'),
-    [
-        (r'\\attacker.example.com\share', 'attacker.example.com'),
-        (r'\\evil.example.net@SSL\DavWWWRoot\x', 'evil.example.net'),
-        (r'\\3232235777\c$', '192.168.1.1'),
-        (r'\\2001-db8--1.ipv6-literal.net\s', '2001:db8::1'),
-        (r'\\fileserver\public', None),
-        ('file://localhost/x', None),
-    ],
-)
-def test_get_share_host(share: str, expected: str | None) -> None:
+GET_SHARE_HOST_CASES = [
+    (r'\\attacker.example.com\share', 'attacker.example.com'),
+    (r'\\evil.example.net@SSL\DavWWWRoot\x', 'evil.example.net'),
+    (r'\\3232235777\c$', '192.168.1.1'),
+    (r'\\2001-db8--1.ipv6-literal.net\s', '2001:db8::1'),
+    (r'\\fileserver\public', None),
+    ('file://localhost/x', None),
+]
+
+
+def test_get_share_host() -> None:
     """The host is an indicator only if it is a domain or an address."""
-    assert eml_parser.parser.EmlParser().get_share_host(share) == expected
+
+    def check(share: str, expected: str | None) -> None:
+        assert eml_parser.parser.EmlParser().get_share_host(share) == expected
+
+    tests.table.assert_all_cases(check, GET_SHARE_HOST_CASES)
 
 
 HTML = (

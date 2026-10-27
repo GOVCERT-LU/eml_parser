@@ -1,17 +1,18 @@
 """Tests for IPv4 addresses in obfuscated URL hosts."""
 
-import pytest
-
 import eml_parser.parser
+import tests.table
+
+GET_OBFUSCATED_IP_CASES = ['3232235777', '0xC0A80101', '192.168.257', '0xC0.0xA8.1.1']
 
 
-@pytest.mark.parametrize(
-    'host',
-    ['3232235777', '0xC0A80101', '192.168.257', '0xC0.0xA8.1.1'],
-)
-def test_get_obfuscated_ip(host: str) -> None:
+def test_get_obfuscated_ip() -> None:
     """All notations resolve like in a browser."""
-    assert eml_parser.parser.EmlParser().get_obfuscated_ip(host) == '192.168.1.1'
+
+    def check(host: str) -> None:
+        assert eml_parser.parser.EmlParser().get_obfuscated_ip(host) == '192.168.1.1'
+
+    tests.table.assert_all_cases(check, GET_OBFUSCATED_IP_CASES)
 
 
 def test_octal_parts() -> None:
@@ -19,10 +20,16 @@ def test_octal_parts() -> None:
     assert eml_parser.parser.EmlParser().get_obfuscated_ip('0300.0250.0.1') == '192.168.0.1'
 
 
-@pytest.mark.parametrize('host', ['example.com', 'deface.cafe', '0x', '08', '1.2.3.4.5', '256.1.1.1', '12345678901'])
-def test_get_obfuscated_ip_rejects(host: str) -> None:
+GET_OBFUSCATED_IP_REJECTS_CASES = ['example.com', 'deface.cafe', '0x', '08', '1.2.3.4.5', '256.1.1.1', '12345678901']
+
+
+def test_get_obfuscated_ip_rejects() -> None:
     """Names and invalid numbers are not addresses."""
-    assert eml_parser.parser.EmlParser().get_obfuscated_ip(host) is None
+
+    def check(host: str) -> None:
+        assert eml_parser.parser.EmlParser().get_obfuscated_ip(host) is None
+
+    tests.table.assert_all_cases(check, GET_OBFUSCATED_IP_REJECTS_CASES)
 
 
 def test_body_extraction() -> None:
