@@ -133,12 +133,75 @@ def parserouting(line: str, email_regex: regex.Pattern[str] = eml_parser.regexes
     """
     out: dict[str, typing.Any] = {'src': line}
     line = line.lower()
+    comments, tokens = _structure(line)
+    split = _sections(tokens)
 
-    # Collect the structural tokens outside of comments. A closing parenthesis removes everything since its opening one; an unbalanced
-    # opening parenthesis does not start a comment.
+    if split is None:
+        # Detect "sticked lines"
+        out['warning'] = ['Merged Received headers']
+        return out
+
+    sections, separators = split
+    if sections:
+        out.update(_section_values(line, sections, separators))
+    else:
+        # Lines such as "(qmail 4711 invoked by uid 500); 28 Sep 2002 16:21:17 -0000" have a date but no relay.
+        out['warning'] = ['Nothing Parsable']
+
+    date = _parse_date(line, comments, separators)
+    if date is not None:
+        out['date'] = date
+
+    if out.get('for'):
+        _split_for(out, email_regex)
+
+    # Now.. find IP and Host in from and by. The domain of an address in angle brackets, e.g. the one of the sender in
+    # "(envelope-from <a@sender.example>)" or of a message id, is no relay.
+    for keyword in ('from', 'by'):
+        if out.get(keyword):
+            text = _ANGLE_ADDRESS.sub(' ', out[keyword]) if '<' in out[keyword] else out[keyword]
+            out[keyword] = get_domain_ip(text)
+            if not out[keyword]:  # if array is empty remove
+                del out[keyword]
+
+    return out
+
+
+def _sections(tokens: list[tuple[str, int, int]]) -> tuple[dict[str, tuple[int, int]], list[int]] | None:
+    """Find the sections of a received line in its tokens (see `_structure()`).
+
+    The first occurrence of each keyword starts a section, later ones are part of the text. The last semicolon is the one in front of the date.
+
+    Returns:
+        tuple: Start and end of the keyword of each section, and the positions of the semicolons; None if the line contains another
+            received line.
+    """
+    sections: dict[str, tuple[int, int]] = {}
+    separators: list[int] = []
+
+    for kind, start, end in tokens:
+        if kind == ';':
+            separators.append(start)
+        elif kind == 'received:':
+            return None
+        elif kind not in sections:
+            sections[kind] = (start, end)
+
+    return sections, separators
+
+
+def _structure(line: str) -> tuple[list[tuple[int, int]], list[tuple[str, int, int]]]:
+    """Collect the comments and the structural tokens outside of comments of a received line.
+
+    A closing parenthesis removes everything since its opening one; an unbalanced opening parenthesis does not start a comment.
+
+    Returns:
+        tuple: Start and end of the comments, and kind, start and end of the tokens (keywords and semicolons).
+    """
     open_comments: list[tuple[int, int]] = []
     comments: list[tuple[int, int]] = []
     tokens: list[tuple[str, int, int]] = []
+
     for match in _STRUCTURE.finditer(line):
         kind = match.group()
 
@@ -152,28 +215,14 @@ def parserouting(line: str, email_regex: regex.Pattern[str] = eml_parser.regexes
         else:
             tokens.append((kind, match.start(), match.end()))
 
-    # The first occurrence of each keyword starts a section, later ones are part of the text. The last semicolon is the one in front of the date.
-    sections: dict[str, tuple[int, int]] = {}
-    separators: list[int] = []
-    for kind, start, end in tokens:
-        if kind == ';':
-            separators.append(start)
-        elif kind == 'received:':
-            # Detect "sticked lines"
-            out['warning'] = ['Merged Received headers']
-            return out
-        elif kind not in sections:
-            sections[kind] = (start, end)
+    return comments, tokens
 
-    if not sections:
-        # Lines such as "(qmail 4711 invoked by uid 500); 28 Sep 2002 16:21:17 -0000" have a date but no relay.
-        out['warning'] = ['Nothing Parsable']
-        date = _parse_date(line, comments, separators)
-        if date is not None:
-            out['date'] = date
-        return out
 
+def _section_values(line: str, sections: dict[str, tuple[int, int]], separators: list[int]) -> dict[str, str]:
+    """The text of each section of a received line: from its keyword to the next one, the last one to the semicolon in front of the date."""
+    values = {}
     ordered = sorted((start, end, keyword) for keyword, (start, end) in sections.items())
+
     for position, (_, end, keyword) in enumerate(ordered):
         if position + 1 < len(ordered):
             stop = ordered[position + 1][0]
@@ -181,36 +230,22 @@ def parserouting(line: str, email_regex: regex.Pattern[str] = eml_parser.regexes
             # The last section ends at the first semicolon after it.
             stop = next((start for start in separators if start > end), len(line))
 
-        value = cleanline(line[end:stop])
-        if value:
-            out[keyword] = value
+        if value := cleanline(line[end:stop]):
+            values[keyword] = value
 
-    date = _parse_date(line, comments, separators)
-    if date is not None:
-        out['date'] = date
+    return values
 
-    # Fixup for "From" in "for" field
-    # ie google, do that...
-    if out.get('for'):
-        # include spaces in test, otherwise there will be an exception with domains containing "from" in itself
-        if ' from ' in out['for']:
-            before, _, after = out['for'].partition(' from ')
-            out['for'] = before
-            out['from'] = f'{out.get("from", "")} {after}'
 
-        found = email_regex.findall(out['for'])
-        if found:
-            out['for'] = list(dict.fromkeys(found))
-        else:
-            del out['for']
+def _split_for(out: dict[str, typing.Any], email_regex: regex.Pattern[str]) -> None:
+    """Replace the text of the *for* section by the addresses in it, a *from* in it (Google does that) belongs to the *from* section."""
+    # include spaces in test, otherwise there will be an exception with domains containing "from" in itself
+    if ' from ' in out['for']:
+        before, _, after = out['for'].partition(' from ')
+        out['for'] = before
+        out['from'] = f'{out.get("from", "")} {after}'
 
-    # Now.. find IP and Host in from and by. The domain of an address in angle brackets, e.g. the one of the sender in
-    # "(envelope-from <a@sender.example>)" or of a message id, is no relay.
-    for keyword in ('from', 'by'):
-        if out.get(keyword):
-            text = _ANGLE_ADDRESS.sub(' ', out[keyword]) if '<' in out[keyword] else out[keyword]
-            out[keyword] = get_domain_ip(text)
-            if not out[keyword]:  # if array is empty remove
-                del out[keyword]
-
-    return out
+    found = email_regex.findall(out['for'])
+    if found:
+        out['for'] = list(dict.fromkeys(found))
+    else:
+        del out['for']

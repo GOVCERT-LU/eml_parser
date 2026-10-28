@@ -49,7 +49,7 @@ recv_dom_regex = re.compile(
 # It must not follow "%" (`%2Fevil.example`, the domains of encoded URLs are taken from the decoded URLs), be the local part of an address,
 # or touch an encoded dot (`other.example&#46;com`). The last label consists of letters only or is punycode, which rejects IP addresses,
 # version numbers and sizes (`10.0pt`). The labels are matched possessively and the TLD is checked afterwards, which keeps the search linear.
-# Non-ASCII host names are taken from the URLs (`EmlParser.get_ascii_host()`), as browsers resolve them.
+# Non-ASCII host names are taken from the URLs (`hosts.ascii_host()`), as browsers resolve them.
 _ENCODED_DOT = r"""&(?i:\#0*46|\#x0*2e|period);"""
 dom_regex = re.compile(
     rf"""(?<![_.%-]|{_WORD_CHAR})(?<!{_ENCODED_DOT})[A-Za-z0-9-]++(?:\.[A-Za-z0-9-]++)++(?<=\.(?:[A-Za-z]{{2,63}}|xn--[A-Za-z0-9-]{{1,59}}))(?![_@]|\.?{_WORD_CHAR}|{_ENCODED_DOT})"""
@@ -164,7 +164,7 @@ _url_regex_href_tag_name = re.compile(r'[a-z:]+', flags=re.IGNORECASE)
 _url_regex_href_ws_or_slash = ' \t\r\n\f\v/'
 
 
-def findall_href(body: str) -> list:
+def findall_href(body: str) -> list[str]:
     """Find the URL values of HTML attributes (href, src, action, formaction, data, background, and xlink:href).
 
     Args:
@@ -173,7 +173,7 @@ def findall_href(body: str) -> list:
     Returns:
         list: The attribute values (quotes included), in order of appearance.
     """
-    found: list = []
+    found: list[str] = []
     last_end = 0
     for m in url_regex_href_attr.finditer(body):
         start = body.rfind('<', max(last_end, m.start(1) - URL_HREF_TAG_WINDOW), m.start(1))
@@ -202,7 +202,7 @@ url_backslash_scheme_regex = re.compile(r"""[\"\']?[a-z][a-z0-9+.\-]*:[\\/]{2}""
 
 window_slice_regex = re.compile(r"""\s""")
 
-# Candidates for an IPv4 address in the notations of inet_aton(): http://3232235777/, 0xC0A80101, 0300.0250.0.1, 127.1 (validated by get_obfuscated_ip())
+# Candidates for an IPv4 address in the notations of inet_aton(): http://3232235777/, 0xC0A80101, 0300.0250.0.1, 127.1 (validated by hosts.HostValidator.obfuscated_ip())
 ipv4_obfuscated_regex = re.compile(r"""[0-9a-fA-FxX.]+""")
 
 # URL whose host is a plain number (decimal or hexadecimal), e.g. http://3232235777/ or http://user@0xC0A80101:8080/

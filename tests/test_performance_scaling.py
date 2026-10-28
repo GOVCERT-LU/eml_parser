@@ -66,7 +66,7 @@ header field. Profile the largest message of the shape to find the code whose ca
 
 Regular expressions
 -------------------
-The body is searched in slices of at most about 8 KiB (``EmlParser.string_sliding_window_loop()``), which caps the cost of a
+The body is searched in slices of at most about 8 KiB (``indicators.sliding_windows()``), which caps the cost of a
 pattern that is super-linear in the length of a single token, so such a pattern is hardly visible when parsing a message.
 The patterns in ``REGEX_SHAPES`` are therefore also measured on their own, on one long token, by CPU time only (a search is
 a single C-level call).
@@ -242,6 +242,15 @@ SHAPES: dict[str, Shape] = {
     # the parameter text bound of the parser at every size, so always cut)
     'header-value-content-type-parameters': Shape(
         lambda n: _message(content_type='text/plain; ' + ';\r\n '.join(f'p{i}=v{i}' for i in range(n))), (8_000, 16_000, 32_000), 'parameters'
+    ),
+    # many RFC 2047 encoded words in the subject: email.header.decode_header() is quadratic in their number (list.pop(0),
+    # bytes concatenation), so the parser has its own linear decode.decode_header()
+    'header-value-subject-encoded-words': Shape(
+        lambda n: _message().replace(b'Subject: scaling', b'Subject: ' + b'=?utf-8?q?a?= ' * n), (20_000, 40_000, 80_000), 'words'
+    ),
+    # many encoded words without the closing "?=": the pattern of the stdlib searches to the end of the line from each one
+    'header-value-subject-unclosed-encoded-words': Shape(
+        lambda n: _message().replace(b'Subject: scaling', b'Subject: ' + b'=?a?q?x ' * n), (20_000, 40_000, 80_000), 'words'
     ),
     'header-value-authentication-results': Shape(
         lambda n: _message(

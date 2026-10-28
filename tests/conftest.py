@@ -10,7 +10,7 @@ is started with ``--run-slow``, so the regular CI job (``pytest -v tests``) is n
 
 import pytest
 
-import eml_parser.parser
+import eml_parser.attachments
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -37,6 +37,6 @@ def pytest_unconfigure() -> None:
     It is closed in `__del__`, which at interpreter shutdown runs after the globals of the module are cleared and then fails with
     "Exception ignored in: MagicDetect.__del__ ... TypeError: 'NoneType' object is not callable".
     """
-    cache = getattr(eml_parser.parser.magic, 'threadlocal', None)
+    cache = getattr(eml_parser.attachments.magic, 'threadlocal', None)
     if cache is not None and hasattr(cache, 'magic_instance'):
         del cache.magic_instance
