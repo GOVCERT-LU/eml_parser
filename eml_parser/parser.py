@@ -8,6 +8,7 @@ import dataclasses
 import datetime as dt
 import email
 import email.errors
+import email.generator
 import email.headerregistry
 import email.message
 import email.policy
@@ -15,6 +16,7 @@ import email.utils
 import functools
 import hashlib
 import html
+import io
 import ipaddress
 import itertools
 import logging
@@ -98,6 +100,19 @@ _URL_NOISE_REGEX = re.compile(r"""[', ")}\\]""")
 
 _WHITESPACE_RUN_REGEX = re.compile(r"""\s+""")
 
+# Writes header fields as they are (no refolding, so no parsing) and as UTF-8, see `_Utf8BytesGenerator`.
+_UNFOLDED_UTF8_POLICY = email.policy.default.clone(max_line_length=0, refold_source='none', utf8=True)
+
+
+class _Utf8BytesGenerator(email.generator.BytesGenerator):
+    """Bytes generator which writes text as UTF-8 instead of failing on non-ASCII characters; 8-bit data is written unchanged."""
+
+    _fp: typing.BinaryIO  # set by Generator.__init__(), missing in the typeshed stubs
+
+    def write(self, s: str) -> None:
+        """Write text as UTF-8, surrogate escaped bytes as the original bytes."""
+        self._fp.write(s.encode('utf-8', 'surrogateescape'))
+
 
 def _normalized_ip(text: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
     """Parse an IP address for comparisons, independent of its notation.
@@ -122,6 +137,40 @@ def _normalized_ip(text: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address |
         return address.ipv4_mapped
 
     return address
+
+
+def _payload_text(part: email.message.Message) -> list[email.message.Message] | str:
+    """Return the payload of a part like `part.get_payload()`, also if its declared charset fails.
+
+    For 8-bit text the stdlib decodes the payload with the declared charset and falls back to ASCII only for unknown charset
+    names; others raise, e.g. "idna" (which supports no error handler). These are decoded as ASCII as well, after the
+    content transfer encoding (the stdlib offers the undecoded bytes only that way).
+
+    Args:
+        part (email.message.Message): The part.
+
+    Returns:
+        The list of sub-parts of a multipart part, otherwise the text.
+    """
+    try:
+        return typing.cast('list[email.message.Message] | str', part.get_payload())
+    except ValueError:
+        logger.warning('Payload cannot be decoded with its charset "%s", decoding it as ASCII.', part.get_content_charset())
+
+    return typing.cast('bytes', part.get_payload(decode=True)).decode('ascii', 'replace')
+
+
+def _filename(part: email.message.Message) -> str:
+    """Return the file name of a part, or an empty string if it has none or it cannot be decoded.
+
+    The stdlib fails on some malformed parameters, e.g. with a ValueError on an RFC 2231 value with a NUL in its charset.
+    """
+    try:
+        return part.get_filename('')
+    except (binascii.Error, AssertionError, ValueError):
+        logger.exception('Exception occurred while trying to parse the content-disposition header. Collected data will not be complete.')
+
+    return ''
 
 
 def iter_parts(msg: email.message.Message, recursion_limit: int) -> collections.abc.Iterator[tuple[email.message.Message, str | None]]:
@@ -308,7 +357,7 @@ class CustomPolicy(email.policy.EmailPolicy):
         return result
 
     @functools.lru_cache(maxsize=1024)  # noqa: B019 - the cache is bounded, so it keeps at most 1024 policies alive
-    def _fetch_fixed_header(self, name: str, value: str) -> tuple[str, str | None]:
+    def _fetch_fixed_header(self, name: str, value: str) -> tuple[str, str | None]:  # noqa: PLR0911 - a value and a fallback per kind of header
         """Cached pure variant of `fetch_fixed_header` which reports its warning as the second return value instead of logging it."""
         header = name.lower()
 
@@ -337,7 +386,13 @@ class CustomPolicy(email.policy.EmailPolicy):
                 m = self.email_regex.findall(value)
                 return ', '.join(m), None
 
-        return super().header_fetch_parse(name, value), None
+        try:
+            return super().header_fetch_parse(name, value), None
+        except (IndexError, ValueError):
+            # The stdlib parsers fail on some malformed values, e.g. on a parameter `name*` without a value (IndexError) or with a
+            # NUL in its RFC 2231 charset (ValueError) in Content-Type or Content-Disposition. This happens while the stdlib
+            # parses the message, so the raw value is used instead.
+            return self.unparsed_header_value(name, value), f'Header field "{header}" cannot be parsed, its raw value is used.'
 
 
 class EmlParser:
@@ -498,11 +553,17 @@ class EmlParser:
 
         while parts:
             part = parts.pop()
-            payload = part.get_payload()
 
             if part.is_multipart():
-                parts.extend(typing.cast('list[email.message.Message]', payload))
-            elif part.get_content_maintype() == 'multipart' and isinstance(payload, str):
+                parts.extend(typing.cast('list[email.message.Message]', part.get_payload()))
+                continue
+
+            if part.get_content_maintype() != 'multipart':
+                continue
+
+            payload = _payload_text(part)
+
+            if isinstance(payload, str):
                 boundary = self.guess_boundary(payload, part.get_boundary(failobj=None))
 
                 if boundary is None:
@@ -520,7 +581,13 @@ class EmlParser:
                     part.replace_header('Content-Type', 'text/plain')
                     continue
 
-                part.set_param('boundary', boundary)
+                try:
+                    part.set_param('boundary', boundary)
+                except ValueError:
+                    # The other parameters contain line breaks, which may not be stored again. set_param() removed the header already.
+                    logger.warning('Content-Type of a repaired multipart part contains line breaks, keeping only the boundary.')
+                    part['Content-Type'] = f'multipart/mixed; boundary="{boundary}"'
+
                 part.set_payload(repaired)
                 parts.append(part)
 
@@ -1339,7 +1406,7 @@ class EmlParser:
             or filename.endswith(eml_parser.constants.TEXT_ATTACHMENT_EXTENSIONS)
         )
 
-        if is_text and is_attachment and len(msg.get_payload()) > eml_parser.constants.MAX_TEXT_ATTACHMENT_SIZE:
+        if is_text and is_attachment and len(_payload_text(msg)) > eml_parser.constants.MAX_TEXT_ATTACHMENT_SIZE:
             logger.warning('Text attachment "%s" is larger than %d bytes, it is not scanned.', filename, eml_parser.constants.MAX_TEXT_ATTACHMENT_SIZE)
             return False
 
@@ -1366,11 +1433,7 @@ class EmlParser:
             # Treat text document attachments as belonging to the body of the mail.
             # Attachments with a file-extension of .htm/.html are implicitly treated
             # as text as well in order not to escape later checks (e.g. URL scan).
-            try:
-                filename = part.get_filename('').lower()
-            except (binascii.Error, AssertionError):
-                logger.exception('Exception occurred while trying to parse the content-disposition header. Collected data will not be complete.')
-                filename = ''
+            filename = _filename(part).lower()
 
             if not self.is_text_part(part, filename):
                 continue
@@ -1468,7 +1531,7 @@ class EmlParser:
             data = typing.cast('bytes', msg.get_payload(decode=True))
 
         part_number = next(counter)
-        filename = msg.get_filename('')
+        filename = _filename(msg)
 
         if filename:
             filename = eml_parser.decode.decode_field(filename)
@@ -1534,13 +1597,25 @@ class EmlParser:
 
         try:
             return payload[0].as_bytes(policy=email.policy.default.clone(max_line_length=0))
-        except UnicodeEncodeError:
+        except (AttributeError, IndexError, UnicodeEncodeError):
+            # AttributeError and IndexError: the stdlib address parser fails on a header field while refolding it.
             custom_policy = email.policy.compat32.clone(max_line_length=0)
 
         try:
             return payload[0].as_bytes(policy=custom_policy)
         except UnicodeEncodeError:
+            pass
+
+        try:
             return payload[0].as_string(policy=custom_policy).encode('utf-8', 'replace')
+        except (LookupError, TypeError, UnicodeEncodeError, email.errors.MessageError):
+            # The text generator re-encodes 8-bit text with the declared charset, which fails for unknown, unsuitable (UTF-16)
+            # or RFC 2231 charsets, and refuses header fields with line breaks. Written as is instead: text as UTF-8, 8-bit data unchanged.
+            logger.warning('The message in a "message/rfc822" part cannot be serialized, writing it without re-encoding.')
+
+        serialized = io.BytesIO()
+        _Utf8BytesGenerator(serialized, mangle_from_=False, policy=_UNFOLDED_UTF8_POLICY).flatten(payload[0])
+        return serialized.getvalue()
 
     @staticmethod
     def get_mime_type(data: bytes) -> tuple[str, str] | tuple[None, None]:
