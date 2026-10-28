@@ -1,10 +1,13 @@
 """This module contains various string import, check and parse methods."""
 
+import collections.abc
+import contextlib
 import datetime as dt
 import decimal
 import email
 import email.errors
 import email.header
+import email.message
 import email.policy
 import email.utils
 import html
@@ -50,6 +53,7 @@ import eml_parser.regexes
 logger = logging.getLogger(__name__)
 
 default_date = '1970-01-01T00:00:00+00:00'
+DEFAULT_DATE = dt.datetime.fromisoformat(default_date)
 _DATEUTIL_DEFAULT = dt.datetime(1970, 1, 1)  # noqa: DTZ001
 
 # The charset detection is slow, bodies larger than this are decoded with the declared charset only, even if that is wrong.
@@ -73,18 +77,18 @@ def decode_field(field: str) -> str:
     except email.errors.HeaderParseError:
         return field
 
-    string = ''
+    decoded_parts = []
 
-    for _text, charset in _decoded:
+    for text, charset in _decoded:
         if charset:
-            string += decode_string(_text, charset)
-        elif isinstance(_text, bytes):
+            decoded_parts.append(decode_string(text, charset))
+        elif isinstance(text, bytes):
             # @TODO might be an idea to check with charset-normalizer here
-            string += _text.decode('utf-8', 'replace')
+            decoded_parts.append(text.decode('utf-8', 'replace'))
         else:
-            string += _text
+            decoded_parts.append(text)
 
-    return string
+    return ''.join(decoded_parts)
 
 
 def decode_body(data: bytes, charset: str | None) -> str:
@@ -203,15 +207,13 @@ def workaround_bug_27257(msg: email.message.Message, header: str, email_regex: r
     Returns:
         list: Returns a list of strings which represent e-mail addresses.
     """
-    return_value: list[str] = []
+    addresses: list[str] = []
 
     for value in workaround_field_value_parsing_errors(msg, header):
-        if value != '':
-            m = email_regex.findall(value)
-            if m:
-                return_value += list(dict.fromkeys(m))
+        # unique per value, in order of appearance
+        addresses.extend(dict.fromkeys(email_regex.findall(value)))
 
-    return return_value
+    return addresses
 
 
 def workaround_field_value_parsing_errors(msg: email.message.Message, header: str) -> list[str]:
@@ -224,22 +226,27 @@ def workaround_field_value_parsing_errors(msg: email.message.Message, header: st
     Returns:
         list: Return an extracted list of strings.
     """
-    if msg.policy == email.policy.compat32:
-        new_policy = None
-    else:
-        new_policy = msg.policy
+    with compat32_policy(msg):
+        return [value for value in msg.get_all(header, []) if value != '']
 
+
+@contextlib.contextmanager
+def compat32_policy(msg: email.message.Message) -> collections.abc.Iterator[email.message.Message]:
+    """Temporarily parse the header fields of a message with the lenient compat32 policy, for values the default policy fails on.
+
+    Args:
+        msg (email.message.Message): An e-mail message object, its policy is restored on exit, also if an exception is raised.
+
+    Yields:
+        email.message.Message: The message.
+    """
+    former_policy = msg.policy
     msg.policy = email.policy.compat32
-    return_value = []
 
-    for value in msg.get_all(header, []):
-        if value != '':
-            return_value.append(value)
-
-    if new_policy is not None:
-        msg.policy = new_policy
-
-    return return_value
+    try:
+        yield msg
+    finally:
+        msg.policy = former_policy
 
 
 def robust_string2date(line: str) -> dt.datetime:
@@ -263,7 +270,7 @@ def robust_string2date(line: str) -> dt.datetime:
 
     # if the input is empty, we return a default date
     if line == '':
-        return dt.datetime.fromisoformat(default_date)
+        return DEFAULT_DATE
 
     try:
         date_ = email.utils.parsedate_to_datetime(line)
@@ -276,7 +283,7 @@ def robust_string2date(line: str) -> dt.datetime:
             date_ = dateutil.parser.parse(line, default=_DATEUTIL_DEFAULT)
         except (AttributeError, ValueError, OverflowError, decimal.InvalidOperation):
             # Now we are facing an invalid date.
-            return dt.datetime.fromisoformat(default_date)
+            return DEFAULT_DATE
 
     if date_.utcoffset() is None:
         return date_.replace(tzinfo=dt.UTC)
@@ -343,25 +350,25 @@ def rfc2047_decode(value: str) -> str:
     if not value:
         return value
 
-    parsed = ''
+    return ''.join(_decode_rfc2047_fragment(fragment, charset) for fragment, charset in email.header.decode_header(value))
 
-    for k, v in email.header.decode_header(value):
-        if isinstance(k, str):
-            # decode_header returns str (not bytes) for fragments which did not
-            # need RFC2047 decoding, e.g. when the whole value is plain ASCII.
-            parsed += k
-        elif v is None:
-            parsed += k.decode('ascii', errors='replace')
 
-        else:
-            try:
-                parsed += k.decode(v, errors='replace')
-            except LookupError:
-                # Unknown charset name, e.g. "=?foo-bar?q?x?=". Never fail on attacker controlled input.
-                logger.debug('Unknown charset "%s" in RFC2047 encoded word, trying to detect the encoding', v, exc_info=True)
-                parsed += decode_string(k)
+def _decode_rfc2047_fragment(fragment: str | bytes, charset: str | None) -> str:
+    """Decode one fragment returned by `email.header.decode_header()`, see `rfc2047_decode()`."""
+    if isinstance(fragment, str):
+        # decode_header returns str (not bytes) for fragments which did not
+        # need RFC2047 decoding, e.g. when the whole value is plain ASCII.
+        return fragment
 
-    return parsed
+    if charset is None:
+        return fragment.decode('ascii', errors='replace')
+
+    try:
+        return fragment.decode(charset, errors='replace')
+    except LookupError:
+        # Unknown charset name, e.g. "=?foo-bar?q?x?=". Never fail on attacker controlled input.
+        logger.debug('Unknown charset "%s" in RFC2047 encoded word, trying to detect the encoding', charset, exc_info=True)
+        return decode_string(fragment)
 
 
 def noparenthesis(line: str, replacement: str = '') -> str:

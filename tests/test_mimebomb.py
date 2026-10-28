@@ -6,7 +6,7 @@ import pytest
 import eml_parser.parser
 
 
-def mime_bomb_a(depth: int = 124):
+def mime_bomb_a(depth: int = 124) -> bytes:
     inner = b'From: a@a\r\nTo: b@b\r\nContent-Type: text/plain\r\n\r\n.\r\n'
     msg = inner
     for i in range(depth):
@@ -21,7 +21,7 @@ def mime_bomb_a(depth: int = 124):
     return msg
 
 
-def mime_bomb_b(depth: int = 124):
+def mime_bomb_b(depth: int = 124) -> EmailMessage:
     msg = EmailMessage()
     msg.set_content('This is the core of the onion.')
 
@@ -38,7 +38,7 @@ def mime_bomb_b(depth: int = 124):
     return msg
 
 
-def mime_bomb_c(depth: int = 124):
+def mime_bomb_c(depth: int = 124) -> bytes:
     msg = b'From: leaf@test.com\r\nTo: root@test.com\r\nSubject: The Core\r\nContent-Type: text/plain\r\n\r\nThis is the innermost content.'
 
     for i in range(depth):

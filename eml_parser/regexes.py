@@ -1,5 +1,3 @@
-# pylint: disable=line-too-long
-
 """This module contains a number of regular expressions used by this Library."""
 
 import regex as re
@@ -62,7 +60,20 @@ dom_regex = re.compile(
 ipv4_regex = re.compile(r"""(?<![0-9A-Za-z_.])(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})(?![0-9A-Za-z_])(?!\.[0-9A-Za-z_])""")
 
 # From https://gist.github.com/mnordhoff/2213179 : IPv6 with zone ID (RFC 6874)
-_IPV6_ADDRESS = r"""((?:[0-9a-f]{1,4}:){6}(?:[0-9a-f]{1,4}:[0-9a-f]{1,4}|(?:(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))|::(?:[0-9a-f]{1,4}:){5}(?:[0-9a-f]{1,4}:[0-9a-f]{1,4}|(?:(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))|(?:[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){4}(?:[0-9a-f]{1,4}:[0-9a-f]{1,4}|(?:(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))|(?:[0-9a-f]{1,4}:[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){3}(?:[0-9a-f]{1,4}:[0-9a-f]{1,4}|(?:(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))|(?:(?:[0-9a-f]{1,4}:){,2}[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){2}(?:[0-9a-f]{1,4}:[0-9a-f]{1,4}|(?:(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))|(?:(?:[0-9a-f]{1,4}:){,3}[0-9a-f]{1,4})?::[0-9a-f]{1,4}:(?:[0-9a-f]{1,4}:[0-9a-f]{1,4}|(?:(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))|(?:(?:[0-9a-f]{1,4}:){,4}[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:[0-9a-f]{1,4}|(?:(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))|(?:(?:[0-9a-f]{1,4}:){,5}[0-9a-f]{1,4})?::[0-9a-f]{1,4}|(?:(?:[0-9a-f]{1,4}:){,6}[0-9a-f]{1,4})?::)"""
+_IPV6_H16 = r"""[0-9a-f]{1,4}"""
+_IPV4_OCTET = r"""(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])"""
+_IPV6_LS32 = rf"""(?:{_IPV6_H16}:{_IPV6_H16}|(?:{_IPV4_OCTET}\.){{3}}{_IPV4_OCTET})"""
+_IPV6_ADDRESS = (
+    rf"""((?:{_IPV6_H16}:){{6}}{_IPV6_LS32}"""
+    rf"""|::(?:{_IPV6_H16}:){{5}}{_IPV6_LS32}"""
+    rf"""|(?:{_IPV6_H16})?::(?:{_IPV6_H16}:){{4}}{_IPV6_LS32}"""
+    rf"""|(?:{_IPV6_H16}:{_IPV6_H16})?::(?:{_IPV6_H16}:){{3}}{_IPV6_LS32}"""
+    rf"""|(?:(?:{_IPV6_H16}:){{,2}}{_IPV6_H16})?::(?:{_IPV6_H16}:){{2}}{_IPV6_LS32}"""
+    rf"""|(?:(?:{_IPV6_H16}:){{,3}}{_IPV6_H16})?::{_IPV6_H16}:{_IPV6_LS32}"""
+    rf"""|(?:(?:{_IPV6_H16}:){{,4}}{_IPV6_H16})?::{_IPV6_LS32}"""
+    rf"""|(?:(?:{_IPV6_H16}:){{,5}}{_IPV6_H16})?::{_IPV6_H16}"""
+    rf"""|(?:(?:{_IPV6_H16}:){{,6}}{_IPV6_H16})?::)"""
+)
 
 # An address must not directly follow a word character, a dot or a colon (exception: the "IPv6:" tag of address literals) nor be followed by a word character
 # or a colon and hex digit, otherwise parts of longer sequences such as "std::vector" or "1:2:3:4:5:6:7:8:9" would be reported.
@@ -86,19 +97,11 @@ def findall_ipv6(text: str) -> list[str]:
     return []
 
 
-# simple version for searching for URLs
-# character set based on http://tools.ietf.org/html/rfc3986
-# url_regex_simple = re.compile(r'''(?:(?:https?|ftps?)://)(?:\S+(?::\S*)?@)?(?:(?:[1-9]\d?|1\d\d|2[01]\d|22[0-3])(?:\.(?:1?\d{1,2}|2[0-4]\d|25[0-5])){2}(?:\.(?:[1-9]\d?|1\d\d|2[0-4]\d|25[0-4]))|(?:(?:[a-z\u00a1-\uffff0-9]+-?)*[a-z\u00a1-\uffff0-9]+)(?:\.(?:[a-z\u00a1-\uffff0-9]+-?)*[a-z\u00a1-\uffff0-9]+)*(?:\.(?:[a-z\u00a1-\uffff]{2,})))(?::\d{2,5})?(?:/[^\s]*)?''')
-# regex updated from https://gist.github.com/gruber/8891611 but modified with:
-#   - do not use a fixed list of TLDs but rather \w
-#   - only check for URLs with scheme
-#   - modify the end marker to allow any acceptable char according to the RFC3986
-
-url_regex_comma = re.compile(r',(?=https?|ftps?)', flags=re.IGNORECASE)
-url_regex_www_comma = re.compile(r',(?=https?|ftps?|www\d{0,3})', flags=re.IGNORECASE)
-
-url_regex_simple = re.compile(
-    r"""
+# URLs with a scheme, based on https://gist.github.com/gruber/8891611 (character set of RFC 3986), but modified to
+#   - not use a fixed list of TLDs but rather \w
+#   - only match URLs with a scheme
+#   - end with any character acceptable according to RFC 3986
+_URL_WITH_SCHEME = r"""
 \b
 (?:https?|ftps?):
 (?:/{1,3}|[a-z0-9%])
@@ -108,33 +111,21 @@ url_regex_simple = re.compile(
   [^\x00-\x20\s`()<>{}\[\]\/'"«»“”‘’]+
 )
 (?:[\w\-._~%!$&'()*+,;=:/?#\[\]@\U00001000-\U0010FFFF]*[^\x00-\x20\s`!\[\]{};:'".,<>«»“”‘’])?
-""",
-    flags=re.IGNORECASE | re.VERBOSE,
-)
-url_regex_www = re.compile(
-    r"""
-(?:
-# http/ftp schemes
-    \b
-    (?:https?|ftps?):
-    (?:/{1,3}|[a-z0-9%])
-    (?:
-      \[[0-9a-f:.]{2,40}(?:%[^\x00-\x20\s\]]{1,100})?\]
-    |
-      [^\x00-\x20\s`()<>{}\[\]\/'"«»“”‘’]+
-    )
-    (?:[\w\-._~%!$&'()*+,;=:/?#\[\]@\U00001000-\U0010FFFF]*[^\x00-\x20\s`!\[\]{};:'".,<>«»“”‘’])?
-|
-# www address  (any preceding matched character needs to be removed afterward)
-    (?:
-    ^|[ \t\n\r\f\v\'\"«»“”‘’])
-    www\d{0,3}[.](?:[-\w\u0900-\u2017\u2020-\U0010FFFF]{1,250}[.]){1,250}[-0-9a-z\w\u0900-\u0DFF]{2,30}[.]*  # Host Simple TLD regex
-    (?::[0]*[1-9][0-9]{0,4})?  # Port
-    (?:[\/#?](?:[\w\-._~%!$&'()*+,;=:/?#\[\]@\U00001000-\U0010FFFF]*[^\x00-\x20\s`!\[\]{};:'\".,<>«»“”‘’])) # Path, etc.
-)
-""",
-    flags=re.IGNORECASE | re.VERBOSE,
-)
+"""
+
+# An address starting with "www" without a scheme (the preceding character which is matched needs to be removed afterwards)
+_URL_WWW = r"""
+(?:^|[ \t\n\r\f\v\'\"«»“”‘’])
+www\d{0,3}[.](?:[-\w\u0900-\u2017\u2020-\U0010FFFF]{1,250}[.]){1,250}[-0-9a-z\w\u0900-\u0DFF]{2,30}[.]*  # Host Simple TLD regex
+(?::[0]*[1-9][0-9]{0,4})?  # Port
+(?:[\/#?](?:[\w\-._~%!$&'()*+,;=:/?#\[\]@\U00001000-\U0010FFFF]*[^\x00-\x20\s`!\[\]{};:'\".,<>«»“”‘’])) # Path, etc.
+"""
+
+url_regex_comma = re.compile(r',(?=https?|ftps?)', flags=re.IGNORECASE)
+url_regex_www_comma = re.compile(r',(?=https?|ftps?|www\d{0,3})', flags=re.IGNORECASE)
+
+url_regex_simple = re.compile(_URL_WITH_SCHEME, flags=re.IGNORECASE | re.VERBOSE)
+url_regex_www = re.compile(f'(?:{_URL_WITH_SCHEME}|{_URL_WWW})', flags=re.IGNORECASE | re.VERBOSE)
 
 
 # Search for URLs in the attributes of HTML tags: links and images, but also the targets of forms (phishing), frames, scripts, embedded objects and redirects.
@@ -208,8 +199,6 @@ url_drop_chars_table = str.maketrans('', '', '\t\n\r')
 
 # A (quoted) value starting with a scheme followed by slashes or backslashes, i.e. http:\\\\host\\path
 url_backslash_scheme_regex = re.compile(r"""[\"\']?[a-z][a-z0-9+.\-]*:[\\/]{2}""", re.IGNORECASE)
-
-escape_special_regex_chars = re.compile(r"""([\^$\[\]()+?.])""")
 
 window_slice_regex = re.compile(r"""\s""")
 

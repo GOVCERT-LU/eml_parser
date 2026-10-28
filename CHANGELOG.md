@@ -3,6 +3,19 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Fixes
+- Fix `include_raw_body=True` not adding the text parts to the result (since v0.9, 2016): `parse_email()` stored them and then overwrote them. The result has the top level `raw_body` key of v0.5 again, a list of `(content transfer encoding, decoded text)` pairs, one per text part.
+### Changes
+- Refactor `EmlParser.parse_email()` into focused internal steps (sender, received lines, text parts, indicators, header fields). Apart from the fix above, the parse result and the public API are unchanged, verified on a corpus of 3 200 e-mails.
+- Walk the MIME parts iteratively in one place (`parser.iter_parts()`), for the text parts and the attachments. Nesting beyond `EmlParser.MULTIPART_RECURSION_LIMIT` still raises `RecursionError`.
+- The internal methods `get_raw_body_text()`, `traverse_multipart()` and `prepare_multipart_part_attachment()` are private now (`_get_raw_body_text()`, ...) and return lists of parts and attachments instead of dicts keyed by random UUIDs.
+- Restore the policy of a message when parsing a header field with the compat32 policy fails as well (`decode.compat32_policy()`); it was left on compat32.
+- Build `regexes.url_regex_www` and the IPv6 pattern from shared fragments (same matches), and remove the unused `regexes.escape_special_regex_chars`.
+- Add `decode.DEFAULT_DATE` and `parser.HASH_TYPES`.
+### Tests
+- Add tests for the new helpers.
+
 ## [v4.6.0]
 ### Fixes
 - Fix domains and e-mail addresses next to non-ASCII letters being reported as fragments (since v4.4.0; vulnerability report by @4ktLuffy, thanks): `exämple.de` gave `mple.de`, `user@exämple.de` gave `user@ex` and `jörg@example.com` gave `rg@example.com`. Such a token is no longer reported in part. CJK, Thai and Korean text around a domain still ends it.
