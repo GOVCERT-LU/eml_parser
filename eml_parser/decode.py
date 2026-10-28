@@ -13,6 +13,7 @@ import email.utils
 import html
 import json
 import logging
+import typing
 
 import charset_normalizer
 import dateutil.parser
@@ -210,8 +211,13 @@ def workaround_bug_27257(msg: email.message.Message, header: str, email_regex: r
     addresses: list[str] = []
 
     for value in workaround_field_value_parsing_errors(msg, header):
+        text = value
+        # compat32 returns values with 8-bit bytes as Header objects, the regex needs their decoded text
+        if isinstance(value, email.header.Header):
+            text = rfc2047_decode(value)
+
         # unique per value, in order of appearance
-        addresses.extend(dict.fromkeys(email_regex.findall(value)))
+        addresses.extend(dict.fromkeys(email_regex.findall(text)))
 
     return addresses
 
@@ -247,6 +253,27 @@ def compat32_policy(msg: email.message.Message) -> collections.abc.Iterator[emai
         yield msg
     finally:
         msg.policy = former_policy
+
+
+def header_items(msg: email.message.Message) -> list[tuple[str, typing.Any]]:
+    """Return the header fields of a message or MIME part, falling back to the compat32 policy if parsing a value fails.
+
+    The stdlib address parser fails with an IndexError on some malformed values (e.g. `Cc: "`) and with an
+    AttributeError or TypeError on 8-bit values (bug 27257). Values parsed with compat32 may be `email.header.Header` objects.
+
+    Args:
+        msg (email.message.Message): An e-mail message object or MIME part.
+
+    Returns:
+        list: The (name, value) pairs of all header fields, in order.
+    """
+    try:
+        return msg.items()
+    except (AttributeError, IndexError, TypeError, ValueError):
+        logger.warning('Error parsing the header fields of a MIME part, falling back to the compat32 policy.')
+
+    with compat32_policy(msg):
+        return msg.items()
 
 
 def robust_string2date(line: str) -> dt.datetime:

@@ -99,6 +99,31 @@ _URL_NOISE_REGEX = re.compile(r"""[', ")}\\]""")
 _WHITESPACE_RUN_REGEX = re.compile(r"""\s+""")
 
 
+def _normalized_ip(text: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
+    """Parse an IP address for comparisons, independent of its notation.
+
+    Brackets and the zone index are removed and an IPv4-mapped IPv6 address is its IPv4 address, so `2001:DB8:0::1`
+    equals `2001:db8::1`, `[fe80::1%eth0]` equals `fe80::1` and `::ffff:192.0.2.1` equals `192.0.2.1`.
+
+    Args:
+        text: The address.
+
+    Returns:
+        The address, or None if the text is no IP address.
+    """
+    address_text = text.strip('[]').partition('%')[0]
+
+    try:
+        address = ipaddress.ip_address(address_text)
+    except ValueError:
+        return None
+
+    if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped is not None:
+        return address.ipv4_mapped
+
+    return address
+
+
 def iter_parts(msg: email.message.Message, recursion_limit: int) -> collections.abc.Iterator[tuple[email.message.Message, str | None]]:
     """Walk a message and all its MIME parts depth first, each part before its sub-parts.
 
@@ -381,7 +406,7 @@ class EmlParser:
         """
         self.include_raw_body = include_raw_body
         self.include_attachment_data = include_attachment_data
-        # If no pconf was specified, default to empty dict
+        # If no pconf was specified, default to empty dict. It is read only, the optional keys default to no whitelisting.
         self.pconf = pconf or {}
         self.ignore_bad_start = ignore_bad_start
         self.email_force_tld = email_force_tld
@@ -402,13 +427,9 @@ class EmlParser:
         self.email_regex = eml_parser.regexes.email_force_tld_regex if email_force_tld else eml_parser.regexes.email_no_force_tld_regex
         self.policy = policy or CustomPolicy(email_regex=self.email_regex)
 
-        # If no whitelisting is required, set to emtpy list
-        if 'whiteip' not in self.pconf:
-            self.pconf['whiteip'] = []
-        if 'whitefor' not in self.pconf:
-            self.pconf['whitefor'] = []
-
         self.msg: email.message.Message | None = None
+        # The addresses of pconf['whiteip'], parsed at the start of each message (pconf may change between messages).
+        self._white_ip_addresses: frozenset[ipaddress.IPv4Address | ipaddress.IPv6Address] = frozenset()
 
     def decode_email(self, eml_file: os.PathLike[str] | str, ignore_bad_start: bool = False) -> dict:
         """Function for decoding an EML file into an easily parsable structure.
@@ -565,6 +586,7 @@ class EmlParser:
             raise ValueError('msg is not set.')
 
         msg = self.msg
+        self._white_ip_addresses = self._parse_white_ips()
         headers_struc: dict[str, typing.Any] = {'subject': eml_parser.decode.decode_field(msg.get('subject', ''))}
 
         # If parsing had problems, report it. str() of most stdlib defects is empty, the class name identifies the problem.
@@ -700,7 +722,7 @@ class EmlParser:
                 received.append(parsed_routing)
 
                 for ip in eml_parser.regexes.findall_ipv6(received_line_flat) + eml_parser.regexes.ipv4_regex.findall(received_line_flat):
-                    if ip in self.pconf['whiteip']:
+                    if self._is_white_ip(ip):
                         continue
 
                     if valid_ip := self.get_valid_domain_or_ip(ip):
@@ -713,12 +735,12 @@ class EmlParser:
 
                 recipients = parsed_routing.get('for', [])
                 for mail_candidate in self.email_regex.findall(received_line_flat):
-                    validated_mail_candidate = mail_candidate
-                    if self.email_force_tld:
-                        validated_mail_candidate = self.get_valid_domain_or_ip(mail_candidate)
+                    # The host of the address must be a valid domain or IP address, the address itself is reported.
+                    if self.email_force_tld and self.get_valid_domain_or_ip(mail_candidate) is None:
+                        continue
 
-                    if validated_mail_candidate is not None and validated_mail_candidate not in recipients:
-                        found['received_email'].append(validated_mail_candidate)
+                    if mail_candidate not in recipients:
+                        found['received_email'].append(mail_candidate)
 
         except TypeError:  # Ready to parse email without received headers.
             logger.exception('Exception occurred while parsing received lines.')
@@ -727,7 +749,7 @@ class EmlParser:
         found_foremail: dict[str, None] = {}
         for parsed_routing in received:
             for recipient in parsed_routing.get('for', []):
-                if recipient not in self.pconf['whitefor']:
+                if recipient not in self.pconf.get('whitefor', []):
                     found_foremail[recipient] = None
 
         # Unique values, keys without values are left out.
@@ -764,10 +786,7 @@ class EmlParser:
 
                 found_smtpin[byhostentry] += 1
                 if found_smtpin[byhostentry] > 1:  # Twice found the header...
-                    if parsed_routing.get('warning'):
-                        parsed_routing['warning'].append(['Duplicate SMTP by entrypoint'])
-                    else:
-                        parsed_routing['warning'] = ['Duplicate SMTP by entrypoint']
+                    parsed_routing.setdefault('warning', []).append('Duplicate SMTP by entrypoint')
 
     def _parse_body_part(self, body_part: BodyPart, multipart: bool) -> dict[str, typing.Any]:
         """Build the entry of a text part in the parse result: its indicators (or their hashes), header fields and hash.
@@ -866,12 +885,7 @@ class EmlParser:
                     # "::" or a scope resolution like "Add::dead" is not an address
                     continue
 
-                valid_ip = self.get_valid_domain_or_ip(ip.lower())
-                if valid_ip in self.pconf['whiteip']:
-                    continue
-
-                if valid_ip:
-                    found.ip[valid_ip] = None
+                self._add_ip(self.get_valid_domain_or_ip(ip.lower()), found.ip)
 
         # URLs do not necessarily appear as-is in the body, as they may contain escaped entities.
         # For this reason, we have to extract the domains again from each parsed URL.
@@ -918,8 +932,28 @@ class EmlParser:
 
     def _add_ip(self, ip: str | None, ips: dict[str, None]) -> None:
         """Add an IP address to *ips*, unless it is None or in `pconf['whiteip']`."""
-        if ip and ip not in self.pconf['whiteip']:
+        if ip and not self._is_white_ip(ip):
             ips[ip] = None
+
+    def _parse_white_ips(self) -> frozenset[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+        """Parse the entries of `pconf['whiteip']` which are IP addresses, see `_normalized_ip()`."""
+        addresses = set()
+
+        for entry in self.pconf.get('whiteip', []):
+            address = _normalized_ip(str(entry))
+            if address is not None:
+                addresses.add(address)
+
+        return frozenset(addresses)
+
+    def _is_white_ip(self, ip: str) -> bool:
+        """Check whether an IP address is in `pconf['whiteip']`, in any notation (see `_normalized_ip()`)."""
+        # Entries are also compared as given, as before addresses were parsed.
+        if ip in self.pconf.get('whiteip', []):
+            return True
+
+        address = _normalized_ip(ip)
+        return address is not None and address in self._white_ip_addresses
 
     def _collect_header_fields(self, msg: email.message.Message) -> dict[str, list[str]]:
         """Collect the decoded values of all header fields of a message, working around values the stdlib fails to parse.
@@ -953,7 +987,8 @@ class EmlParser:
                 # Try to work around this by using a relaxed policy, if possible.
                 # Parsing might not give meaningful results in this case!
                 logger.error('Field value parsing error, trying to work around this!')
-                decoded_values = eml_parser.decode.workaround_field_value_parsing_errors(msg, name)
+                # compat32 returns values with 8-bit bytes as Header objects, which are no JSON values
+                decoded_values = [str(value) for value in eml_parser.decode.workaround_field_value_parsing_errors(msg, name)]
             except ValueError:
                 # extract values using a relaxed policy
                 for raw_field in eml_parser.decode.workaround_field_value_parsing_errors(msg, name):
@@ -1343,13 +1378,7 @@ class EmlParser:
             encoding = part.get('content-transfer-encoding', '').lower()
             text = eml_parser.decode.decode_body(typing.cast('bytes', part.get_payload(decode=True)), part.get_content_charset())
 
-            # In case we hit bug 27257 or any other parsing error, try to downgrade the used policy
-            try:
-                headers = part.items()
-            except (AttributeError, TypeError, ValueError):
-                with eml_parser.decode.compat32_policy(part):
-                    headers = part.items()
-
+            headers = eml_parser.decode.header_items(part)
             body_parts.append(BodyPart(encoding, text, headers, boundary))
 
         return body_parts
@@ -1470,7 +1499,7 @@ class EmlParser:
             attachment['raw'] = base64.b64encode(data)
 
         content_headers: dict[str, list[str]] = {}
-        for name, value in msg.items():
+        for name, value in eml_parser.decode.header_items(msg):
             content_headers.setdefault(name.lower(), []).append(str(value))
         attachment['content_header'] = content_headers
 

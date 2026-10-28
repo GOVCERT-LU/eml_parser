@@ -5,6 +5,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 ### Fixes
+- Fix the warning for a gateway of `pconf['byhostentry']` found more than once in a `Received` line being added as a nested list (`['Duplicate SMTP by entrypoint']`) instead of a string to `header.received[].warning`.
+- Fix `EmlParser` adding the keys `whiteip` and `whitefor` to the `pconf` dict of the caller. The dict is only read now; missing keys mean no whitelisting, as before.
+- Fix whitelisted IP addresses (`pconf['whiteip']`) being matched by notation: in `Received` lines the address was compared as written, in the body in its normalised form, so `2001:db8:0:0::1` or `::ffff:192.0.2.1` was not recognised as the whitelisted `2001:db8::1` or `192.0.2.1`, and an entry written in upper case never matched. Addresses are compared as IP addresses now (zone index ignored, IPv4-mapped IPv6 addresses as their IPv4 address); entries are still compared as given too. A `whiteip` given as a string instead of a list no longer makes the parser raise `TypeError`.
+- Fix `header.received_email` containing the domains of the addresses instead of the addresses when `email_force_tld` is set. The recipients of the `for` part of a line are left out, as without `email_force_tld`; this comparison never matched a domain before.
+- Fix a single malformed header field aborting the parse. In the headers of a text part or an attachment, address fields the stdlib parser fails on (e.g. `Cc: "` or `To: x:"`, `IndexError`) or 8-bit values (`AttributeError`) made `decode_email_bytes()` raise; these header fields are read with the compat32 policy now, as the text parts already did for some errors (`decode.header_items()`).
+- Fix `decode.workaround_bug_27257()` raising `TypeError` for `From`, `To` or `Cc` fields with 8-bit bytes, which aborted the parse: compat32 returns these values as `email.header.Header` objects, they are decoded before the addresses are extracted.
+- Fix `header.header` holding `email.header.Header` objects instead of strings for header fields with 8-bit bytes the default policy fails on (e.g. `Sender: \xff:?]`), which made `export_to_json()` raise `TypeError`.
 - Fix `include_raw_body=True` not adding the text parts to the result (since v0.9, 2016): `parse_email()` stored them and then overwrote them. The result has the top level `raw_body` key of v0.5 again, a list of `(content transfer encoding, decoded text)` pairs, one per text part.
 ### Changes
 - Refactor `EmlParser.parse_email()` into focused internal steps (sender, received lines, text parts, indicators, header fields). Apart from the fix above, the parse result and the public API are unchanged, verified on a corpus of 3 200 e-mails.
@@ -12,7 +19,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - The internal methods `get_raw_body_text()`, `traverse_multipart()` and `prepare_multipart_part_attachment()` are private now (`_get_raw_body_text()`, ...) and return lists of parts and attachments instead of dicts keyed by random UUIDs.
 - Restore the policy of a message when parsing a header field with the compat32 policy fails as well (`decode.compat32_policy()`); it was left on compat32.
 - Build `regexes.url_regex_www` and the IPv6 pattern from shared fragments (same matches), and remove the unused `regexes.escape_special_regex_chars`.
-- Add `decode.DEFAULT_DATE` and `parser.HASH_TYPES`.
+- Add `decode.DEFAULT_DATE`, `decode.header_items()` and `parser.HASH_TYPES`.
 ### Tests
 - Add tests for the new helpers.
 
