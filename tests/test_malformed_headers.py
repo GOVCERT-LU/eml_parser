@@ -81,3 +81,16 @@ def test_rfc2047_decode_keeps_undecodable_values() -> None:
 
     # Assert
     assert decoded == value
+
+
+def test_deeply_nested_address_groups_do_not_exhaust_the_stack() -> None:
+    # Arrange: every colon opens a group, the stdlib address parser recurses once per group
+    nested = b'a:' * 5000 + b'x@y.example'
+    raw = b'From: ' + nested + b'\nTo: ' + nested + b'\n\nbody\n'
+
+    # Act
+    header = eml_parser.parser.EmlParser().decode_email_bytes(raw)['header']
+
+    # Assert
+    assert header['from'] == 'x@y.example'
+    assert header['to'] == ['x@y.example']

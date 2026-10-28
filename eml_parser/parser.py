@@ -100,6 +100,16 @@ _URL_NOISE_REGEX = re.compile(r"""[', ")}\\]""")
 
 _WHITESPACE_RUN_REGEX = re.compile(r"""\s+""")
 
+# Bounds for the stdlib address parser, see `_is_cheap_for_address_parser()`: a group of 32 KiB takes at most about 0.2 s,
+# 500 nested groups stay below the default recursion limit of 1 000.
+_MAX_ADDRESS_PARSER_GROUP_TEXT = 32 * 1024
+_MAX_ADDRESS_PARSER_COLONS = 500
+
+# Header fields with MIME parameters, and the length up to which the stdlib parses them in reasonable time (about 20 ms),
+# see `CustomPolicy.unparsed_header_value()`.
+_MIME_PARAMETER_HEADERS = frozenset(('content-type', 'content-disposition'))
+_MAX_PARAMETER_TEXT = 32 * 1024
+
 # Writes header fields as they are (no refolding, so no parsing) and as UTF-8, see `_Utf8BytesGenerator`.
 _UNFOLDED_UTF8_POLICY = email.policy.default.clone(max_line_length=0, refold_source='none', utf8=True)
 
@@ -158,6 +168,16 @@ def _payload_text(part: email.message.Message) -> list[email.message.Message] | 
         logger.warning('Payload cannot be decoded with its charset "%s", decoding it as ASCII.', part.get_content_charset())
 
     return typing.cast('bytes', part.get_payload(decode=True)).decode('ascii', 'replace')
+
+
+def _is_cheap_for_address_parser(text: str) -> bool:
+    """Whether the stdlib address parser (`email.utils.getaddresses()`, `parseaddr()`) handles *text* in reasonable time.
+
+    It is linear for lists of addresses, but quadratic in the number of members of a group (`team: a, b, ...;`, members
+    need no commas) and recursive for each nested group, so a long group takes minutes and deep nesting raises
+    RecursionError. A text without a colon has no group; otherwise its length bounds the members and its colons the nesting.
+    """
+    return ':' not in text or (len(text) <= _MAX_ADDRESS_PARSER_GROUP_TEXT and text.count(':') <= _MAX_ADDRESS_PARSER_COLONS)
 
 
 def _filename(part: email.message.Message) -> str:
@@ -337,11 +357,22 @@ class CustomPolicy(email.policy.EmailPolicy):
 
     @staticmethod
     def unparsed_header_value(name: str, value: str) -> str:
-        """The raw value of a header field which is not run through the structured header parsers."""
-        if name.lower() == 'date':
+        """The raw value of a header field which is not run through the structured header parsers.
+
+        The parameters of Content-Type and Content-Disposition are still parsed by the stdlib on every access (`get_param()`,
+        `get_boundary()`, ...), quadratic in their number: 4 MB take minutes. Such values are cut after `_MAX_PARAMETER_TEXT`.
+        """
+        header = name.lower()
+        if header == 'date':
             return eml_parser.decode.default_date
 
-        return str(email.policy.compat32.header_fetch_parse(name, value))
+        raw = str(email.policy.compat32.header_fetch_parse(name, value))
+        if header not in _MIME_PARAMETER_HEADERS or len(raw) <= _MAX_PARAMETER_TEXT:
+            return raw
+
+        logger.warning('Header field "%s" is %d characters long, only its first %d characters are used.', header, len(raw), _MAX_PARAMETER_TEXT)
+        cut = raw.rfind(';', 0, _MAX_PARAMETER_TEXT)
+        return raw[: cut if cut > 0 else _MAX_PARAMETER_TEXT]
 
     def fetch_fixed_header(self, name: str, value: str) -> str:
         """Early fix parsing issues and pass the name/value to the parent header_fetch_parse method for proper parsing.
@@ -750,10 +781,12 @@ class EmlParser:
         if field == '':
             return None
 
-        address = email.utils.parseaddr(field)
+        # Values the stdlib address parser cannot handle in reasonable time are searched by regex only.
+        if _is_cheap_for_address_parser(field):
+            address = email.utils.parseaddr(field)
 
-        if address != ('', ''):
-            return address[1]
+            if address != ('', ''):
+                return address[1]
 
         if m := self.email_regex.search(field):
             return m.group(1)
@@ -1340,6 +1373,23 @@ class EmlParser:
 
         return list(found_urls)
 
+    def _getaddresses(self, values: list[str]) -> list[tuple[str, str]]:
+        """Return the (display name, address) pairs of header values like `email.utils.getaddresses()`.
+
+        Values the stdlib address parser cannot handle in reasonable time (see `_is_cheap_for_address_parser()`) are searched
+        for addresses by regex instead.
+        """
+        # The stdlib parses the values joined by ", ", which is what has to be cheap.
+        if _is_cheap_for_address_parser(', '.join(values)):
+            return email.utils.getaddresses(values)
+
+        logger.warning('Address header field too complex for the address parser, extracting the addresses by regex.')
+        pairs: list[tuple[str, str]] = []
+        for value in values:
+            pairs.extend(('', address) for address in self.email_regex.findall(value))
+
+        return pairs
+
     def headeremail2list(self, header: str) -> list[str]:
         """Parses a given header field with e-mail addresses to a list of e-mail addresses.
 
@@ -1353,7 +1403,7 @@ class EmlParser:
             raise ValueError('msg is not set.')
 
         try:
-            field = email.utils.getaddresses(self.msg.get_all(header, []))
+            field = self._getaddresses(self.msg.get_all(header, []))
         except (IndexError, AttributeError):
             field = email.utils.getaddresses(eml_parser.decode.workaround_bug_27257(self.msg, header, self.email_regex))
         except ValueError:

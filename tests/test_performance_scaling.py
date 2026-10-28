@@ -233,6 +233,16 @@ SHAPES: dict[str, Shape] = {
     'header-value-addresses': Shape(
         lambda n: _message(headers=['Cc: ' + ',\r\n '.join(f'u{i} <u{i}@d{i}.example.test>' for i in range(n))]), (2_000, 4_000, 8_000), 'addresses'
     ),
+    # one group with many members: the stdlib address parser is quadratic in the members of a group (above the group bound of
+    # the parser at every size, so always the regex path)
+    'header-value-address-group': Shape(
+        lambda n: _message(headers=['To: team: ' + ',\r\n '.join(f'u{i}@d.test' for i in range(n)) + ';']), (20_000, 40_000, 80_000), 'addresses'
+    ),
+    # many MIME parameters: the stdlib parses them on every get_param() / get_boundary(), quadratic in their number (above
+    # the parameter text bound of the parser at every size, so always cut)
+    'header-value-content-type-parameters': Shape(
+        lambda n: _message(content_type='text/plain; ' + ';\r\n '.join(f'p{i}=v{i}' for i in range(n))), (8_000, 16_000, 32_000), 'parameters'
+    ),
     'header-value-authentication-results': Shape(
         lambda n: _message(
             headers=['Authentication-Results: mx.example.test;\r\n ' + ';\r\n '.join(f'spf=pass smtp.mailfrom=s{i}.example.test' for i in range(n))]
@@ -305,7 +315,12 @@ REGEX_SHAPES: dict[str, tuple[typing.Any, str]] = {
     'recv-dom-regex-host-names': (eml_parser.regexes.recv_dom_regex, 'from a.'),
     'recv-dom-regex-numeric-last-label': (eml_parser.regexes.recv_dom_regex, 'from a.1'),
     'recv-dom-regex-fragments': (eml_parser.regexes.recv_dom_regex, 'by a1_'),
+    # a share host whose separator after the last label is missing must not be given back label by label
+    'unc-regex-host-labels': (eml_parser.regexes.unc_regex, '1.'),
 }
+
+# Text in front of the repeated unit, for patterns which only start at a marker.
+REGEX_PREFIXES = {'unc-regex-host-labels': '\\\\'}
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -469,7 +484,8 @@ def test_parsing_cost_scales_linearly(name: str, header_cache: typing.Any, monke
 @pytest.mark.parametrize('name', list(REGEX_SHAPES))
 def test_regex_cost_scales_linearly(name: str) -> None:
     pattern, unit = REGEX_SHAPES[name]
-    small_text, large_text = (unit * n for n in REGEX_SIZES)
+    prefix = REGEX_PREFIXES.get(name, '')
+    small_text, large_text = (prefix + unit * n for n in REGEX_SIZES)
     size_ratio = REGEX_SIZES[-1] / REGEX_SIZES[0]
 
     small, _ = _cpu_time(lambda: pattern.findall(small_text), None)

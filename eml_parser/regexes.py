@@ -231,13 +231,13 @@ unc_regex = re.compile(
     (?:
         (?<![\\\w:.])                              # not part of a longer token or an escaped path such as C:\\Users
         \\{2}(?:\?\\UNC\\)?
-        (?P<unc_host>[a-z0-9-]+(?:\.[a-z0-9-]+)*(?:@(?:ssl|\d{1,5}))?)
+        (?P<unc_host>[a-z0-9-]++(?:\.[a-z0-9-]++)*+(?:@(?:ssl|\d{1,5}))?)  # possessive: giving back labels never helps
         \\(?!\\)                                   # exactly one backslash: in escaped text (`\\\\Users\\\\Bob`) the separators are doubled
         [^\s\\/:*?"<>|]+                            # share name
         (?:\\[^\s"'<>|)\]]*)?                       # path
     |
         (?:file://(?!/)|file:////|smb://)            # `file:///C:/x` and `file://localhost/` are local
-        (?P<url_host>[a-z0-9-]+(?:\.[a-z0-9-]+)*(?:@(?:ssl|\d{1,5}))?)
+        (?P<url_host>[a-z0-9-]++(?:\.[a-z0-9-]++)*+(?:@(?:ssl|\d{1,5}))?)
         (?:/[^\s"'<>)\]]*)?
     )
     """,
