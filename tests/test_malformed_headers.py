@@ -70,3 +70,14 @@ def test_header_items_falls_back_to_compat32() -> None:
     # Assert
     assert items == [('Cc', '"'), ('Subject', 's')]
     assert msg.policy is email.policy.default
+
+
+def test_rfc2047_decode_keeps_undecodable_values() -> None:
+    # Arrange: invalid base64 in the encoded word, the stdlib raises HeaderParseError
+    value = '=?utf-8?B?==E9?='
+
+    # Act
+    decoded = eml_parser.decode.rfc2047_decode(value)
+
+    # Assert
+    assert decoded == value

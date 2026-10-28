@@ -381,7 +381,7 @@ class CustomPolicy(email.policy.EmailPolicy):
             try:
                 return super().header_fetch_parse(name, value), None
             except RecursionError:
-                # This can happen when the recursion gets too deep in in the stdlib recursive descent parser.
+                # This can happen when the recursion gets too deep in the stdlib recursive descent parser.
                 # In this case, the header is certainly pathological. We still try to extract some addresses.
                 m = self.email_regex.findall(value)
                 return ', '.join(m), None

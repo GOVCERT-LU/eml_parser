@@ -374,12 +374,18 @@ def rfc2047_decode(value: str) -> str:
         value: The value to be decoded
 
     Returns:
-        str: Decoded string
+        str: Decoded string, or the value as is if an encoded word cannot be decoded (e.g. invalid base64).
     """
     if not value:
         return value
 
-    return ''.join(_decode_rfc2047_fragment(fragment, charset) for fragment, charset in email.header.decode_header(value))
+    try:
+        fragments = email.header.decode_header(value)
+    except email.errors.HeaderParseError:
+        logger.warning('RFC2047 encoded word cannot be decoded, keeping the value as is: %r', value)
+        return value
+
+    return ''.join(_decode_rfc2047_fragment(fragment, charset) for fragment, charset in fragments)
 
 
 def _decode_rfc2047_fragment(fragment: str | bytes, charset: str | None) -> str:
