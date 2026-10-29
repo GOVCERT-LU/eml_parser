@@ -85,23 +85,21 @@ exclude = [
 ]
 
 [tool.mypy]
-show_error_context = true
-show_column_numbers = false
-ignore_missing_imports = true
-disallow_incomplete_defs = true
-disallow_untyped_defs = true
-disallow_untyped_calls = true
-warn_no_return = true
-warn_redundant_casts = true
-warn_unused_ignores = true
-strict_optional = true
-check_untyped_defs = true
+show_error_codes = true
+show_column_numbers = true
+pretty = true
+
 strict = true
+disallow_any_unimported = true
+warn_unreachable = true
 
 files = [
   "eml_parser/**/*.py",
   "scripts/**/*.py"
 ]
+[[tool.mypy.overrides]]
+module = "magic.*"
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 minversion = "9.0"
