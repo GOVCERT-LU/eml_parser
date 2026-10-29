@@ -44,6 +44,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Restore the policy of a message when parsing a header field with the compat32 policy fails as well; it was left on compat32.
 - Build `regexes.url_regex_www` and the IPv6 pattern from shared fragments (same matches), and remove the unused `regexes.escape_special_regex_chars`.
 - Add `decode.DEFAULT_DATE`.
+- Type the result of `decode_email()` / `decode_email_bytes()`, the `pconf` parameter and the argument of `decode.export_to_json()` as `dict[str, Any]` instead of a bare `dict` (mypy strict); add the `types-regex` stubs to the `dev` dependencies.
 ### Tests
 - Group the tests in one file per module (`test_parser.py` for the results of `EmlParser`), 100% line coverage of the package.
 - Add tests for the new helpers and for the fixed behaviour.

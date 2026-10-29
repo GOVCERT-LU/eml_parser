@@ -54,6 +54,7 @@ dev = [
   "types-chardet",
   "ruff>=0.16",
   "prek>=0.5.4",
+  "types-regex>=2026.9.29.20261017",
 ]
 test = [
   "pytest>=9.1",
@@ -89,12 +90,13 @@ show_column_numbers = false
 ignore_missing_imports = true
 disallow_incomplete_defs = true
 disallow_untyped_defs = true
-disallow_untyped_calls = false
+disallow_untyped_calls = true
 warn_no_return = true
 warn_redundant_casts = true
 warn_unused_ignores = true
 strict_optional = true
-check_untyped_defs = false
+check_untyped_defs = true
+strict = true
 
 files = [
   "eml_parser/**/*.py",

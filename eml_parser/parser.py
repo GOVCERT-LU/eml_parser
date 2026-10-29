@@ -96,7 +96,7 @@ class EmlParser:
         self,
         include_raw_body: bool = False,
         include_attachment_data: bool = False,
-        pconf: dict | None = None,
+        pconf: dict[str, typing.Any] | None = None,
         policy: email.policy.Policy | None = None,
         ignore_bad_start: bool = False,
         email_force_tld: bool = False,
@@ -169,7 +169,7 @@ class EmlParser:
         self.msg = email.message.Message()
         self._whitelist = eml_parser.hosts.IpWhitelist.from_entries(())
 
-    def decode_email(self, eml_file: os.PathLike[str] | str, ignore_bad_start: bool = False) -> dict:
+    def decode_email(self, eml_file: os.PathLike[str] | str, ignore_bad_start: bool = False) -> dict[str, typing.Any]:
         """Function for decoding an EML file into an easily parsable structure.
 
         Some intelligence is applied while parsing the file in order to work around
@@ -187,7 +187,7 @@ class EmlParser:
         """
         return self.decode_email_bytes(pathlib.Path(eml_file).read_bytes(), ignore_bad_start=ignore_bad_start)
 
-    def decode_email_bytes(self, eml_file: bytes, ignore_bad_start: bool = False) -> dict:
+    def decode_email_bytes(self, eml_file: bytes, ignore_bad_start: bool = False) -> dict[str, typing.Any]:
         """Function for decoding an EML file into an easily parsable structure.
 
         Some intelligence is applied while parsing the file in order to work around
@@ -214,7 +214,7 @@ class EmlParser:
 
         return self._parse_email()
 
-    def _parse_email(self) -> dict:
+    def _parse_email(self) -> dict[str, typing.Any]:
         """Parse the message in `self.msg` into the result of `decode_email_bytes()`."""
         self._whitelist = eml_parser.hosts.IpWhitelist.from_entries(self.pconf.get('whiteip', []))
         headers_struc = self._parse_header()

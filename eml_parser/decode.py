@@ -269,7 +269,7 @@ def json_serial(obj: object) -> str:
     raise TypeError(f'Type not serializable - {str(type(obj))}')
 
 
-def export_to_json(parsed_msg: dict, sort_keys: bool = False) -> str:
+def export_to_json(parsed_msg: dict[str, typing.Any], sort_keys: bool = False) -> str:
     """Function to convert a parsed e-mail dict to a JSON string.
 
     Args:
