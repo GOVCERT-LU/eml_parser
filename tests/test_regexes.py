@@ -128,8 +128,8 @@ FINDALL_HREF_SKIPPED_CASES = [
 ]
 
 
-def test_findall_href_skips_attributes_outside_of_tags() -> None:
+def test_href_value_spans_skips_attributes_outside_of_tags() -> None:
     def check(body: str) -> None:
-        assert eml_parser.regexes.findall_href(body) == []
+        assert eml_parser.regexes.href_value_spans(body) == []
 
     tests.table.assert_all_cases(check, FINDALL_HREF_SKIPPED_CASES)

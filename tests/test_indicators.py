@@ -53,7 +53,8 @@ def test_find_urls_in_href() -> None:
         'example2.com',
     ]
 
-    assert find_urls(test_urls, include_href=True) == expected_result
+    # The order depends on where the text is sliced (the URLs of the attributes starting in a slice follow those found in its text).
+    assert sorted(find_urls(test_urls, include_href=True)) == sorted(expected_result)
 
 
 def test_find_urls_separated_by_commas() -> None:
@@ -85,7 +86,8 @@ def test_find_urls_with_valid_tld() -> None:
 
     expected_result = ['http://www.example.com?t1=v1&t2=v2', 'example.com', 'example.com/test1?bla', 'example.com/a/b/c/d/', 'example2.com']
 
-    assert find_urls(test_urls, include_href=True, domain_force_tld=True) == expected_result
+    # The order depends on where the text is sliced (the URLs of the attributes starting in a slice follow those found in its text).
+    assert sorted(find_urls(test_urls, include_href=True, domain_force_tld=True)) == sorted(expected_result)
 
 
 def test_find_urls_without_catastrophic_backtracking() -> None:
@@ -98,7 +100,9 @@ def test_find_urls_without_catastrophic_backtracking() -> None:
         'http://xxxxxxxxxx.example.com������������������������������������������������������������������������������������������������������������������������������������������������'
     ]
 
-    assert find_urls(test_urls, domain_force_tld=False) == expected_result
+    # The pattern matches the whole token in linear time; its host contains U+FFFD, which browsers reject, so it is no URL.
+    assert eml_parser.regexes.url_regex_simple.findall(test_urls) == expected_result
+    assert find_urls(test_urls, domain_force_tld=False) == []
 
 
 def test_find_urls_with_unicode() -> None:
@@ -633,13 +637,159 @@ def test_clean_url_rejects_unparsable_urls_and_urls_without_host() -> None:
     tests.table.assert_all_cases(check, CLEAN_URL_REJECTED_CASES)
 
 
-def test_url_cut_inside_a_bracketed_host_does_not_raise() -> None:
-    # Arrange: the noise after "a" is cut off the URL, which leaves the IPvFuture host unclosed, which the stdlib refuses to parse
+# (text, the URLs found in it): where an URL in text ends.
+URL_END_IN_TEXT_CASES = [
+    ('see http://en.wikipedia.org/wiki/Foo_(bar) for details', ['http://en.wikipedia.org/wiki/Foo_(bar)']),
+    ('(see http://en.wikipedia.org/wiki/Foo_(bar))', ['http://en.wikipedia.org/wiki/Foo_(bar)']),
+    ('see (http://example.com/x) now', ['http://example.com/x']),
+    ('see http://example.com/x.) now', ['http://example.com/x']),
+    ('see https://example.com/search?q=(a)&b=1 now', ['https://example.com/search?q=(a)&b=1']),
+    ('see www.example.com/wiki/Foo_(bar) now', ['www.example.com/wiki/Foo_(bar)']),
+    ('see https://example.com/a,b/c now', ['https://example.com/a,b/c']),
+    ('http://interactif.lemonde.fr/article/0,5611,2850-0,FF.html', ['http://interactif.lemonde.fr/article/0,5611,2850-0,FF.html']),
+    ("see https://example.com/it's now", ["https://example.com/it's"]),
+    ('see https://example.com/a\\b now', ['https://example.com/a']),
+    ('see "http://example.com/x", and', ['http://example.com/x']),
+    ('see https://example.com/x, https://example.org/y now', ['https://example.com/x', 'https://example.org/y']),
+    ("list 'http://a.example/x','http://b.example/y' end", ['http://a.example/x', 'http://b.example/y']),
+    ('http://www1.example.com?t1=v1&t2=v2, next', ['http://www1.example.com?t1=v1&t2=v2']),
+    ('Visit http://example.com. Then http://example.org/x!', ['http://example.com', 'http://example.org/x']),
+    ('http://example.com/x\u3000next', ['http://example.com/x']),
+    ('&lt;http://example.com/x&gt; text', ['http://example.com/x']),
+    ('at: http://199.97.97.79/IMDS|PMADJN0,PMADJN1|index next', ['http://199.97.97.79/IMDS|PMADJN0,PMADJN1|index']),
+    ('see https://example.com/q?x={1}&y=a^b now', ['https://example.com/q?x={1}&y=a^b']),
+    ('see www.example.com/a|b now', ['www.example.com/a|b']),
+    ('{see http://example.com/x} now', ['http://example.com/x']),
+]
+
+
+def test_url_end_in_text() -> None:
+    def check(text: str, expected: list[str]) -> None:
+        assert find_urls(text, include_href=False) == expected
+
+    tests.table.assert_all_cases(check, URL_END_IN_TEXT_CASES)
+
+
+# (normalised attribute value as found by regexes.href_value_spans(), the URL): the value of an attribute ends at its quote only.
+URL_END_IN_ATTRIBUTE_VALUE_CASES = [
+    ('"http://en.wikipedia.org/wiki/Foo_(bar)', 'http://en.wikipedia.org/wiki/Foo_(bar)'),
+    ('"https://example.com/a,b(c)', 'https://example.com/a,b(c)'),
+    ("'https://example.com/x?it's", "https://example.com/x?it's"),
+    ('https://example.com/x?a=1,2', 'https://example.com/x?a=1,2'),
+    ('"https://example.com/x?eid=1\\~2', 'https://example.com/x?eid=1\\~2'),
+    ('"http://example.com/x>click</a> more', 'http://example.com/x>click</a> more'),  # no closing quote: the value a browser takes
+    ('"http://www.example.com/remove.cfm?email=<email>', 'http://www.example.com/remove.cfm?email=<email>'),
+    ('"http://example.com/?q=&lt;b&gt;', 'http://example.com/?q=&lt;b&gt;'),  # character references are decoded once, before
+    ('\'http://example.com/say "hi"', 'http://example.com/say "hi"'),
+    ('" \x01http://example.com/x \x00', 'http://example.com/x'),  # control characters and spaces at the ends are stripped
+    ('"http://example.com/a b', 'http://example.com/a b'),  # browsers percent-encode the space
+    ('"http://example.com/a b?q=x y  ', 'http://example.com/a b?q=x y'),
+    ('"http://exa mple.com/x', None),  # but a host has no white space
+    ('"mailto:a@example.com    ?subject=more info', 'mailto:a@example.com    ?subject=more info'),
+    ('"http://[2001:db8::1]/x', 'http://[2001:db8::1]/x'),
+    ('"http://[v1.a,b.example.com]/', None),  # browsers accept only IPv6 addresses in brackets
+]
+
+
+def test_url_end_in_attribute_value() -> None:
     hosts = eml_parser.hosts.HostValidator(domain_force_tld=False, ip_force_routable=False)
     finder = eml_parser.indicators.IndicatorFinder(hosts, eml_parser.regexes.email_no_force_tld_regex, include_www=True, include_href=True)
 
+    def check(value: str, expected: str | None) -> None:
+        assert finder.clean_url(value, in_attribute=True) == expected
+
+    tests.table.assert_all_cases(check, URL_END_IN_ATTRIBUTE_VALUE_CASES)
+
+
+def test_href_with_balanced_parentheses_in_html() -> None:
+    # Arrange
+    raw = b'From: a@b.example\nContent-Type: text/html\n\n<a href="http://en.wikipedia.org/wiki/Foo_(bar)">Foo (bar)</a>\n'
+
     # Act
-    found = finder.find('<a href="http://[v1.a,b.example.com]/">x</a>', eml_parser.hosts.IpWhitelist.from_entries(()))
+    body = eml_parser.parser.EmlParser(include_raw_body=True).decode_email_bytes(raw)['body'][0]
 
     # Assert
-    assert list(found.domain) == ['b.example.com']
+    assert body['uri'] == ['http://en.wikipedia.org/wiki/Foo_(bar)']
+
+
+def test_other_urls_in_an_attribute_value_are_reported() -> None:
+    # Arrange: a second URL in the value of an attribute, or after a missing closing quote, is no part of the attribute URL to hide behind
+    body = '<a href="http://good.example/ http://evil.example/x">x</a>'
+
+    # Act
+    urls = find_urls(body)
+
+    # Assert
+    assert urls == ['http://good.example/ http://evil.example/x', 'http://evil.example/x']
+
+
+# (filler length, the link): the boundary of a slice falls into the tag or into the value with white space at some filler length.
+SLICE_BOUNDARY_LINKS = [
+    '<a class="button primary" title="Read more" href="example.com/report">x</a>',
+    '<a href="mailto:a@example.com?subject=More information about the report">x</a>',
+]
+
+
+def test_attribute_urls_do_not_depend_on_slice_boundaries() -> None:
+    def check(link: str) -> None:
+        expected = find_urls(link)
+        urls = {repr(find_urls('w ' * (filler // 2) + 'x' * (filler % 2) + ' ' + link)) for filler in range(400, 600)}
+
+        assert urls == {repr(expected)}
+
+    tests.table.assert_all_cases(check, SLICE_BOUNDARY_LINKS)
+
+
+# (URL, whether it is reported): the host must be one a browser accepts as written; percent-encoding is decoded by the browser.
+URL_HOST_CASES = [
+    ('http://cgi3.e|Form', False),
+    ('http://exa^mple.com/', False),
+    ('http://xxxxxxxxxx.example.com\ufffd\ufffd', False),  # an invalid internationalised name
+    ('http://www.Make.com%40w%77%77%2E%74%65%72%72%61%2Ee%73/x', True),  # obfuscated address of www.terra.es
+    ('http://%31%30%31%2e%31/x', True),
+    ('http://bücher.example/x', True),
+    ('bücher.example/x', True),
+    ('3D"mailto:a@example.com"', False),  # undecoded quoted-printable, no host
+    ('mailto:a@example.com,', True),  # a comma separates the addresses
+    ('mailto:a@example.com%20<a@example.com>', True),
+    ('mailto:a@example.com    ?subject=more info', True),
+    ('mailto:info.example.com?subject=x', False),  # no address
+]
+
+
+def test_url_host() -> None:
+    hosts = eml_parser.hosts.HostValidator(domain_force_tld=False, ip_force_routable=False)
+    finder = eml_parser.indicators.IndicatorFinder(hosts, eml_parser.regexes.email_no_force_tld_regex, include_www=True, include_href=True)
+
+    def check(url: str, reported: bool) -> None:
+        assert (finder.clean_url(url, in_attribute=True) is not None) is reported
+
+    tests.table.assert_all_cases(check, URL_HOST_CASES)
+
+
+def test_domain_of_an_obfuscated_address_is_reported() -> None:
+    # Arrange
+    body = '<a href="http://www.Make.com%40w%77%77%2E%74%65%72%72%61%2Ee%73/pe%72%73o%6E%61%6C9/x/">x</a>'
+    raw = f'From: a@b.example\nContent-Type: text/html\n\n{body}\n'.encode()
+
+    # Act
+    result = eml_parser.parser.EmlParser(include_raw_body=True).decode_email_bytes(raw)['body'][0]
+
+    # Assert
+    assert result['uri'] == ['http://www.Make.com%40w%77%77%2E%74%65%72%72%61%2Ee%73/pe%72%73o%6E%61%6C9/x/']
+    assert 'www.terra.es' in result['domain']
+
+
+def test_mailto_url_with_bracket_in_the_address() -> None:
+    # Arrange: valid as mailto URL (its host is the domain of the address), but no URL with a host for urllib (unbalanced bracket)
+    text = '<a href="mailto:[x@example.com">x</a>'
+
+    # Act
+    found = find_urls(text)
+    indicators = eml_parser.indicators.IndicatorFinder(
+        eml_parser.hosts.HostValidator(domain_force_tld=False, ip_force_routable=False), eml_parser.regexes.email_no_force_tld_regex, True, True
+    ).find(text, eml_parser.hosts.IpWhitelist.from_entries(()))
+
+    # Assert
+    assert found == ['mailto:[x@example.com']
+    assert list(indicators.domain) == ['example.com']

@@ -101,6 +101,8 @@ def findall_ipv6(text: str) -> list[str]:
 #   - not use a fixed list of TLDs but rather \w
 #   - only match URLs with a scheme
 #   - end with any character acceptable according to RFC 3986
+#   - accept `|`, `^`, `{` and `}` in the path, which browsers accept (percent-encoded), e.g. `http://example.com/IMDS|index`; a closing
+#     brace without an opening one ends the URL (`indicators._end_of_text_url()`)
 _URL_WITH_SCHEME = r"""
 \b
 (?:https?|ftps?):
@@ -110,7 +112,7 @@ _URL_WITH_SCHEME = r"""
 |
   [^\x00-\x20\s`()<>{}\[\]\/'"«»“”‘’]+
 )
-(?:[\w\-._~%!$&'()*+,;=:/?#\[\]@\U00001000-\U0010FFFF]*[^\x00-\x20\s`!\[\]{};:'".,<>«»“”‘’])?
+(?:[\w\-._~%!$&'()*+,;=:/?#\[\]@|^{}\U00001000-\U0010FFFF]*[^\x00-\x20\s`!\[\]{;:'".,<>«»“”‘’])?
 """
 
 # An address starting with "www" without a scheme (the preceding character which is matched needs to be removed afterwards)
@@ -118,11 +120,12 @@ _URL_WWW = r"""
 (?:^|[ \t\n\r\f\v\'\"«»“”‘’])
 www\d{0,3}[.](?:[-\w\u0900-\u2017\u2020-\U0010FFFF]{1,250}[.]){1,250}[-0-9a-z\w\u0900-\u0DFF]{2,30}[.]*  # Host Simple TLD regex
 (?::[0]*[1-9][0-9]{0,4})?  # Port
-(?:[\/#?](?:[\w\-._~%!$&'()*+,;=:/?#\[\]@\U00001000-\U0010FFFF]*[^\x00-\x20\s`!\[\]{};:'\".,<>«»“”‘’])) # Path, etc.
+(?:[\/#?](?:[\w\-._~%!$&'()*+,;=:/?#\[\]@|^{}\U00001000-\U0010FFFF]*[^\x00-\x20\s`!\[\]{;:'\".,<>«»“”‘’])) # Path, etc.
 """
 
-url_regex_comma = re.compile(r',(?=https?|ftps?)', flags=re.IGNORECASE)
-url_regex_www_comma = re.compile(r',(?=https?|ftps?|www\d{0,3})', flags=re.IGNORECASE)
+# The comma between URLs which are matched as one, the next one possibly quoted: `http://a.example/x,'http://b.example/y'`.
+url_regex_comma = re.compile(r""",(?=['"]?(?:https?|ftps?))""", flags=re.IGNORECASE)
+url_regex_www_comma = re.compile(r""",(?=['"]?(?:https?|ftps?|www\d{0,3}))""", flags=re.IGNORECASE)
 
 url_regex_simple = re.compile(_URL_WITH_SCHEME, flags=re.IGNORECASE | re.VERBOSE)
 url_regex_www = re.compile(f'(?:{_URL_WITH_SCHEME}|{_URL_WWW})', flags=re.IGNORECASE | re.VERBOSE)
@@ -131,7 +134,7 @@ url_regex_www = re.compile(f'(?:{_URL_WITH_SCHEME}|{_URL_WWW})', flags=re.IGNORE
 # Search for URLs in the attributes of HTML tags: links and images, but also the targets of forms (phishing), frames, scripts, embedded objects and redirects.
 # The scan overlaps with url_regex_simple, so simple URL content that starts with "<a " or "<img " still matches.
 #
-# Two-stage, linear in the length of the body: url_regex_href_attr locates the attribute values and findall_href() accepts a value only if
+# Two-stage, linear in the length of the body: url_regex_href_attr locates the attribute values and href_value_spans() accepts a value only if
 # the nearest "<" opens a tag which carries that attribute (see URL_HREF_TAG_ATTRS), with no ">" in between. The tag opening is bounded
 # by URL_HREF_TAG_WINDOW, as neither a document nor a browser keeps a tag opening longer than that open. One value per tag opening is
 # accepted (the first in text order), and attribute keywords are not matched as substrings of longer names: <form formaction="u"> yields
@@ -157,39 +160,48 @@ URL_HREF_TAG_ATTRS = {
     'background': frozenset(('body',)),
 }
 
-# Maximum size of the tag opening (from "<" to the attribute) which findall_href() verifies.
+# Maximum size of the tag opening (from "<" to the attribute) which href_value_spans() verifies.
 URL_HREF_TAG_WINDOW = 16384
 
 _url_regex_href_tag_name = re.compile(r'[a-z:]+', flags=re.IGNORECASE)
 _url_regex_href_ws_or_slash = ' \t\r\n\f\v/'
 
 
-def findall_href(body: str) -> list[str]:
+def href_value_spans(body: str) -> list[tuple[int, int]]:
     """Find the URL values of HTML attributes (href, src, action, formaction, data, background, and xlink:href).
+
+    Linear in the length of the body: the nearest "<" and ">" in front of an attribute are tracked while the text is read once.
 
     Args:
         body (str): Text input which should be searched for attribute URLs.
 
     Returns:
-        list: The attribute values (quotes included), in order of appearance.
+        list: Start and end of the attribute values (the opening quote included), in order of appearance.
     """
-    found: list[str] = []
+    found: list[tuple[int, int]] = []
     last_end = 0
+    searched_to = 0  # the last "<" and ">" in front of this position are known
+    last_open = -1
+    last_close = -1
     for m in url_regex_href_attr.finditer(body):
-        start = body.rfind('<', max(last_end, m.start(1) - URL_HREF_TAG_WINDOW), m.start(1))
-        if start == -1:
+        attribute_start = m.start(1)
+        if (open_position := body.rfind('<', searched_to, attribute_start)) != -1:
+            last_open = open_position
+        if (close_position := body.rfind('>', searched_to, attribute_start)) != -1:
+            last_close = close_position
+        searched_to = attribute_start
+
+        # The tag opening: the nearest "<" in front of the attribute, after the last accepted value and within the window, no ">" since.
+        if last_open < max(last_end, attribute_start - URL_HREF_TAG_WINDOW) or last_close > last_open:
             continue
-        segment = body[start : m.start(1)]
-        if '>' in segment:
-            continue
-        tname = _url_regex_href_tag_name.match(segment, 1)
-        if tname is None or tname.end() >= len(segment) or segment[tname.end()] not in _url_regex_href_ws_or_slash:
+        tname = _url_regex_href_tag_name.match(body, last_open + 1, attribute_start)
+        if tname is None or tname.end() >= attribute_start or body[tname.end()] not in _url_regex_href_ws_or_slash:
             continue
         name = tname.group()
         attr = m.group(1).lower()
         if attr != 'xlink:href' and name.lower() not in URL_HREF_TAG_ATTRS[attr]:
             continue
-        found.append(m.group(2))
+        found.append(m.span(2))
         last_end = m.end(2)
     return found
 

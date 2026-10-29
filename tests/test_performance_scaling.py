@@ -267,6 +267,21 @@ SHAPES: dict[str, Shape] = {
         REPORT_FIELD_COUNTS,
         'links',
     ),
+    # attribute values are searched in the whole body (not in slices): the nearest tag opening must be found without searching back
+    # from every attribute, and a value without its closing quote (with white space, so the text search slices it) must stay linear
+    'body-html-attributes-without-tags': Shape(
+        lambda n: _message(_lines(f'href=h{i}.example.test/p' for i in range(n)), 'text/html; charset=us-ascii'), REPORT_FIELD_COUNTS, 'attributes'
+    ),
+    'body-html-hrefs-without-scheme': Shape(
+        lambda n: _message(_lines(f'<a class="c{i}" title="t {i}" href="h{i}.example.test/p {i}">l</a>' for i in range(n)), 'text/html; charset=us-ascii'),
+        REPORT_FIELD_COUNTS,
+        'links',
+    ),
+    'body-html-unclosed-href-value': Shape(
+        lambda n: _message('<a href="https://example.test/' + _lines(f'w{i} https://h{i}.example.test/' for i in range(n)), 'text/html; charset=us-ascii'),
+        REPORT_FIELD_COUNTS,
+        'words',
+    ),
     'body-email-addresses': Shape(lambda n: _message(_lines(f'u{i}@h{i}.example.test' for i in range(n))), REPORT_FIELD_COUNTS, 'addresses'),
     'body-domains': Shape(lambda n: _message(_lines(f'h{i}.example{i % 89}.test' for i in range(n))), REPORT_FIELD_COUNTS, 'domains'),
     'body-ip-addresses': Shape(
