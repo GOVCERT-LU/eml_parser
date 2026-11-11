@@ -1,6 +1,7 @@
 """Tests for `eml_parser.hosts`: domains, IP addresses in any notation, host names like browsers resolve them and the IP whitelist."""
 
 import ipaddress
+import random
 import urllib.parse
 
 import pytest
@@ -161,6 +162,37 @@ BROWSER_HOSTS = {
 
 
 BROWSER_REJECTED_HOSTS = ['exam\u200cple.com', 'exam\u202eple.com', '\u0301a.com', 'a%2fb.com', 'exa mple.com']
+
+
+PUNYCODE_LABELS = [
+    'ü',
+    'bücher',
+    'faß',
+    'пример',
+    '例え',
+    '💩',
+    'a-ü-b',
+    'üüü',
+    'ünchen-ü',
+    '\U00010000\U0010ffff',
+    ''.join(chr(0x20000 + i) for i in range(1000)),  # distinct increasing code points: quadratic in the stdlib codec
+    ''.join(chr(0x4E00 + 999 - i) for i in range(1000)),  # distinct decreasing code points
+]
+
+
+@pytest.mark.parametrize('label', PUNYCODE_LABELS)
+def test_punycode_like_stdlib(label: str) -> None:
+    assert eml_parser.hosts.punycode(label) == label.encode('punycode').decode('ascii')
+
+
+def test_punycode_like_stdlib_random_labels() -> None:
+    # Arrange: mixes of basic, Latin-1, BMP and astral code points with repetitions
+    generator = random.Random(4711)  # noqa: S311 - reproducible test data, not cryptography
+    alphabet = 'ab-09\x7f\x80üßж例\U0001f4a9\U00020000\U0010ffff'
+    labels = [''.join(generator.choices(alphabet, k=generator.randint(1, 40))) for _ in range(2000)]
+
+    # Act / Assert
+    assert [eml_parser.hosts.punycode(label) for label in labels] == [label.encode('punycode').decode('ascii') for label in labels]
 
 
 def test_ascii_host_like_browsers() -> None:

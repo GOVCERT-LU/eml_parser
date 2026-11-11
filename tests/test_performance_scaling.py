@@ -289,6 +289,11 @@ SHAPES: dict[str, Shape] = {
         REPORT_FIELD_COUNTS,
         'IPv4/IPv6 pairs',
     ),
+    # a host label of distinct code points: the stdlib punycode codec is quadratic in their number (up to the 1 024 characters
+    # idna accepts for a host), so `hosts.punycode()` computes the deltas in O(n log n)
+    'body-url-idn-label-length': Shape(
+        lambda n: _message(f'http://{"".join(chr(0x20000 + i) for i in range(n))}.xn--p1ai/x', 'text/plain; charset=utf-8'), (250, 500, 1_000), 'code points'
+    ),
     'body-unc-shares': Shape(lambda n: _message(_lines(f'\\\\h{i}.example.test\\share{i}' for i in range(n))), REPORT_FIELD_COUNTS, 'shares'),
     # --- MIME structure and attachments ---
     'mime-text-parts': Shape(

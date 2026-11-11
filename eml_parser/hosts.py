@@ -2,6 +2,7 @@
 
 import collections.abc
 import dataclasses
+import encodings.punycode
 import functools
 import ipaddress
 import socket
@@ -55,6 +56,64 @@ def normalized_ip(text: str) -> IPAddress | None:
     return address
 
 
+def punycode(label: str) -> str:
+    """Encode a label to punycode (RFC 3492), the same as `label.encode('punycode')` in O(n log n) instead of O(n²) time.
+
+    The stdlib codec scans the whole label once per distinct code point to compute the insertion deltas, which is quadratic
+    for labels of distinct code points: one of 1 000 takes 0.15 s, and a message may contain many. The deltas are computed
+    here by counting the smaller code points before each position in a Fenwick tree; the stdlib still encodes them.
+
+    Args:
+        label: The label, of any length.
+
+    Returns:
+        The punycode of the label, without the `xn--` prefix.
+    """
+    length = len(label)
+    smaller_tree = [0] * (length + 1)  # Fenwick tree over the positions of the code points encoded so far, basic ones first
+    positions_by_code_point: dict[int, list[int]] = {}
+    basic = []
+
+    def mark_encoded(position: int) -> None:
+        index = position + 1
+        while index <= length:
+            smaller_tree[index] += 1
+            index += index & -index
+
+    for position, char in enumerate(label):
+        if char < '\x80':
+            basic.append(char)
+            mark_encoded(position)
+        else:
+            positions_by_code_point.setdefault(ord(char), []).append(position)
+
+    deltas = []
+    encoded_count = len(basic)
+    delta = 0
+    next_code_point = 0x80
+    for code_point in sorted(positions_by_code_point):
+        positions = positions_by_code_point[code_point]
+        delta += (code_point - next_code_point) * (encoded_count + 1)
+        previous_smaller = 0
+        for position in positions:
+            smaller = 0
+            index = position
+            while index:
+                smaller += smaller_tree[index]
+                index &= index - 1
+            deltas.append(delta + smaller - previous_smaller)
+            delta = 0
+            previous_smaller = smaller
+        delta = encoded_count - previous_smaller + 1
+        for position in positions:
+            mark_encoded(position)
+        encoded_count += len(positions)
+        next_code_point = code_point + 1
+
+    extended = encodings.punycode.generate_integers(len(basic), deltas).decode('ascii')
+    return f'{"".join(basic)}-{extended}' if basic else extended
+
+
 def ascii_host(host: str) -> str | None:
     """Convert the host name of an URL to the ASCII form a browser resolves (domain to ASCII of the WHATWG URL standard).
 
@@ -82,7 +141,7 @@ def ascii_host(host: str) -> str | None:
                 if not all(idna.valid_contextj(label, index) for index, char in enumerate(label) if char in '‌‍'):
                     return None
 
-                labels[position] = f'xn--{label.encode("punycode").decode("ascii")}'
+                labels[position] = f'xn--{punycode(label)}'
         except idna.IDNAError:
             return None
 
