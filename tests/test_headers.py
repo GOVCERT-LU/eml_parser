@@ -17,6 +17,7 @@ import pytest
 import eml_parser.decode
 import eml_parser.headers
 import eml_parser.parser
+import eml_parser.policy
 import eml_parser.regexes
 import tests.table
 
@@ -153,16 +154,31 @@ def test_addresses_are_recovered_from_8bit_address_fields() -> None:
     assert header['to'] == ['c@d.example']
 
 
+def test_addresses_the_stdlib_parser_loses_are_recovered() -> None:
+    # Arrange: an unterminated quote and text after an address, which the stdlib renders without the (other) addresses
+    raw = b'From: "John <a@b.example>\nTo: a@b.example x <c@d.example>\nCc: <e@f.example> junk\nSubject: s\n\nbody\n'
+
+    # Act
+    header = eml_parser.parser.EmlParser().decode_email_bytes(raw)['header']
+
+    # Assert
+    assert header['from'] == 'a@b.example'
+    assert header['to'] == ['a@b.example', 'c@d.example']
+    assert header['cc'] == ['e@f.example']
+    assert header['header']['to'] == ['a@b.example x <c@d.example>']
+
+
 def test_header_items_falls_back_to_compat32() -> None:
     # Arrange
-    msg = email.message_from_bytes(b'Cc: "\nSubject: s\n\nbody\n', policy=email.policy.default)
+    policy = eml_parser.policy.CustomPolicy()
+    msg = email.message_from_bytes(b'Cc: "\nSubject: s\n\nbody\n', policy=policy)
 
     # Act
     items = eml_parser.headers.header_items(msg)
 
     # Assert
     assert items == [('Cc', '"'), ('Subject', 's')]
-    assert msg.policy is email.policy.default
+    assert msg.policy is policy
 
 
 def test_deeply_nested_address_groups_do_not_exhaust_the_stack() -> None:

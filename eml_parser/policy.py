@@ -2,6 +2,7 @@
 
 import collections
 import email.errors
+import email.headerregistry
 import email.message
 import email.policy
 import functools
@@ -27,6 +28,20 @@ _MAX_PARAMETER_TEXT = 32 * 1024
 
 class HeaderParsingLimitDefect(email.errors.HeaderDefect):
     """The message has more header fields or header bytes than are parsed in structured form, see `limit_header_parsing()`."""
+
+
+# Defects of the stdlib address parser for values it renders without some of their addresses, or with made-up ones: an unterminated
+# quote takes the rest of the value (`"John <a@b.example>` is a local part, `Cc: "` gives `<>`), and the text after an address is an
+# invalid mailbox (`a@b.example x <c@d.example>` gives `a@b.example, <>`). Older Python versions raise on some of these values instead.
+_LOSSY_ADDRESS_DEFECTS = frozenset(('end of header inside quoted string', 'invalid address in address-list'))
+
+
+class LossyAddressParseError(IndexError):
+    """The stdlib address parser loses addresses of a value, see `_LOSSY_ADDRESS_DEFECTS`.
+
+    It is an IndexError, the error older Python versions raise for some of these values (bug 27257), so the same workarounds
+    apply to all of them: the addresses are extracted by regex and the value is read with the compat32 policy.
+    """
 
 
 class UnparsedHeaderValue(str):
@@ -113,11 +128,16 @@ class CustomPolicy(email.policy.EmailPolicy):
             return self._fetch_date(name, value)
         elif header in _ADDRESS_HEADERS:
             try:
-                return super().header_fetch_parse(name, value), None
+                parsed = super().header_fetch_parse(name, value)
             except RecursionError:
                 # This can happen when the recursion gets too deep in the stdlib recursive descent parser.
                 # In this case, the header is certainly pathological. We still try to extract some addresses.
                 return ', '.join(self.email_regex.findall(value)), None
+
+            if isinstance(parsed, email.headerregistry.BaseHeader) and any(str(defect) in _LOSSY_ADDRESS_DEFECTS for defect in parsed.defects):
+                raise LossyAddressParseError(f'Header field "{header}" cannot be parsed without losing addresses.')
+
+            return parsed, None
 
         try:
             return super().header_fetch_parse(name, value), None

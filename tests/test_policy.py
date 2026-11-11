@@ -197,6 +197,18 @@ def test_long_address_header_still_yields_the_addresses() -> None:
     assert header['to'] == addresses
 
 
+@pytest.mark.parametrize('value', ['"', '"John <a@b.example>', 'a@b.example x <c@d.example>', '<a@b.example> junk'])
+def test_address_value_the_stdlib_parses_lossily_raises(value: str) -> None:
+    """Such values raise an IndexError on every Python version, like older ones do for some of them, so the same workarounds apply."""
+    with pytest.raises(IndexError):
+        eml_parser.policy.CustomPolicy().header_fetch_parse('To', value)
+
+
+@pytest.mark.parametrize('value', ['root', 'John <a@b.example>, c@d.example', 'team: a@b.example, c@d.example;', '"a b"@c.example'])
+def test_address_value_with_harmless_defects_or_none_is_parsed(value: str) -> None:
+    assert eml_parser.policy.CustomPolicy().header_fetch_parse('To', value) != ''
+
+
 def test_huge_date_is_the_default_date() -> None:
     """A date can not be that long, it is invalid."""
     assert _parse_header(b'Date: ' + b'Mon ' * 20_000)['date'] == dt.datetime.fromisoformat(eml_parser.decode.default_date)
