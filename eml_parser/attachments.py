@@ -2,6 +2,7 @@
 
 import base64
 import collections.abc
+import email.errors
 import email.message
 import email.policy
 import hashlib
@@ -15,6 +16,15 @@ import eml_parser.headers
 import eml_parser.mime
 
 logger = logging.getLogger(__name__)
+
+# The policies `_serialize()` writes attached messages with. Python 3.11.10, 3.12.5 and 3.13 refuse to write a header field whose
+# folded value contains a line break (gh-121650), which compat32 gives for a malformed field with e.g. a form feed (and so does the
+# default policy on Python 3.11). The written message is only hashed and returned as attachment data, so the fallback writes the
+# fields as folded, like older versions do.
+_SERIALIZE_POLICY = email.policy.default.clone(max_line_length=0)
+_SERIALIZE_FALLBACK_POLICY = email.policy.compat32.clone(max_line_length=0)
+if hasattr(_SERIALIZE_FALLBACK_POLICY, 'verify_generated_headers'):
+    _SERIALIZE_FALLBACK_POLICY = _SERIALIZE_FALLBACK_POLICY.clone(verify_generated_headers=False)
 
 try:
     import magic
@@ -116,13 +126,14 @@ def _serialize(message: email.message.Message) -> bytes:
     parsed from their bytes as well, see `mime.repair_multipart()`), which the bytes generator writes as it is.
     """
     try:
-        return message.as_bytes(policy=email.policy.default.clone(max_line_length=0))
-    except (AttributeError, IndexError, UnicodeEncodeError):
+        return message.as_bytes(policy=_SERIALIZE_POLICY)
+    except (AttributeError, IndexError, UnicodeEncodeError, email.errors.MessageError):
         # The stdlib header parsers fail while refolding some malformed header fields (AttributeError, IndexError), and so does
-        # encoding a refolded value with an 8-bit byte as UTF-8 (UnicodeEncodeError). compat32 writes the fields as they are.
+        # encoding a refolded value with an 8-bit byte as UTF-8 (UnicodeEncodeError) and writing a refolded value with a line
+        # break (HeaderWriteError, a MessageError which only exists since Python 3.11.10). compat32 writes the fields as they are.
         logger.debug('The message in a "message/rfc822" part cannot be serialized with the default policy, using compat32.')
 
-    return message.as_bytes(policy=email.policy.compat32.clone(max_line_length=0))
+    return message.as_bytes(policy=_SERIALIZE_FALLBACK_POLICY)
 
 
 def attachment_parts(msg: email.message.Message, recursion_limit: int) -> collections.abc.Iterator[email.message.Message]:
