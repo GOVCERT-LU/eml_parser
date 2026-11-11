@@ -5,11 +5,11 @@ import decimal
 import email
 import email.errors
 import email.header
-import email.policy
 import email.utils
 import html
 import json
 import logging
+import typing
 
 import charset_normalizer
 import dateutil.parser
@@ -50,7 +50,9 @@ import eml_parser.regexes
 logger = logging.getLogger(__name__)
 
 default_date = '1970-01-01T00:00:00+00:00'
+DEFAULT_DATE = dt.datetime.fromisoformat(default_date)
 _DATEUTIL_DEFAULT = dt.datetime(1970, 1, 1)  # noqa: DTZ001
+_LONE_SURROGATE_REGEX = regex.compile('[\ud800-\udfff]')
 
 # The charset detection is slow, bodies larger than this are decoded with the declared charset only, even if that is wrong.
 MAX_CHARSET_DETECTION_SIZE = 256 * 1024
@@ -69,22 +71,22 @@ def decode_field(field: str) -> str:
         str: Clean encoded strings
     """
     try:
-        _decoded = email.header.decode_header(field)
+        _decoded = decode_header(field)
     except email.errors.HeaderParseError:
         return field
 
-    string = ''
+    decoded_parts = []
 
-    for _text, charset in _decoded:
-        if charset:
-            string += decode_string(_text, charset)
-        elif isinstance(_text, bytes):
-            # @TODO might be an idea to check with charset-normalizer here
-            string += _text.decode('utf-8', 'replace')
+    for text, charset in _decoded:
+        if isinstance(text, str):
+            decoded_parts.append(text)
+        elif charset:
+            decoded_parts.append(decode_string(text, charset))
         else:
-            string += _text
+            # @TODO might be an idea to check with charset-normalizer here
+            decoded_parts.append(text.decode('utf-8', 'replace'))
 
-    return string
+    return ''.join(decoded_parts)
 
 
 def decode_body(data: bytes, charset: str | None) -> str:
@@ -111,7 +113,8 @@ def decode_body(data: bytes, charset: str | None) -> str:
     else:
         text = decode_string(data)
 
-    return text.replace('\ufffd', ' ')
+    # Some codecs (e.g. UTF-7, unicode_escape) decode to lone surrogates, which are no text either and cannot be encoded again.
+    return _LONE_SURROGATE_REGEX.sub(' ', text.replace('\ufffd', ' '))
 
 
 def _redetect_if_damaged(data: bytes, text: str) -> str:
@@ -192,56 +195,6 @@ def normalize_attribute_url(value: str) -> str:
     return value
 
 
-def workaround_bug_27257(msg: email.message.Message, header: str, email_regex: regex.Pattern[str] = eml_parser.regexes.email_no_force_tld_regex) -> list[str]:
-    """Function to work around bug 27257 and just tries its best using the compat32 policy to extract any meaningful information, i.e. e-mail addresses.
-
-    Args:
-        msg (email.message.Message): An e-mail message object.
-        header (str): The header field to decode.
-        email_regex (regex.Pattern[str], optional): Pattern used to extract e-mail addresses.
-
-    Returns:
-        list: Returns a list of strings which represent e-mail addresses.
-    """
-    return_value: list[str] = []
-
-    for value in workaround_field_value_parsing_errors(msg, header):
-        if value != '':
-            m = email_regex.findall(value)
-            if m:
-                return_value += list(dict.fromkeys(m))
-
-    return return_value
-
-
-def workaround_field_value_parsing_errors(msg: email.message.Message, header: str) -> list[str]:
-    """Function to work around field value parsing errors by trying a best effort parsing using the compat32 policy to extract any meaningful information.
-
-    Args:
-        msg (email.message.Message): An e-mail message object.
-        header (str): The header field to decode.
-
-    Returns:
-        list: Return an extracted list of strings.
-    """
-    if msg.policy == email.policy.compat32:
-        new_policy = None
-    else:
-        new_policy = msg.policy
-
-    msg.policy = email.policy.compat32
-    return_value = []
-
-    for value in msg.get_all(header, []):
-        if value != '':
-            return_value.append(value)
-
-    if new_policy is not None:
-        msg.policy = new_policy
-
-    return return_value
-
-
 def robust_string2date(line: str) -> dt.datetime:
     """Parses a date string to a datetime.datetime object using different methods.
 
@@ -263,7 +216,7 @@ def robust_string2date(line: str) -> dt.datetime:
 
     # if the input is empty, we return a default date
     if line == '':
-        return dt.datetime.fromisoformat(default_date)
+        return DEFAULT_DATE
 
     try:
         date_ = email.utils.parsedate_to_datetime(line)
@@ -276,7 +229,7 @@ def robust_string2date(line: str) -> dt.datetime:
             date_ = dateutil.parser.parse(line, default=_DATEUTIL_DEFAULT)
         except (AttributeError, ValueError, OverflowError, decimal.InvalidOperation):
             # Now we are facing an invalid date.
-            return dt.datetime.fromisoformat(default_date)
+            return DEFAULT_DATE
 
     if date_.utcoffset() is None:
         return date_.replace(tzinfo=dt.UTC)
@@ -316,7 +269,7 @@ def json_serial(obj: object) -> str:
     raise TypeError(f'Type not serializable - {str(type(obj))}')
 
 
-def export_to_json(parsed_msg: dict, sort_keys: bool = False) -> str:
+def export_to_json(parsed_msg: dict[str, typing.Any], sort_keys: bool = False) -> str:
     """Function to convert a parsed e-mail dict to a JSON string.
 
     Args:
@@ -331,37 +284,152 @@ def export_to_json(parsed_msg: dict, sort_keys: bool = False) -> str:
     return json.dumps(parsed_msg, default=json_serial, sort_keys=sort_keys, indent=2)
 
 
-def rfc2047_decode(value: str) -> str:
+def rfc2047_decode(value: str | email.header.Header) -> str:
     """Use the standard library decode_header function for decoding RFC2047 encoded values.
 
     Args:
-        value: The value to be decoded
+        value: The value to be decoded, a compat32 `email.header.Header` object for values with 8-bit bytes.
 
     Returns:
-        str: Decoded string
+        str: Decoded string, or the value as is if an encoded word cannot be decoded (e.g. invalid base64).
     """
     if not value:
-        return value
+        return ''
 
-    parsed = ''
+    try:
+        fragments = decode_header(value)
+    except email.errors.HeaderParseError:
+        logger.warning('RFC2047 encoded word cannot be decoded, keeping the value as is: %r', value)
+        return str(value)
 
-    for k, v in email.header.decode_header(value):
-        if isinstance(k, str):
-            # decode_header returns str (not bytes) for fragments which did not
-            # need RFC2047 decoding, e.g. when the whole value is plain ASCII.
-            parsed += k
-        elif v is None:
-            parsed += k.decode('ascii', errors='replace')
+    return ''.join(_decode_rfc2047_fragment(fragment, charset) for fragment, charset in fragments)
 
+
+def _decode_rfc2047_fragment(fragment: str | bytes, charset: str | None) -> str:
+    """Decode one fragment returned by `decode_header()`, see `rfc2047_decode()`."""
+    if isinstance(fragment, str):
+        # decode_header returns str (not bytes) for fragments which did not
+        # need RFC2047 decoding, e.g. when the whole value is plain ASCII.
+        return fragment
+
+    if charset is None:
+        return fragment.decode('ascii', errors='replace')
+
+    try:
+        return fragment.decode(charset, errors='replace')
+    except LookupError:
+        # Unknown charset name, e.g. "=?foo-bar?q?x?=". Never fail on attacker controlled input.
+        logger.debug('Unknown charset "%s" in RFC2047 encoded word, trying to detect the encoding', charset, exc_info=True)
+        return decode_string(fragment)
+
+
+class _NextOccurrence:
+    """The next occurrence of a substring at or after a position, for positions which never decrease: each part of the text is searched once."""
+
+    def __init__(self, text: str, substring: str) -> None:
+        self._text = text
+        self._substring = substring
+        self._found = text.find(substring)
+
+    def at_or_after(self, position: int) -> int:
+        """Position of the next occurrence at or after *position* (not before the previous query), or -1."""
+        if self._found != -1 and self._found < position:
+            self._found = self._text.find(self._substring, position)
+
+        return self._found
+
+
+def _split_encoded_words(text: str) -> list[str]:
+    """Split a text at its RFC 2047 encoded words like `email.header.ecre.split()`, in linear time.
+
+    The result is the text in front of the first encoded word, then charset, encoding, encoded text and the text up to the next
+    encoded word for each. An encoded word is `=?charset?encoding?encoded?=`: the charset runs up to the first "?" (it may contain
+    a line feed), the encoding is one of "qQbB", and the encoded text runs up to the first "?=" before the next line feed. The
+    regular expression of the stdlib finds the same words, but it searches to the end of the line from every "=?" without a
+    closing "?=", which is quadratic in their number.
+    """
+    parts: list[str] = []
+    closings = _NextOccurrence(text, '?=')
+    line_feeds = _NextOccurrence(text, '\n')
+    text_start = 0
+    start = text.find('=?')
+
+    while start != -1:
+        charset_end = text.find('?', start + 2)
+        if charset_end == -1:
+            break
+
+        closing = closings.at_or_after(charset_end + 3)
+        line_feed = line_feeds.at_or_after(charset_end + 3)
+        is_word = text[charset_end + 1 : charset_end + 2] in ('q', 'Q', 'b', 'B') and text[charset_end + 2 : charset_end + 3] == '?'
+
+        if not is_word or closing == -1 or line_feed != -1 and line_feed < closing:
+            # A word starting later has its charset end no earlier, so the positions asked from closings and line_feeds never decrease.
+            start = text.find('=?', start + 1)
+            continue
+
+        parts.extend((text[text_start:start], text[start + 2 : charset_end], text[charset_end + 1], text[charset_end + 3 : closing]))
+        text_start = closing + 2
+        start = text.find('=?', text_start)
+
+    parts.append(text[text_start:])
+    return parts
+
+
+def decode_header(value: str | email.header.Header) -> list[tuple[bytes | str, str | None]]:
+    """Split a header value into its encoded words and the text between them, like `email.header.decode_header()`, in linear time.
+
+    The stdlib function is quadratic in the number of encoded words (it removes the parts from the front of a list and
+    concatenates the bytes of consecutive words one at a time), so a megabyte of encoded words in a subject takes minutes.
+    This is the same algorithm with the same result; each encoded word is still decoded by the stdlib function.
+
+    Args:
+        value: The header value, or a compat32 `email.header.Header` object.
+
+    Returns:
+        list: The (text, charset) pairs, see `email.header.decode_header()`.
+
+    Raises:
+        email.errors.HeaderParseError: If an encoded word cannot be decoded, e.g. invalid base64.
+    """
+    if isinstance(value, email.header.Header):
+        return email.header.decode_header(value)
+
+    if len(_split_encoded_words(value)) == 1:
+        return [(value, None)]
+
+    # (text, encoding, charset) per word, unencoded text with None as encoding and charset
+    words: list[tuple[str, str | None, str | None]] = []
+    for line in value.splitlines():
+        parts = _split_encoded_words(line)
+        for index in range(0, len(parts), 4):
+            unencoded = parts[index].lstrip() if index == 0 else parts[index]
+            if unencoded:
+                words.append((unencoded, None, None))
+            if index + 1 < len(parts):
+                words.append((parts[index + 3], parts[index + 2].lower(), parts[index + 1].lower()))
+
+    # White space between two encoded words is dropped.
+    kept_words = []
+    for index, word in enumerate(words):
+        between_encoded_words = 0 < index < len(words) - 1 and words[index - 1][1] and words[index + 1][1]
+        if not (between_encoded_words and word[0].isspace()):
+            kept_words.append(word)
+
+    # Consecutive words of the same charset are joined, the unencoded ones with a space.
+    runs: list[tuple[str | None, list[bytes]]] = []
+    for text, encoding, charset in kept_words:
+        if encoding is None:
+            data = bytes(text, 'raw-unicode-escape')
         else:
-            try:
-                parsed += k.decode(v, errors='replace')
-            except LookupError:
-                # Unknown charset name, e.g. "=?foo-bar?q?x?=". Never fail on attacker controlled input.
-                logger.debug('Unknown charset "%s" in RFC2047 encoded word, trying to detect the encoding', v, exc_info=True)
-                parsed += decode_string(k)
+            data = typing.cast('bytes', email.header.decode_header(f'=?{charset}?{encoding}?{text}?=')[0][0])
 
-    return parsed
+        if runs and runs[-1][0] == charset:
+            runs[-1][1].append(data)
+        else:
+            runs.append((charset, [data]))
+
+    return [((b' ' if charset is None else b'').join(chunks), charset) for charset, chunks in runs]
 
 
 def noparenthesis(line: str, replacement: str = '') -> str:

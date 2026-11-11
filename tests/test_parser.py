@@ -1,6 +1,8 @@
+"""End-to-end tests of `EmlParser`: the options and the structure of the result."""
+
 import datetime as dt
-import email.policy
-import email.utils
+import hashlib
+import itertools
 import json
 import pathlib
 import typing
@@ -9,11 +11,12 @@ from email.message import EmailMessage
 
 import pytest
 
+import eml_parser.decode
 import eml_parser.parser
+import eml_parser.policy
+import tests.table
 
-my_execution_dir = pathlib.Path(__file__).resolve().parent
-parent_dir = my_execution_dir.parent
-samples_dir = pathlib.Path(parent_dir, 'samples')
+samples_dir = pathlib.Path(__file__).resolve().parent.parent / 'samples'
 
 
 def deep_flatten_object(obj: typing.Any) -> dict:
@@ -80,223 +83,6 @@ def json_serial(obj: typing.Any) -> str | None:
 
 
 class TestEMLParser:
-    def test_get_file_hash(self) -> None:
-        with pathlib.Path(samples_dir, 'sample.eml').open('rb') as fhdl:
-            raw_email = fhdl.read()
-
-        pre_computed_hashes = {
-            'sha256': '99798841db2f773a11ead628526ab4d6226187e20ca715e3439bb7375806b275',
-            'md5': '2c5e3f62e6d2b1511a0f5e7476bca46a',
-            'sha512': '3a3d78e6cb8a5e0740fbfdf36083d9da950a60843bb240990ab30fa4062e608a17770a582de3d13b5240727531cfb98a826fbcc6aadd371f541acabb7c9f98e7',
-            'sha1': 'effbc0f4702f8d8d1d4911a6f0228013919c2cdc',
-        }
-
-        assert eml_parser.EmlParser.get_file_hash(raw_email) == pre_computed_hashes
-
-    def test_wrap_hash_sha256(self) -> None:
-        assert eml_parser.EmlParser.get_hash('www.example.com', 'sha256') == '80fc0fb9266db7b83f85850fa0e6548b6d70ee68c8b5b412f1deea6ebdef0404'
-
-    def test_get_uri_ondata(self) -> None:
-        test_urls = """Lorem ipsum dolor sit amet, consectetur adipiscing elit.
-        Mauris consectetur mi tortor, http://www.example.com consectetur iaculis orci ultricies sit amet.
-        Mauris "http://www.example.com/test1?bla" ornare lobortis ex nec dictum. Aliquam blandit arcu ac lorem iaculis aliquet.
-        Praesent a tempus dui, eu feugiat diam. Interdum http://www.example.com/a/b/c/d/ et malesuada fames ac ante ipsum primis in faucibus.
-        Suspendisse ac rutrum leo, non vehicula purus. Quisque quis sapien lorem. Nunc velit enim, <img src=image.example.com/test.jpg>
-        placerat quis vestibulum at, https://www.example2.com condimentum non velit."""
-
-        expected_result = ['http://www.example.com', 'http://www.example.com/test1?bla', 'http://www.example.com/a/b/c/d/', 'https://www.example2.com']
-
-        assert eml_parser.EmlParser(include_href=False).get_uri_ondata(test_urls) == expected_result
-
-    def test_get_uri_href_ondata(self) -> None:
-        test_urls = """<html><body>Lorem ipsum dolor sit amet, consectetur adipiscing elit.
-        Mauris consectetur mi tortor, <a href="example.com">consectetur iaculis</a> orci ultricies sit amet.
-        <center><img src="http://47fee4f03182a2437d6d-359a8ec3a1ca7be00e972dc7374155\r\n16.r50.cf3.example.com/img1.jpg" />Play a cool game!
-        Mauris <a href="example.com/test1?bla"><img src=image.example.com/test.jpg></a> ex nec dictum. Aliquam blandit arcu ac lorem iaculis aliquet.
-        Praesent a tempus dui, eu feugiat diam. Interdum <a href="example.com/a/b/c/d/">et malesuada</a> fames ac ante ipsum primis in faucibus.
-        Suspendisse ac rutrum leo, non vehicula purus. Quisque <a href="http://www.example.com?t1=v1&amp;t2=v2">quis</a> sapien lorem. Nunc velit enim,
-        placerat quis vestibulum at, <a href="example2.com">condimentum </a> non velit.</html></body>"""
-
-        expected_result = [
-            'http://www.example.com?t1=v1&t2=v2',
-            'example.com',
-            'http://47fee4f03182a2437d6d-359a8ec3a1ca7be00e972dc737415516.r50.cf3.example.com/img1.jpg',
-            'example.com/test1?bla',
-            'image.example.com/test.jpg',
-            'example.com/a/b/c/d/',
-            'example2.com',
-        ]
-
-        assert eml_parser.EmlParser(include_href=True, email_force_tld=True).get_uri_ondata(test_urls) == expected_result
-
-    def test_get_uri_href_commas_ondata(self) -> None:
-        test_urls = """
-        http://www.example.com?t1=v1&t2=v2,https://www.example.com, http://www1.example.com?t1=v1&t2=v2, https://www1.example.com,
-        http://www2.example.com,https://www3.example.com
-        """
-
-        expected_result = [
-            'http://www.example.com?t1=v1&t2=v2',
-            'https://www.example.com',
-            'http://www1.example.com?t1=v1&t2=v2',
-            'https://www1.example.com',
-            'http://www2.example.com',
-            'https://www3.example.com',
-        ]
-
-        assert eml_parser.EmlParser(include_www=True).get_uri_ondata(test_urls) == expected_result
-
-    def test_get_valid_tld_uri_href_ondata(self) -> None:
-        test_urls = """<html><body>Lorem ipsum dolor sit amet, consectetur adipiscing elit.
-        Mauris consectetur mi tortor, <a href="example.com">consectetur iaculis</a> orci ultricies sit amet.
-        Mauris <a href="example.com/test1?bla"><img src=image.example.jpg/test.jpg></a> ex nec dictum. Aliquam blandit arcu ac lorem iaculis aliquet.
-        Praesent a tempus dui, eu feugiat diam. Interdum <a href="example.com/a/b/c/d/">et malesuada</a> fames ac ante ipsum primis in faucibus.
-        Suspendisse ac rutrum leo, non vehicula purus. Quisque <a href="http://www.example.com?t1=v1&amp;t2=v2">quis</a> sapien lorem. Nunc velit enim,
-        placerat quis vestibulum at, <a href="example2.com">condimentum </a> non velit.</html></body>
-        """
-
-        expected_result = ['http://www.example.com?t1=v1&t2=v2', 'example.com', 'example.com/test1?bla', 'example.com/a/b/c/d/', 'example2.com']
-
-        assert eml_parser.EmlParser(include_href=True, domain_force_tld=True).get_uri_ondata(test_urls) == expected_result
-
-    def test_get_uri_re_backtracking(self) -> None:
-        """Ensure url_regex_simple does not cause catastrophic backtracking (Issue 63), test with re instead of regex"""
-        test_urls = """
-        Lorem ipsum dolor sit amet, http://xxxxxxxxxx.example.com������������������������������������������������������������������������������������������������������������������������������������������������ consectetur adipiscing elit.
-        """
-
-        expected_result = [
-            'http://xxxxxxxxxx.example.com������������������������������������������������������������������������������������������������������������������������������������������������'
-        ]
-
-        assert eml_parser.EmlParser(domain_force_tld=False).get_uri_ondata(test_urls) == expected_result
-
-    def test_get_uri_unicode_ondata(self) -> None:
-        """Ensure url_regex includes Unicode in domains and paths"""
-        test_urls = """
-        Lorem ipsum dolor sit amet http://💌.example.คอม , http://💌.example.คอม/📮/📧/📬.png consectetur https://💩.la adipiscing elit.
-        """
-
-        expected_result = ['http://💌.example.คอม', 'http://💌.example.คอม/📮/📧/📬.png', 'https://💩.la']
-
-        assert eml_parser.EmlParser(include_www=False, domain_force_tld=True).get_uri_ondata(test_urls) == expected_result
-
-    def test_get_uri_ipv6_ondata(self) -> None:
-        """Ensure url_regex includes URLs with IPv6 hosts, including zone Indexes"""
-        test_urls = """
-        Lorem ipsum dolor sit amet http://[2001:0db8:85a3:0000:0000:8a2e:0370:7334]
-        http://[fe80::1ff:fe23:4567:890a%25eth0]/6️⃣ consectetur adipiscing elit.
-        """
-
-        expected_result = ['http://[2001:0db8:85a3:0000:0000:8a2e:0370:7334]', 'http://[fe80::1ff:fe23:4567:890a%25eth0]/6️⃣']
-
-        assert eml_parser.EmlParser(ip_force_routable=False).get_uri_ondata(test_urls) == expected_result
-
-    def test_get_uri_ipv6_routable_ondata(self) -> None:
-        """Ensure url_regex can exclude private and other unallocated IPv6 hosts in URLs."""
-        test_urls = """
-        Curabitur vel neque lacinia, consequat erat id http://[2001:0db8:85a3:0000:0000:8a2e:0370:7334],
-        venenatis sem. Etiam dignissim ullamcorper http://[2606:2800:220:1:248:1893:25c8:1946] risus non pulvinar.
-        Etiam dui tortor http://[fe80::1ff:fe23:4567:890a%25eth0]/6️⃣, posuere et iaculis sed, accumsan a erat.
-        """
-
-        expected_result = ['http://[2606:2800:220:1:248:1893:25c8:1946]']
-
-        assert eml_parser.EmlParser(ip_force_routable=True).get_uri_ondata(test_urls) == expected_result
-
-    def test_get_uri_www_ondata(self) -> None:
-        test_urls = """
-        www91.example.com@www92.example.com  www93.example.com@example.com
-        www94......example.com/path  not.www95.example.com:443/path
-        www2.example.com:443/path 'www3.example.com/path' ‘www4.example.com#abc’  www5.example.com:443?def   \nwww6.example.com.../path
-        www7.example.com/?# www8.example.com?/#  www9.example.com#?/  www10.example.com/?
-        https://www01.example.com/path  https://www02.example.com..../path  https://www03.example.com/
-        http://www04.example.com/?# http://www05.example.com?/#  http://www06.example.com#?/  http://www07.example.com/?
-        """
-
-        expected_result = [
-            'www2.example.com:443/path',
-            'www3.example.com/path',
-            'www4.example.com#abc',
-            'www5.example.com:443?def',
-            'www6.example.com.../path',
-            'www7.example.com/',
-            'www8.example.com?/',
-            'www9.example.com#?/',
-            'www10.example.com/',
-            'https://www01.example.com/path',
-            'https://www02.example.com..../path',
-            'https://www03.example.com/',
-            'http://www04.example.com/',
-            'http://www05.example.com?/',
-            'http://www06.example.com#?/',
-            'http://www07.example.com/',
-        ]
-
-        assert eml_parser.EmlParser(include_www=True).get_uri_ondata(test_urls) == expected_result
-
-    def test_headeremail2list_1(self) -> None:
-        msg = EmailMessage()
-        msg['Subject'] = 'Test subject éèàöüä${}'
-        msg['From'] = Address('John Doe', 'john.doe', 'example.com')
-        msg['To'] = (Address('Jané Doe', 'jane.doe', 'example.com'), Address('James Doe', 'james.doe', 'example.com'))
-        msg.set_content("""Hi,
-Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent feugiat vitae tellus et molestie. Duis est ipsum, tristique eu pulvinar vel, aliquet a nibh. Vestibulum ultricies semper euismod. Maecenas non sagittis elit. Mauris non feugiat leo. Cras vitae quam est. Donec dapibus justo ut dictum viverra. Aliquam eleifend tortor mollis, vulputate ante sit amet, sodales elit. Fusce scelerisque congue risus mollis pellentesque. Sed malesuada erat sit amet nisl laoreet mollis. Suspendisse potenti. Fusce cursus, tortor sit amet euismod molestie, sem enim semper quam, eu ultricies leo est vel turpis.
-""")
-        ep = eml_parser.EmlParser()
-        ep.msg = msg
-
-        assert sorted(ep.headeremail2list(header='to')) == ['james.doe@example.com', 'jane.doe@example.com']
-
-    def test_headeremail2list_2(self) -> None:
-        """Here we test the headeremail2list function using an input which should trigger
-        a email library bug (27257, or a related unquoted-trailing-period display-name
-        parsing bug that still affects some Python versions).
-        """
-        with pathlib.Path(samples_dir, 'sample_bug27257.eml').open('rb') as fhdl:
-            raw_email = fhdl.read()
-
-        msg = email.message_from_bytes(raw_email, policy=email.policy.default)
-
-        ep = eml_parser.EmlParser()
-        ep.msg = msg
-
-        # Regardless of whether this particular Python/stdlib version raises on
-        # msg.items()/get_all() for this malformed header, our own workaround must
-        # still produce the correct result.
-        assert ep.headeremail2list(header='to') == ['test@example.com']
-
-    def test_headeremail2list_valueerror_branch_fallback(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Regression test for the 'except ValueError' branch of headeremail2list.
-
-        Some Python versions surface the malformed "Test.<test@example.com>" style
-        header (unquoted display name ending in a bare period) as a ValueError from
-        Message.get_all(), rather than the AttributeError handled by the other except
-        clause. In that case, headeremail2list falls back to parsing each raw value
-        with email.headerregistry.HeaderRegistry directly - but that stdlib parser can
-        itself raise on this same input. We force that branch here (regardless of what
-        the current interpreter actually raises) and verify we still fall back to
-        regex-based extraction instead of propagating the exception.
-        """
-        with pathlib.Path(samples_dir, 'sample_bug27257.eml').open('rb') as fhdl:
-            raw_email = fhdl.read()
-
-        msg = email.message_from_bytes(raw_email, policy=email.policy.default)
-
-        original_get_all = email.message.Message.get_all
-
-        def fake_get_all(self: email.message.Message, *args: typing.Any, **kwargs: typing.Any) -> typing.Any:
-            if self.policy is email.policy.default:
-                raise ValueError('forced for test')
-            return original_get_all(self, *args, **kwargs)
-
-        monkeypatch.setattr(email.message.Message, 'get_all', fake_get_all)
-
-        ep = eml_parser.EmlParser()
-        ep.msg = msg
-
-        assert ep.headeremail2list(header='to') == ['test@example.com']
-
     def test_parse_email_1(self) -> None:
         """Parses a generated sample e-mail and tests it against a known good result"""
         msg = EmailMessage()
@@ -311,9 +97,8 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
         good_output = json.loads(good_output_json)
 
         ep = eml_parser.EmlParser()
-        ep.msg = msg
 
-        test_output_json = json.dumps(ep.parse_email(), default=json_serial)
+        test_output_json = json.dumps(ep.decode_email_bytes(msg.as_bytes()), default=json_serial)
         test_output = json.loads(test_output_json)
 
         recursive_compare(good_output, test_output)
@@ -543,3 +328,267 @@ Lorem ipsüm dolor sit amét, consectetur 10$ + 5€ adipiscing elit. Praesent f
         assert body['uri'] == ['https://phishing.example.com/verify?id=ABCD1234']
         assert set(body['uri_noscheme']) == {'other.example.com?something&blub', 'mailto:scammer@example.com'}
         assert set(body['domain']) == {'phishing.example.com', 'other.example.com', 'example.com'}
+
+
+MULTIPART_MESSAGE = b"""From: a@example.com
+Content-Type: multipart/alternative; boundary="b1"
+
+--b1
+Content-Type: text/plain
+Content-Transfer-Encoding: quoted-printable
+
+Visit http://example.com/ caf=C3=A9
+--b1
+Content-Type: text/html
+
+<p>html</p>
+--b1--
+"""
+
+
+def test_raw_body_lists_the_text_parts() -> None:
+    # Arrange
+    parser = eml_parser.parser.EmlParser(include_raw_body=True)
+
+    # Act
+    parsed = parser.decode_email_bytes(MULTIPART_MESSAGE)
+    exported = json.loads(eml_parser.decode.export_to_json(parsed))
+
+    # Assert
+    assert parsed['raw_body'] == [('quoted-printable', 'Visit http://example.com/ café'), ('', '<p>html</p>')]
+    assert exported['raw_body'] == [['quoted-printable', 'Visit http://example.com/ café'], ['', '<p>html</p>']]
+
+
+def test_raw_body_is_absent_by_default() -> None:
+    # Arrange
+    parser = eml_parser.parser.EmlParser()
+
+    # Act
+    parsed = parser.decode_email_bytes(MULTIPART_MESSAGE)
+
+    # Assert
+    assert 'raw_body' not in parsed
+
+
+# A multipart mail with three parts:
+#   1. a text/plain body part
+#   2. a text/html attachment (scanned as body AND as attachment)
+#   3. a binary attachment
+RAW_MAIL = (
+    b'From: a@example.com\r\n'
+    b'Subject: part hook\r\n'
+    b'Content-Type: multipart/mixed; boundary="b"\r\n'
+    b'\r\n'
+    b'--b\r\n'
+    b'Content-Type: text/plain; charset="utf-8"\r\n'
+    b'\r\n'
+    b'body line\r\n'
+    b'--b\r\n'
+    b'Content-Type: text/html; name="note.html"\r\n'
+    b'Content-Disposition: attachment; filename="note.html"\r\n'
+    b'\r\n'
+    b'<html><body>note</body></html>\r\n'
+    b'--b\r\n'
+    b'Content-Type: application/octet-stream; name="bin.dat"\r\n'
+    b'Content-Disposition: attachment; filename="bin.dat"\r\n'
+    b'Content-Transfer-Encoding: base64\r\n'
+    b'\r\n'
+    b'AQID\r\n'
+    b'--b--\r\n'
+)
+
+
+def test_hook_receives_every_part_with_hashed_bytes() -> None:
+    """Each part is delivered once per representation, with data that matches its hash in the result."""
+    calls: list[eml_parser.parser.PartData] = []
+    result = eml_parser.parser.EmlParser(part_hook=calls.append).decode_email_bytes(RAW_MAIL)
+
+    # The text/html attachment is scanned as body and as attachment, like in the result itself.
+    assert [part.kind for part in calls] == ['body', 'body', 'attachment', 'attachment']
+
+    for part in calls:
+        assert part.sha256 == hashlib.sha256(part.data).hexdigest()
+
+    bodies = {body['hash']: body for body in result['body']}
+    attachments = {a['hash']['sha256']: a for a in result['attachment']}
+
+    body_parts = [part for part in calls if part.kind == 'body']
+    assert [part.data for part in body_parts] == [b'body line', b'<html><body>note</body></html>']
+    assert all(part.sha256 in bodies for part in body_parts)
+    assert all(part.filename is None for part in body_parts)
+    assert body_parts[0].content_type == 'text/plain'
+    assert body_parts[0].boundary == 'b'
+
+    attachment_parts = [part for part in calls if part.kind == 'attachment']
+    assert [part.filename for part in attachment_parts] == ['note.html', 'bin.dat']
+    assert all(part.sha256 in attachments for part in attachment_parts)
+    assert attachment_parts[1].data == b'\x01\x02\x03'
+    assert attachment_parts[1].content_type == 'application/octet-stream'
+
+
+def test_hook_fires_without_raw_body_in_the_result() -> None:
+    """The point of the hook: the data is available to the scanner, but not in the returned structure."""
+    calls: list[eml_parser.parser.PartData] = []
+    result = eml_parser.parser.EmlParser(part_hook=calls.append).decode_email_bytes(RAW_MAIL)
+
+    assert calls, 'the hook must fire even with include_raw_body and include_attachment_data left at False'
+    assert all('content' not in body for body in result['body'])
+    assert all('raw' not in attachment for attachment in result['attachment'])
+
+
+def test_hook_not_set_parses_unchanged() -> None:
+    """Without a hook the output is exactly the pre-existing one."""
+    plain = eml_parser.parser.EmlParser().decode_email_bytes(RAW_MAIL)
+    hooked = eml_parser.parser.EmlParser(part_hook=lambda part: None).decode_email_bytes(RAW_MAIL)
+    assert plain == hooked
+
+
+def test_hook_exception_propagates() -> None:
+    """A failing scanner is not swallowed."""
+
+    def failing(part: eml_parser.parser.PartData) -> None:
+        raise RuntimeError('scan failed')
+
+    with pytest.raises(RuntimeError, match='scan failed'):
+        eml_parser.parser.EmlParser(part_hook=failing).decode_email_bytes(RAW_MAIL)
+
+
+def test_hook_receives_attached_message_bytes() -> None:
+    """A message/rfc822 attachment is delivered as attachment with the exact serialized bytes that were hashed.
+
+    As an .eml file it is also scanned as text (like in the result itself), so the hook
+    is called twice for it.
+    """
+    inner = b'From: in@example.com\r\nSubject: in\r\n\r\ninner body\r\n'
+    raw = (
+        b'From: a@example.com\r\n'
+        b'Content-Type: multipart/mixed; boundary="b"\r\n'
+        b'\r\n'
+        b'--b\r\n'
+        b'Content-Type: message/rfc822; name="inner.eml"\r\n'
+        b'Content-Disposition: attachment; filename="inner.eml"\r\n'
+        b'\r\n' + inner + b'--b--\r\n'
+    )
+    calls: list[eml_parser.parser.PartData] = []
+    result = eml_parser.parser.EmlParser(part_hook=calls.append).decode_email_bytes(raw)
+
+    attachments = [part for part in calls if part.kind == 'attachment']
+    assert len(attachments) == 1
+    attachment = attachments[0]
+    assert attachment.filename == 'inner.eml'
+    assert attachment.content_type == 'message/rfc822'
+    assert result['attachment'][0]['hash']['sha256'] == attachment.sha256
+
+
+MESSAGE_BODY = 'body http://evil.example.com/x\n'
+
+
+def build_message(prefix: bytes, line_ending: bytes) -> bytes:
+    lines = [b'From: a@b.com', b'Subject: hi', b'', MESSAGE_BODY.encode().rstrip(b'\n')]
+    return prefix + line_ending.join(lines) + line_ending
+
+
+class TestIgnoreBadStart:
+    # every garbage prefix with both line endings
+    LEADING_GARBAGE_IS_SKIPPED_AND_STRUCTURE_IS_KEPT_CASES = list(
+        itertools.product(
+            [b'garbage line\nmore garbage\n', b'+OK message follows\r\n', b'\r\n\r\n', b'   leading whitespace line\n', b'Dear Bob, note: see below\n'],
+            [b'\n', b'\r\n'],
+        )
+    )
+
+    def test_leading_garbage_is_skipped_and_structure_is_kept(self) -> None:
+        def check(prefix: bytes, line_ending: bytes) -> None:
+            parser = eml_parser.EmlParser(ignore_bad_start=True, include_raw_body=True)
+
+            result = parser.decode_email_bytes(build_message(prefix, line_ending))
+
+            assert result['header']['subject'] == 'hi'
+            assert result['header']['from'] == 'a@b.com'
+            assert result['header']['header']['subject'] == ['hi']
+            assert result['body'][0]['content'].strip() == MESSAGE_BODY.strip()
+            assert result['body'][0]['uri'] == ['http://evil.example.com/x']
+
+        tests.table.assert_all_cases(check, self.LEADING_GARBAGE_IS_SKIPPED_AND_STRUCTURE_IS_KEPT_CASES)
+
+    def test_garbage_prefix_does_not_change_the_body_hash(self) -> None:
+        parser = eml_parser.EmlParser(ignore_bad_start=True)
+
+        clean = parser.decode_email_bytes(build_message(b'', b'\n'))
+        dirty = parser.decode_email_bytes(build_message(b'garbage line\n', b'\n'))
+
+        assert dirty['body'][0]['hash'] == clean['body'][0]['hash']
+
+    def test_per_call_argument_enables_skipping(self) -> None:
+        parser = eml_parser.EmlParser()
+
+        result = parser.decode_email_bytes(build_message(b'garbage line\n', b'\n'), ignore_bad_start=True)
+
+        assert result['header']['subject'] == 'hi'
+
+    def test_valid_message_is_unchanged(self) -> None:
+        raw_email = (samples_dir / 'sample.eml').read_bytes()
+
+        with_flag = eml_parser.EmlParser(ignore_bad_start=True).decode_email_bytes(raw_email)
+        without_flag = eml_parser.EmlParser().decode_email_bytes(raw_email)
+
+        assert with_flag == without_flag
+
+    def test_input_without_any_header_like_line_is_passed_through(self) -> None:
+        parser = eml_parser.EmlParser(ignore_bad_start=True, include_raw_body=True)
+
+        result = parser.decode_email_bytes(b'just some text\nwithout any header\n')
+
+        assert result['header']['subject'] == ''
+
+
+RAW_EMAIL = b'From: a@example.com\r\nSubject: s\r\n\r\nvisit www.Evil.example.com/Path and http://other.example.org/x'
+
+
+def _sha256(value: str) -> str:
+    return hashlib.sha256(value.encode()).hexdigest()
+
+
+def test_raw_mode_reports_uri_noscheme() -> None:
+    body = eml_parser.parser.EmlParser(include_raw_body=True).decode_email_bytes(RAW_EMAIL)['body'][0]
+
+    assert body['uri_noscheme'] == ['www.Evil.example.com/Path']
+    assert body['uri'] == ['http://other.example.org/x']
+
+
+def test_hashed_mode_reports_uri_noscheme_hash() -> None:
+    body = eml_parser.parser.EmlParser().decode_email_bytes(RAW_EMAIL)['body'][0]
+
+    assert body['uri_noscheme_hash'] == [_sha256('www.evil.example.com/path')]
+    assert body['uri_hash'] == [_sha256('http://other.example.org/x')]
+    assert 'uri_noscheme' not in body
+
+
+def test_hashed_mode_without_noscheme_urls_has_no_key() -> None:
+    body = eml_parser.parser.EmlParser().decode_email_bytes(b'From: a@example.com\r\n\r\nhttp://other.example.org/x')['body'][0]
+
+    assert 'uri_noscheme_hash' not in body
+
+
+class TestDefects:
+    """Defects must be reported by name."""
+
+    def test_defect_names(self) -> None:
+        """A multipart without boundary reports the defect classes, not empty strings."""
+        raw = b'From: a@example.com\r\nContent-Type: multipart/mixed\r\n\r\n--x\r\nContent-Type: text/plain\r\n\r\nhello\r\n--x--\r\n'
+        parsed = eml_parser.parser.EmlParser().decode_email_bytes(raw)
+
+        assert parsed['header']['defect'] == ['NoBoundaryInMultipartDefect', 'MultipartInvariantViolationDefect']
+
+    def test_clean_message_has_no_defect_key(self) -> None:
+        """No defects, no key."""
+        assert 'defect' not in eml_parser.parser.EmlParser().decode_email_bytes(b'From: a@example.com\r\n\r\nhello\r\n')['header']
+
+
+def test_policy_and_part_data_are_importable_from_the_parser_module() -> None:
+    # Arrange, Act
+    policy = eml_parser.parser.CustomPolicy()
+
+    # Assert
+    assert isinstance(policy, eml_parser.policy.CustomPolicy)
+    assert eml_parser.parser.PartData.__dataclass_fields__.keys() >= {'kind', 'data', 'sha256'}

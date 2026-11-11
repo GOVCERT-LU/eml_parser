@@ -66,7 +66,7 @@ header field. Profile the largest message of the shape to find the code whose ca
 
 Regular expressions
 -------------------
-The body is searched in slices of at most about 8 KiB (``EmlParser.string_sliding_window_loop()``), which caps the cost of a
+The body is searched in slices of at most about 8 KiB (``indicators.sliding_windows()``), which caps the cost of a
 pattern that is super-linear in the length of a single token, so such a pattern is hardly visible when parsing a message.
 The patterns in ``REGEX_SHAPES`` are therefore also measured on their own, on one long token, by CPU time only (a search is
 a single C-level call).
@@ -233,6 +233,25 @@ SHAPES: dict[str, Shape] = {
     'header-value-addresses': Shape(
         lambda n: _message(headers=['Cc: ' + ',\r\n '.join(f'u{i} <u{i}@d{i}.example.test>' for i in range(n))]), (2_000, 4_000, 8_000), 'addresses'
     ),
+    # one group with many members: the stdlib address parser is quadratic in the members of a group (above the group bound of
+    # the parser at every size, so always the regex path)
+    'header-value-address-group': Shape(
+        lambda n: _message(headers=['To: team: ' + ',\r\n '.join(f'u{i}@d.test' for i in range(n)) + ';']), (20_000, 40_000, 80_000), 'addresses'
+    ),
+    # many MIME parameters: the stdlib parses them on every get_param() / get_boundary(), quadratic in their number (above
+    # the parameter text bound of the parser at every size, so always cut)
+    'header-value-content-type-parameters': Shape(
+        lambda n: _message(content_type='text/plain; ' + ';\r\n '.join(f'p{i}=v{i}' for i in range(n))), (8_000, 16_000, 32_000), 'parameters'
+    ),
+    # many RFC 2047 encoded words in the subject: email.header.decode_header() is quadratic in their number (list.pop(0),
+    # bytes concatenation), so the parser has its own linear decode.decode_header()
+    'header-value-subject-encoded-words': Shape(
+        lambda n: _message().replace(b'Subject: scaling', b'Subject: ' + b'=?utf-8?q?a?= ' * n), (20_000, 40_000, 80_000), 'words'
+    ),
+    # many encoded words without the closing "?=": the pattern of the stdlib searches to the end of the line from each one
+    'header-value-subject-unclosed-encoded-words': Shape(
+        lambda n: _message().replace(b'Subject: scaling', b'Subject: ' + b'=?a?q?x ' * n), (20_000, 40_000, 80_000), 'words'
+    ),
     'header-value-authentication-results': Shape(
         lambda n: _message(
             headers=['Authentication-Results: mx.example.test;\r\n ' + ';\r\n '.join(f'spf=pass smtp.mailfrom=s{i}.example.test' for i in range(n))]
@@ -248,12 +267,32 @@ SHAPES: dict[str, Shape] = {
         REPORT_FIELD_COUNTS,
         'links',
     ),
+    # attribute values are searched in the whole body (not in slices): the nearest tag opening must be found without searching back
+    # from every attribute, and a value without its closing quote (with white space, so the text search slices it) must stay linear
+    'body-html-attributes-without-tags': Shape(
+        lambda n: _message(_lines(f'href=h{i}.example.test/p' for i in range(n)), 'text/html; charset=us-ascii'), REPORT_FIELD_COUNTS, 'attributes'
+    ),
+    'body-html-hrefs-without-scheme': Shape(
+        lambda n: _message(_lines(f'<a class="c{i}" title="t {i}" href="h{i}.example.test/p {i}">l</a>' for i in range(n)), 'text/html; charset=us-ascii'),
+        REPORT_FIELD_COUNTS,
+        'links',
+    ),
+    'body-html-unclosed-href-value': Shape(
+        lambda n: _message('<a href="https://example.test/' + _lines(f'w{i} https://h{i}.example.test/' for i in range(n)), 'text/html; charset=us-ascii'),
+        REPORT_FIELD_COUNTS,
+        'words',
+    ),
     'body-email-addresses': Shape(lambda n: _message(_lines(f'u{i}@h{i}.example.test' for i in range(n))), REPORT_FIELD_COUNTS, 'addresses'),
     'body-domains': Shape(lambda n: _message(_lines(f'h{i}.example{i % 89}.test' for i in range(n))), REPORT_FIELD_COUNTS, 'domains'),
     'body-ip-addresses': Shape(
         lambda n: _message(_lines(f'10.{i // 65536 % 256}.{i // 256 % 256}.{i % 256} 2001:db8::{i:x}' for i in range(n))),
         REPORT_FIELD_COUNTS,
         'IPv4/IPv6 pairs',
+    ),
+    # a host label of distinct code points: the stdlib punycode codec is quadratic in their number (up to the 1 024 characters
+    # idna accepts for a host), so `hosts.punycode()` computes the deltas in O(n log n)
+    'body-url-idn-label-length': Shape(
+        lambda n: _message(f'http://{"".join(chr(0x20000 + i) for i in range(n))}.xn--p1ai/x', 'text/plain; charset=utf-8'), (250, 500, 1_000), 'code points'
     ),
     'body-unc-shares': Shape(lambda n: _message(_lines(f'\\\\h{i}.example.test\\share{i}' for i in range(n))), REPORT_FIELD_COUNTS, 'shares'),
     # --- MIME structure and attachments ---
@@ -305,7 +344,12 @@ REGEX_SHAPES: dict[str, tuple[typing.Any, str]] = {
     'recv-dom-regex-host-names': (eml_parser.regexes.recv_dom_regex, 'from a.'),
     'recv-dom-regex-numeric-last-label': (eml_parser.regexes.recv_dom_regex, 'from a.1'),
     'recv-dom-regex-fragments': (eml_parser.regexes.recv_dom_regex, 'by a1_'),
+    # a share host whose separator after the last label is missing must not be given back label by label
+    'unc-regex-host-labels': (eml_parser.regexes.unc_regex, '1.'),
 }
+
+# Text in front of the repeated unit, for patterns which only start at a marker.
+REGEX_PREFIXES = {'unc-regex-host-labels': '\\\\'}
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -469,7 +513,8 @@ def test_parsing_cost_scales_linearly(name: str, header_cache: typing.Any, monke
 @pytest.mark.parametrize('name', list(REGEX_SHAPES))
 def test_regex_cost_scales_linearly(name: str) -> None:
     pattern, unit = REGEX_SHAPES[name]
-    small_text, large_text = (unit * n for n in REGEX_SIZES)
+    prefix = REGEX_PREFIXES.get(name, '')
+    small_text, large_text = (prefix + unit * n for n in REGEX_SIZES)
     size_ratio = REGEX_SIZES[-1] / REGEX_SIZES[0]
 
     small, _ = _cpu_time(lambda: pattern.findall(small_text), None)
