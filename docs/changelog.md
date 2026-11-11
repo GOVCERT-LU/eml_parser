@@ -5,8 +5,9 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [v4.7.0]
 ### Fixes
+- Fix URLs whose host has a long non-ASCII label of distinct code points (`http://<1 000 CJK characters>.xn--p1ai/`) taking quadratic time to parse (since v4.6.0; vulnerability report by @jaksdy, thanks): the stdlib punycode codec, used to convert the host to its ASCII form, scans the whole label once per distinct code point, so each such URL took 0.15 s and 100 of them in a 400 KB plain text body 9 s. `hosts.punycode()` computes the same encoding in O(n log n) (0.2 s for that body); the reported URLs and domains are unchanged.
 - Fix the warning for a gateway of `pconf['byhostentry']` found more than once in a `Received` line being added as a nested list (`['Duplicate SMTP by entrypoint']`) instead of a string to `header.received[].warning`.
 - Fix `EmlParser` adding the keys `whiteip` and `whitefor` to the `pconf` dict of the caller. The dict is only read now; missing keys mean no whitelisting, as before.
 - Fix whitelisted IP addresses (`pconf['whiteip']`) being matched by notation: in `Received` lines the address was compared as written, in the body in its normalised form, so `2001:db8:0:0::1` or `::ffff:192.0.2.1` was not recognised as the whitelisted `2001:db8::1` or `192.0.2.1`, and an entry written in upper case never matched. Addresses are compared as IP addresses now (zone index ignored, IPv4-mapped IPv6 addresses as their IPv4 address); entries are still compared as given too. A `whiteip` given as a string instead of a list no longer makes the parser raise `TypeError`.
