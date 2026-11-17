@@ -13,12 +13,12 @@ import eml_parser.regexes
 import tests.table
 
 
-def find_urls(text: str, **settings: bool) -> list[str]:
+def find_urls(text: str, *, html: bool = False, **settings: bool) -> list[str]:
     """The URLs found in a text with the given settings of `EmlParser` (its defaults for the others)."""
     options = {'include_www': True, 'include_href': True, 'domain_force_tld': False, 'ip_force_routable': False} | settings
     hosts = eml_parser.hosts.HostValidator(domain_force_tld=options['domain_force_tld'], ip_force_routable=options['ip_force_routable'])
     finder = eml_parser.indicators.IndicatorFinder(hosts, eml_parser.regexes.email_no_force_tld_regex, options['include_www'], options['include_href'])
-    return finder.find_urls(text)
+    return finder.find_urls(text, html=html)
 
 
 def test_find_urls() -> None:
@@ -793,3 +793,175 @@ def test_mailto_url_with_bracket_in_the_address() -> None:
     # Assert
     assert found == ['mailto:[x@example.com']
     assert list(indicators.domain) == ['example.com']
+
+
+# Character references in the text (GHSA-g6w4-pg2r-xx6w): the indicators are searched in the text as its reader sees it, the references
+# resolved once. (token, indicators in a text/html part, indicators in a text/plain part); a text/plain part resolves only references with ";".
+_PHISH_URL = {'uri': ['https://phishing.example.com/login'], 'domain': ['phishing.example.com']}
+_PHISH_MAIL = {'email': ['user@phishing.example.com'], 'domain': ['phishing.example.com']}
+_SHOP_DOMAIN = {'domain': ['shop.example']}
+CHARACTER_REFERENCE_CASES: list[tuple[str, dict[str, list[str]], dict[str, list[str]]]] = [
+    ('https://phishing.example.com/login', _PHISH_URL, _PHISH_URL),
+    ('https&#58;&#47;&#47;phishing&#46;example&#46;com/login', _PHISH_URL, _PHISH_URL),
+    ('https:&#47;&#47;phishing&#46;example&#46;com/login', _PHISH_URL, _PHISH_URL),
+    ('https&#58;//phishing.example.com/login', _PHISH_URL, _PHISH_URL),
+    ('https&#x3a;&#x2f;&#x2f;phishing&#x2e;example&#x2e;com/login', _PHISH_URL, _PHISH_URL),
+    ('https&colon;&sol;&sol;phishing&period;example&period;com/login', _PHISH_URL, _PHISH_URL),
+    ('&#104;&#116;&#116;&#112;&#115;://phishing.example.com/login', _PHISH_URL, _PHISH_URL),
+    (''.join(f'&#{ord(c)};' for c in 'https://phishing.example.com/login'), _PHISH_URL, _PHISH_URL),
+    # without semicolon: resolved by browsers, shown as written by mail clients in plain text
+    ('https&#58&#47&#47phishing&#46example&#46com/login', _PHISH_URL, {}),
+    ('www.phishing&#46;example&#46;com/login', *[{'uri_noscheme': ['www.phishing.example.com/login'], 'domain': ['www.phishing.example.com']}] * 2),
+    ('www&#46;phishing&#46;example&#46;com', *[{'domain': ['www.phishing.example.com']}] * 2),
+    ('phishing&#46;example&#46;com', *[{'domain': ['phishing.example.com']}] * 2),
+    ('198&#46;51&#46;100&#46;7', *[{'ip': ['198.51.100.7']}] * 2),
+    ('http&#58;&#47;&#47;198&#46;51&#46;100&#46;7/x', *[{'uri': ['http://198.51.100.7/x'], 'ip': ['198.51.100.7']}] * 2),
+    ('user&#64;phishing.example.com', _PHISH_MAIL, _PHISH_MAIL),
+    ('user@phishing&#46;example&#46;com', _PHISH_MAIL, _PHISH_MAIL),
+    ('mailto&#58;user&#64;phishing&#46;example&#46;com', _PHISH_MAIL, _PHISH_MAIL),
+    ('&lt;a href=&quot;https://phishing.example.com/x&quot;&gt;', *[{'uri': ['https://phishing.example.com/x'], 'domain': ['phishing.example.com']}] * 2),
+    # resolved once: a reference formed by resolving one is shown as written, so the scheme stays hidden; no fragment of an address
+    ('https&amp;#58;&amp;#47;&amp;#47;phishing&amp;#46;example&amp;#46;com/login', {}, {}),
+    ('https&amp;#58;//phishing.example.com/login', *[{'domain': ['phishing.example.com']}] * 2),
+    ('https&#38;#58;//phishing.example.com/login', *[{'domain': ['phishing.example.com']}] * 2),
+    ('https&#&#53;&#56;;&#&#52;&#55;;&#&#52;&#55;;phishing.example.com/login', *[{'domain': ['phishing.example.com']}] * 2),
+    ('user@phishing&#&#52;&#54;;example.com', {}, {}),
+    # a non-ASCII character (homoglyph) is part of the label, no ASCII fragment of it is reported (as since 4.6.0 for literal ones)
+    ('p&#1072;ypal.com/login', {}, {}),
+    ('https://p&#1072;ypal.com/login', *[{'uri': ['https://p\u0430ypal.com/login'], 'domain': ['xn--pypal-4ve.com']}] * 2),
+    ('j&ouml;rg@example.com', *[{'domain': ['example.com']}] * 2),
+    # no indicators from ordinary text
+    ('v1&#46;2&#46;3', {}, {}),
+    ('invoice&#46;pdf', {}, {}),
+    ('Q&#38;A &amp; more AT&amp;T', {}, {}),
+    # query strings: a legacy name without semicolon ("&sect", "&reg", "&curren") in front of "=" or a letter is left as written
+    ('https://shop.example/p?id=1&section=2&region=eu', *[{'uri': ['https://shop.example/p?id=1&section=2&region=eu']} | _SHOP_DOMAIN] * 2),
+    ('https://shop.example/p?id=1&current_row=2', *[{'uri': ['https://shop.example/p?id=1&current_row=2']} | _SHOP_DOMAIN] * 2),
+    ('https://shop.example/p?id=1&amp;section=2', *[{'uri': ['https://shop.example/p?id=1&section=2']} | _SHOP_DOMAIN] * 2),
+    ('<a href="https://shop.example/p?id=1&section=2">x</a>', *[{'uri': ['https://shop.example/p?id=1&section=2']} | _SHOP_DOMAIN] * 2),
+    (
+        '<a href="https&#58;&#47;&#47;phishing&#46;example&#46;com/">x</a>',
+        *[{'uri': ['https://phishing.example.com/'], 'domain': ['phishing.example.com']}] * 2,
+    ),
+    ('<a href="https&amp;#58;//phishing.example.com/">x</a>', *[{'domain': ['phishing.example.com']}] * 2),
+]
+
+
+def _indicators_in_part(content_type: str, token: str) -> dict[str, list[str]]:
+    body = f'<html><body><p>Please verify at {token} now.</p></body></html>' if content_type == 'text/html' else f'Please verify at {token} now.'
+    raw = f'From: a@sender.test\r\nContent-Type: {content_type}; charset=utf-8\r\n\r\n{body}\r\n'.encode()
+    part = eml_parser.parser.EmlParser(include_raw_body=True).decode_email_bytes(raw)['body'][0]
+    return {key: part[key] for key in ('uri', 'uri_noscheme', 'domain', 'email', 'ip') if part.get(key)}
+
+
+def test_indicators_hidden_by_character_references() -> None:
+    """Indicators written with character references are reported as their reader sees them, in HTML and in plain text."""
+
+    def check(token: str, in_html: dict[str, list[str]], in_plain_text: dict[str, list[str]]) -> None:
+        assert _indicators_in_part('text/html', token) == in_html
+        assert _indicators_in_part('text/plain', token) == in_plain_text
+
+    tests.table.assert_all_cases(check, CHARACTER_REFERENCE_CASES)
+
+
+def test_find_urls_resolves_references_by_context() -> None:
+    """`find_urls()` reads a text as plain text unless told it is HTML; attribute values are always read with the attribute rules."""
+    text = 'see https&#58;//a.example/x and https&#58//b.example/y <a href="https&#58//c.example/z?a=1&copy=2">c</a>'
+
+    assert find_urls(text) == ['https://a.example/x', 'https://c.example/z?a=1&copy=2']
+    assert find_urls(text, html=True) == ['https://a.example/x', 'https://b.example/y', 'https://c.example/z?a=1&copy=2']
+
+
+def test_rendered_text_keeps_text_without_references() -> None:
+    """A text without "&" is returned as it is, with the attribute values in it."""
+    finder = eml_parser.indicators.IndicatorFinder(
+        eml_parser.hosts.HostValidator(domain_force_tld=False, ip_force_routable=False), eml_parser.regexes.email_no_force_tld_regex, True, True
+    )
+    text = '<a href="https://a.example/">a</a>'
+
+    assert finder.rendered_text(text, html=True) == (text, eml_parser.regexes.href_value_spans(text))
+
+
+WWW_LINK_BOUNDARY_CASES = ['<p>{}</p>', '<td>{}</td>', '<br>{}', '({})', '[{}]', '{{{}}}', '<{}>', 'see {} now', '"{}"']
+
+
+def test_www_link_after_tag_or_bracket() -> None:
+    """A www link right after a tag or an opening bracket is a link (it used to be reported as domain only, without its path)."""
+
+    def check(template: str) -> None:
+        assert find_urls(template.format('www.example.com/login?id=1'), html=True) == ['www.example.com/login?id=1']
+
+    tests.table.assert_all_cases(check, WWW_LINK_BOUNDARY_CASES)
+
+
+# (text in a text/plain part, indicators): a numeric reference shown as written (without ";" in plain text) is no part of a domain or
+# IP address, the text next to it is still reported as its reader sees it.
+REFERENCE_SHOWN_AS_WRITTEN_CASES: list[tuple[str, dict[str, list[str]]]] = [
+    ('p&#97ypal.com', {}),
+    ('x&#46y.example.com', {}),
+    ('&#X30.example.com', {}),
+    ('&#49.2.3.4', {}),
+    ('evil.example.com&#1', {'domain': ['evil.example.com']}),
+    ('&#evil.example.com', {'domain': ['evil.example.com']}),
+    ('8.8.8.8&#1', {'ip': ['8.8.8.8']}),
+]
+
+
+def test_reference_shown_as_written_is_no_part_of_a_domain() -> None:
+    """`p&#97ypal.com` in plain text gives no "97ypal.com" (it used to), `evil.example.com&#1` still gives "evil.example.com"."""
+
+    def check(token: str, expected: dict[str, list[str]]) -> None:
+        raw = f'From: a@sender.test\r\nContent-Type: text/plain\r\n\r\nsee {token} now\r\n'.encode()
+        part = eml_parser.parser.EmlParser(include_raw_body=True).decode_email_bytes(raw)['body'][0]
+        assert {key: part[key] for key in ('domain', 'ip', 'email') if part.get(key)} == expected
+
+    tests.table.assert_all_cases(check, REFERENCE_SHOWN_AS_WRITTEN_CASES)
+
+
+# (text in a text/plain part, reported addresses, reported URLs without scheme): an address match which starts in a URL in front of the
+# address is the address itself, the login part of a URL is no address (it used to be reported as `//user@host`, `password@host` or with the
+# whole URL in front).
+ADDRESS_IN_URL_CASES: list[tuple[str, list[str], list[str]]] = [
+    ('http://www.example.com/login.asp?email=jane.doe@example.org', ['jane.doe@example.org'], []),
+    ('http://www.example.com/u/?l=a&e=kevin@example.org', ['kevin@example.org'], []),
+    ('http://h.example.com/p//a@example.org', ['a@example.org'], []),
+    ('http://h.example.com:8080/?email=a@example.org', ['a@example.org'], []),
+    ('https://user:password@evil.example.com/x', [], []),
+    ('https://user@evil.example.com/x', [], []),
+    ('http://www.bank.example.com@evil.example.com/', [], []),
+    ('ftp://anonymous:me@ftp.example.com/', [], []),
+    ('user:password@evil.example.com:8080/x', [], ['user:password@evil.example.com:8080/x']),
+    ('user:password@evil.example.com/x', [], ['user:password@evil.example.com/x']),
+    # addresses stay addresses
+    ('mailto:bob@example.org', ['bob@example.org'], []),
+    ('Contact:bob@example.org', ['bob@example.org'], []),
+    ('list+user=example.com@lists.example.org', ['list+user=example.com@lists.example.org'], []),
+    ('www91.example.com@www92.example.com', ['www91.example.com@www92.example.com'], []),
+]
+
+
+def test_address_in_url() -> None:
+    """Addresses in URLs are reported without the URL, the login part of a URL is no address."""
+
+    def check(token: str, addresses: list[str], urls: list[str]) -> None:
+        raw = f'From: a@sender.test\r\nContent-Type: text/plain\r\n\r\nsee {token} now\r\n'.encode()
+        part = eml_parser.parser.EmlParser(include_raw_body=True).decode_email_bytes(raw)['body'][0]
+        assert (part.get('email', []), part.get('uri_noscheme', [])) == (addresses, urls)
+
+    tests.table.assert_all_cases(check, ADDRESS_IN_URL_CASES)
+
+
+def test_address_login_prefix_is_bounded() -> None:
+    """The token in front of a login is searched back at most 256 characters: a longer one gives no URL, the address is reported."""
+    text = f'{"u" * 300}:pw@example.org/x'
+    raw = f'From: a@sender.test\r\nContent-Type: text/plain\r\n\r\n{text}\r\n'.encode()
+    part = eml_parser.parser.EmlParser(include_raw_body=True).decode_email_bytes(raw)['body'][0]
+
+    assert part.get('uri_noscheme', []) == []
+
+
+def test_address_with_url_characters_in_local_part() -> None:
+    """ "?", "/" or "=" alone in a local part is an address (RFC 5322), not a URL."""
+    for address in ('000?@example.org', 'a/b@example.org', 'a=b@example.org', 'name/et&s/org@example.org', 'cn=name/o=org@example.org'):
+        raw = f'From: a@sender.test\r\nContent-Type: text/plain\r\n\r\nsee {address} now\r\n'.encode()
+        assert eml_parser.parser.EmlParser(include_raw_body=True).decode_email_bytes(raw)['body'][0]['email'] == [address]

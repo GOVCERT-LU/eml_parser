@@ -6,13 +6,16 @@ import email
 import email.errors
 import email.header
 import email.utils
+import enum
 import html
+import html.entities
 import json
 import logging
 import typing
 
 import charset_normalizer
 import dateutil.parser
+import dateutil.tz
 import regex
 
 import eml_parser.regexes
@@ -170,7 +173,88 @@ def decode_string(string: bytes, encoding: str | None = None) -> str:
     return string.decode('latin-1')
 
 
-def normalize_attribute_url(value: str) -> str:
+# A character reference as the stdlib `html.unescape()` finds it: numeric (decimal or hex) or named, the semicolon optional.
+_CHARACTER_REFERENCE_REGEX = regex.compile(r"""&(#[0-9]+;?|#[xX][0-9a-fA-F]+;?|[^\t\n\f <&#;]{1,32};?)""")
+_ASCII_ALNUM = frozenset('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789')
+
+
+class ReferenceContext(enum.Enum):
+    """Where a text with character references is read, which decides which references are resolved (HTML tokenizer rules)."""
+
+    # An HTML document: every reference, a numeric one and a legacy named one (`&copy`) also without semicolon, except a legacy named one
+    # without semicolon in front of "=", a letter or a digit. Browsers leave that one in attribute values (`href="?a=1&section=2"`); in text
+    # content they turn `?a=1&section=2` into `?a=1§ion=2`, which is never meant and is no indicator, so it is left there too.
+    HTML = 'html'
+    # Text which is not HTML: only complete references with a semicolon. Mail clients show them as written, so they are only there to hide
+    # an indicator from a parser; a query string (`?a=1&section=2`) is left as it is.
+    PLAIN_TEXT = 'plain-text'
+
+
+def _numeric_reference(match: regex.Match[str], context: ReferenceContext) -> tuple[str, int] | None:
+    """The character a numeric reference stands for and its end, or None if it is left as it is."""
+    if context is ReferenceContext.PLAIN_TEXT and not match.group(0).endswith(';'):
+        return None
+    # The stdlib applies the HTML rules for invalid code points (NUL, surrogates, C1 controls, beyond U+10FFFF).
+    return html.unescape(match.group(0)), match.end()
+
+
+def _named_reference(text: str, match: regex.Match[str], context: ReferenceContext) -> tuple[str, int] | None:
+    """The character(s) a named reference stands for and its end in *text*, or None if it is left as it is."""
+    body = match.group(1)
+    # A complete reference; the table also has the legacy names without semicolon, which are only resolved below.
+    if body.endswith(';') and body in html.entities.html5:
+        return html.entities.html5[body], match.end()
+
+    if context is ReferenceContext.PLAIN_TEXT:
+        return None
+
+    # The longest legacy name (one without semicolon) the reference starts with, as browsers resolve it.
+    for length in range(min(len(body), 32), 1, -1):
+        name = body[:length]
+        if name in html.entities.html5:
+            end = match.start() + 1 + length
+            if text[end : end + 1] == '=' or text[end : end + 1] in _ASCII_ALNUM:
+                return None  # "?a=1&section=2" stays, see ReferenceContext.HTML
+            return html.entities.html5[name], end
+    return None
+
+
+def decode_character_references(text: str, context: ReferenceContext) -> str:
+    """Resolve the character references of a text once, the way a reader sees it in *context*.
+
+    The result is never decoded again: a reference which is only formed by decoding (`&amp;#58;` gives `&#58;`) stays as it is,
+    as browsers show it.
+
+    Args:
+        text: The text.
+        context: Where the text is read.
+
+    Returns:
+        The decoded text.
+    """
+    if '&' not in text:
+        return text
+
+    pieces: list[str] = []
+    position = 0
+    for match in _CHARACTER_REFERENCE_REGEX.finditer(text):
+        if match.group(1)[0] == '#':
+            replacement = _numeric_reference(match, context)
+        else:
+            replacement = _named_reference(text, match, context)
+        if replacement is not None:
+            characters, end = replacement
+            pieces += (text[position : match.start()], characters)
+            position = end
+
+    if not pieces:
+        return text
+
+    pieces.append(text[position:])
+    return ''.join(pieces)
+
+
+def normalize_attribute_url(value: str, unescape: bool = True) -> str:
     """Normalise the value of an HTML attribute containing an URL the way a browser does before using it.
 
     Character references are resolved, tabs and line feeds (which browsers drop from URLs anywhere) are removed and backslashes
@@ -178,12 +262,13 @@ def normalize_attribute_url(value: str) -> str:
 
     Args:
         value (str): The raw attribute value, possibly with the opening quote.
+        unescape (bool): Resolve the character references (see `ReferenceContext.HTML`); False if this was done already.
 
     Returns:
         str: The normalised value.
     """
-    if '&' in value:
-        value = html.unescape(value)
+    if unescape:
+        value = decode_character_references(value, ReferenceContext.HTML)
 
     value = value.translate(eml_parser.regexes.url_drop_chars_table)
 
@@ -193,6 +278,17 @@ def normalize_attribute_url(value: str) -> str:
         value = value[:end].replace('\\', '/') + value[end:]
 
     return value
+
+
+def _dateutil_zone(name: str | None, offset: int | None) -> dt.tzinfo | None:
+    """The time zone of a date parsed by dateutil: its numeric offset, else UTC for a zone name dateutil does not know.
+
+    Without it, dateutil warns about unknown names (and announces it will raise in a future version), and it takes a name equal to the
+    zone of the analysing machine (`time.tzname`, e.g. "CET") as that local zone, which made the result depend on the machine.
+    """
+    if offset is not None:
+        return dateutil.tz.tzoffset(name, offset)
+    return dt.UTC if name else None
 
 
 def robust_string2date(line: str) -> dt.datetime:
@@ -226,7 +322,7 @@ def robust_string2date(line: str) -> dt.datetime:
         try:
             # dateutil takes missing parts (e.g. the year) from the current date by default, which would make the
             # result depend on the time of the analysis. Use a fixed default instead.
-            date_ = dateutil.parser.parse(line, default=_DATEUTIL_DEFAULT)
+            date_ = dateutil.parser.parse(line, default=_DATEUTIL_DEFAULT, tzinfos=_dateutil_zone)
         except (AttributeError, ValueError, OverflowError, decimal.InvalidOperation):
             # Now we are facing an invalid date.
             return DEFAULT_DATE

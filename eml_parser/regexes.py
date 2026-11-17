@@ -20,7 +20,13 @@ _WORD_CHAR = r"""(?:(?![\p{scx=Han}\p{scx=Hiragana}\p{scx=Katakana}\p{scx=Bopomo
 # so a longer local part or a non-ASCII address yields no fragment. The parts are matched possessively, which keeps the search linear.
 _EMAIL_LOCAL_CHAR = r"""[a-zA-Z0-9.!#$%&'*+\-/=?^_`{|}~]"""
 _EMAIL_START = rf"""(?<!{_EMAIL_LOCAL_CHAR}|{_WORD_CHAR})({_EMAIL_LOCAL_CHAR}{{1,128}}+@[a-zA-Z0-9-]++"""
-_EMAIL_END = rf""")(?!\.?{_WORD_CHAR})"""
+# A reference to a dot which is left in the text (one which only decoding forms, `&#&#52;&#54;;`) does not end an address or a domain either.
+_ENCODED_DOT = r"""&(?i:\#0*46|\#x0*2e|period);"""
+# A domain or IP address does not start in the digits of a numeric character reference which is shown as written (one without ";" in plain
+# text, or one written as `&amp;#97`): `p&#97ypal.com` gives no "97ypal.com", `&#X30.com` no "x30.com". Text next to such a reference is
+# still found, as its reader sees it (`evil.com&#1`, `&#evil.com`).
+_NOT_IN_REFERENCE = r"""(?!(?<=&\#)(?:[0-9]|[xX][0-9a-fA-F]))"""
+_EMAIL_END = rf""")(?!\.?{_WORD_CHAR}|{_ENCODED_DOT})"""
 email_no_force_tld_regex = re.compile(rf"""{_EMAIL_START}(?:\.[a-zA-Z0-9-]++)*+{_EMAIL_END}""")
 email_force_tld_regex = re.compile(rf"""{_EMAIL_START}(?:\.[a-zA-Z0-9-]++)++{_EMAIL_END}""")
 email_regex = email_no_force_tld_regex
@@ -50,14 +56,13 @@ recv_dom_regex = re.compile(
 # or touch an encoded dot (`other.example&#46;com`). The last label consists of letters only or is punycode, which rejects IP addresses,
 # version numbers and sizes (`10.0pt`). The labels are matched possessively and the TLD is checked afterwards, which keeps the search linear.
 # Non-ASCII host names are taken from the URLs (`hosts.ascii_host()`), as browsers resolve them.
-_ENCODED_DOT = r"""&(?i:\#0*46|\#x0*2e|period);"""
 dom_regex = re.compile(
-    rf"""(?<![_.%-]|{_WORD_CHAR})(?<!{_ENCODED_DOT})[A-Za-z0-9-]++(?:\.[A-Za-z0-9-]++)++(?<=\.(?:[A-Za-z]{{2,63}}|xn--[A-Za-z0-9-]{{1,59}}))(?![_@]|\.?{_WORD_CHAR}|{_ENCODED_DOT})"""
+    rf"""(?<![_.%-]|{_WORD_CHAR})(?<!{_ENCODED_DOT}){_NOT_IN_REFERENCE}[A-Za-z0-9-]++(?:\.[A-Za-z0-9-]++)++(?<=\.(?:[A-Za-z]{{2,63}}|xn--[A-Za-z0-9-]{{1,59}}))(?![_@]|\.?{_WORD_CHAR}|{_ENCODED_DOT})"""
 )
 
 # An address must not be part of a longer dotted number or word ("1.2.3.4.5", "v1.2.3.4") nor be the first labels of a host name ("1.2.3.4.nip.io").
 # The boundaries are ASCII only on purpose, as text in e.g. CJK scripts is often not separated by whitespace. A sentence ending dot is fine.
-ipv4_regex = re.compile(r"""(?<![0-9A-Za-z_.])(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})(?![0-9A-Za-z_])(?!\.[0-9A-Za-z_])""")
+ipv4_regex = re.compile(rf"""(?<![0-9A-Za-z_.]){_NOT_IN_REFERENCE}(\d{{1,3}}\.\d{{1,3}}\.\d{{1,3}}\.\d{{1,3}})(?![0-9A-Za-z_])(?!\.[0-9A-Za-z_])""")
 
 # From https://gist.github.com/mnordhoff/2213179 : IPv6 with zone ID (RFC 6874)
 _IPV6_H16 = r"""[0-9a-f]{1,4}"""
@@ -115,9 +120,10 @@ _URL_WITH_SCHEME = r"""
 (?:[\w\-._~%!$&'()*+,;=:/?#\[\]@|^{}\U00001000-\U0010FFFF]*[^\x00-\x20\s`!\[\]{;:'".,<>«»“”‘’])?
 """
 
-# An address starting with "www" without a scheme (the preceding character which is matched needs to be removed afterwards)
+# An address starting with "www" without a scheme (the preceding character which is matched needs to be removed afterwards). It follows
+# white space, a quote, an opening bracket or a tag (`<p>www.example.com/x`, `(www.example.com/x)`, `<www.example.com/x>`).
 _URL_WWW = r"""
-(?:^|[ \t\n\r\f\v\'\"«»“”‘’])
+(?:^|[ \t\n\r\f\v\'\"«»“”‘’(\[{<>])
 www\d{0,3}[.](?:[-\w\u0900-\u2017\u2020-\U0010FFFF]{1,250}[.]){1,250}[-0-9a-z\w\u0900-\u0DFF]{2,30}[.]*  # Host Simple TLD regex
 (?::[0]*[1-9][0-9]{0,4})?  # Port
 (?:[\/#?](?:[\w\-._~%!$&'()*+,;=:/?#\[\]@|^{}\U00001000-\U0010FFFF]*[^\x00-\x20\s`!\[\]{;:'\".,<>«»“”‘’])) # Path, etc.

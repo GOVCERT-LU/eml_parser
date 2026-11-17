@@ -27,6 +27,7 @@ class BodyPart(typing.NamedTuple):
     text: str  # the decoded text
     headers: collections.abc.Sequence[tuple[str, str | email.header.Header]]  # the header fields of the part
     boundary: str | None  # boundary of the enclosing multipart, if any
+    html: bool = False  # whether the text is an HTML document, see `is_html_part()`
 
 
 def find_header_start(data: bytes) -> int:
@@ -247,6 +248,15 @@ def is_text_part(part: email.message.Message, filename_lower: str) -> bool:
     return is_text
 
 
+_HTML_CONTENT_TYPES = frozenset(('text/html', 'application/xhtml+xml', 'image/svg+xml', 'application/hta'))
+_HTML_EXTENSIONS = ('.htm', '.html', '.xhtml', '.shtml', '.svg', '.hta')
+
+
+def is_html_part(part: email.message.Message, filename_lower: str) -> bool:
+    """Whether a text part is an HTML (or XML) document, whose character references its reader sees resolved."""
+    return part.get_content_type() in _HTML_CONTENT_TYPES or filename_lower.endswith(_HTML_EXTENSIONS)
+
+
 def text_parts(msg: email.message.Message, recursion_limit: int) -> list[BodyPart]:
     """Retrieve all text parts of an e-mail, i.e. the text parts and the attachments which are scanned as text (see `is_text_part()`).
 
@@ -264,11 +274,12 @@ def text_parts(msg: email.message.Message, recursion_limit: int) -> list[BodyPar
 
     for part, boundary in iter_parts(msg, recursion_limit):
         # Text document attachments (e.g. .htm/.html) belong to the body as well, so that they do not escape the URL scan.
-        if part.is_multipart() or not is_text_part(part, filename(part).lower()):
+        filename_lower = filename(part).lower()
+        if part.is_multipart() or not is_text_part(part, filename_lower):
             continue
 
         encoding = part.get('content-transfer-encoding', '').lower()
         text = eml_parser.decode.decode_body(typing.cast('bytes', part.get_payload(decode=True)), part.get_content_charset())
-        body_parts.append(BodyPart(encoding, text, eml_parser.headers.header_items(part), boundary))
+        body_parts.append(BodyPart(encoding, text, eml_parser.headers.header_items(part), boundary, is_html_part(part, filename_lower)))
 
     return body_parts

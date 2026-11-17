@@ -8,6 +8,7 @@ import email.header
 import email.message
 import json
 import pathlib
+import time
 import types
 import typing
 
@@ -395,3 +396,51 @@ def test_decode_header_of_a_header_object() -> None:
 
     # Assert
     assert fragments == email.header.decode_header(value)
+
+
+# (text, decoded as HTML, decoded as plain text)
+CHARACTER_REFERENCE_DECODING_CASES = [
+    ('no references', 'no references', 'no references'),
+    ('a&#46;b &#x2E;c &period;d', 'a.b .c .d', 'a.b .c .d'),
+    ('a&#46b &#x2Eg', 'a.b .g', 'a&#46b &#x2Eg'),
+    # legacy names (valid without semicolon): the longest one, unless "=" or an ASCII letter or digit follows
+    ('&copy 2026 &copy;', '\u00a9 2026 \u00a9', '&copy 2026 \u00a9'),
+    ('?a=1&section=2&copy=3&reg2', '?a=1&section=2&copy=3&reg2', '?a=1&section=2&copy=3&reg2'),
+    ('&notit; &not.', '&notit; \u00ac.', '&notit; &not.'),
+    ('&unknown; &zz &#;', '&unknown; &zz &#;', '&unknown; &zz &#;'),
+    # invalid code points are replaced as by browsers (and html.unescape())
+    ('&#0; &#x110000; &#xD800; &#128;', '\ufffd \ufffd \ufffd \u20ac', '\ufffd \ufffd \ufffd \u20ac'),
+    # resolved once only
+    ('&amp;#58; &#38;#58; &#&#53;&#56;;', '&#58; &#58; &#58;', '&#58; &#58; &#58;'),
+]
+
+
+def test_decode_character_references() -> None:
+    """References are resolved once, by the rules of the context."""
+
+    def check(text: str, as_html: str, as_plain_text: str) -> None:
+        assert eml_parser.decode.decode_character_references(text, eml_parser.decode.ReferenceContext.HTML) == as_html
+        assert eml_parser.decode.decode_character_references(text, eml_parser.decode.ReferenceContext.PLAIN_TEXT) == as_plain_text
+
+    tests.table.assert_all_cases(check, CHARACTER_REFERENCE_DECODING_CASES)
+
+
+def test_normalize_attribute_url_keeps_query_parameters() -> None:
+    """A query parameter named like a legacy reference is kept, a value resolved before is not resolved again."""
+    assert eml_parser.decode.normalize_attribute_url('https://a.example/?x=1&section=2&curren') == 'https://a.example/?x=1&section=2\u00a4'
+    assert eml_parser.decode.normalize_attribute_url('https://a.example/?x=&#38;amp;', unescape=False) == 'https://a.example/?x=&#38;amp;'
+
+
+@pytest.mark.parametrize('value', ['Mon, 2 Nov 2026 10:00:00 W', '2 Nov 2026 10:00 C', '2026-11-02 10:00 XYZ'])
+def test_unknown_time_zone_names_are_utc_without_warning(value: str, recwarn: pytest.WarningsRecorder) -> None:
+    """A zone name dateutil does not know is UTC, without the warning which announces an exception in a future dateutil version."""
+    assert eml_parser.decode.robust_string2date(value) == dt.datetime(2026, 11, 2, 10, tzinfo=dt.UTC)
+    assert [str(warning.message) for warning in recwarn] == []
+
+
+def test_date_does_not_depend_on_the_zone_of_the_machine(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A zone name equal to the local zone of the analysing machine is not taken as that zone (dateutil did), an offset is kept."""
+    monkeypatch.setattr(time, 'tzname', ('XYZ', 'XYZ'))
+
+    assert eml_parser.decode.robust_string2date('2026-11-02 10:00 XYZ').utcoffset() == dt.timedelta(0)
+    assert eml_parser.decode.robust_string2date('2026-11-02 10:00 +0130').utcoffset() == dt.timedelta(hours=1, minutes=30)

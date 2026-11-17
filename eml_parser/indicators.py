@@ -2,7 +2,6 @@
 
 import bisect
 import dataclasses
-import html
 import ipaddress
 import logging
 import re
@@ -18,7 +17,7 @@ import eml_parser.regexes
 logger = logging.getLogger(__name__)
 
 # Whitespace and quote characters in front of an URL.
-_URL_LEADING_JUNK = ' \t\n\r\f\v\'"«»“”‘’'
+_URL_LEADING_JUNK = ' \t\n\r\f\v\'"«»“”‘’([{<>'
 
 # Characters which end an URL in text: around an URL they come from character references (`&quot;`, `&lt;http://example.com/&gt;`).
 _URL_END_CHARS = frozenset('"<>')
@@ -105,12 +104,15 @@ class IndicatorFinder:
         self._include_www = include_www
         self._include_href = include_href
 
-    def find(self, text: str, whitelist: eml_parser.hosts.IpWhitelist) -> BodyIndicators:
+    def find(self, text: str, whitelist: eml_parser.hosts.IpWhitelist, *, html: bool = False) -> BodyIndicators:
         """Find the URLs, remote file shares, e-mail addresses, domains and IP addresses in a text.
+
+        The indicators are searched in the text as its reader sees it: the character references are resolved once (see `rendered_text()`).
 
         Args:
             text: The text, e.g. a decoded body.
             whitelist: IP addresses which are left out.
+            html: Whether the text is an HTML document.
 
         Returns:
             BodyIndicators: The valid indicators.
@@ -119,8 +121,9 @@ class IndicatorFinder:
 
         # Namespace declarations (Outlook HTML, SVG, XHTML) are identifiers, not links, and would be reported as indicators on nearly every mail.
         text = eml_parser.regexes.xmlns_declaration_regex.sub(' ', text)
+        text, attribute_spans = self.rendered_text(text, html=html)
 
-        for url in self.find_urls(text):
+        for url in self._find_urls(text, attribute_spans):
             if ':/' in url[:10]:
                 found.uri[url] = None
             else:
@@ -140,10 +143,12 @@ class IndicatorFinder:
         for share in eml_parser.regexes.unc_regex.finditer(body_slice):
             found.unc[share.group(0).rstrip('.,;')] = None
 
-        for match in self._email_regex.findall(body_slice):
-            address = match.lower()
-            if self._hosts.valid_domain_or_ip(address):
-                found.email[address] = None
+        for match in self._email_regex.finditer(body_slice):
+            address, login_url = _address_or_url_login(body_slice, match.start(1), match.end(1))
+            if login_url:
+                found.uri_noscheme[login_url] = None
+            if address and self._email_regex.fullmatch(address) and self._hosts.valid_domain_or_ip(address.lower()):
+                found.email[address.lower()] = None
 
         self._add_domains(eml_parser.regexes.dom_regex.findall(body_slice), found.domain)
 
@@ -196,7 +201,53 @@ class IndicatorFinder:
             if not self._hosts.is_file_name(domain) and self._hosts.valid_domain_or_ip(domain):
                 domains[domain] = None
 
-    def find_urls(self, text: str) -> list[str]:
+    def rendered_text(self, text: str, *, html: bool) -> tuple[str, list[tuple[int, int]]]:
+        """The text with its character references resolved once, as its reader sees it, and the spans of the HTML attribute values in it.
+
+        The attribute values (see `regexes.href_value_spans()`) are found in the text as written, as browsers do, and resolved with the rules
+        for attribute values. The rest of an HTML document is resolved like text content; in other text only complete references with a
+        semicolon are resolved, mail clients show them as written, but they are only there to hide the text. Nothing is resolved twice.
+
+        Args:
+            text: The text as written.
+            html: Whether the text is an HTML document.
+
+        Returns:
+            The rendered text, and the spans of the attribute values in it (empty unless `include_href`).
+        """
+        raw_spans = eml_parser.regexes.href_value_spans(text) if self._include_href else []
+        if '&' not in text:
+            return text, raw_spans
+
+        text_context = eml_parser.decode.ReferenceContext.HTML if html else eml_parser.decode.ReferenceContext.PLAIN_TEXT
+        pieces: list[str] = []
+        spans: list[tuple[int, int]] = []
+        length = 0
+        position = 0
+        for start, end in [*raw_spans, (len(text), len(text))]:
+            for piece, context, is_attribute in ((text[position:start], text_context, False), (text[start:end], eml_parser.decode.ReferenceContext.HTML, True)):
+                decoded = eml_parser.decode.decode_character_references(piece, context) if piece else piece
+                pieces.append(decoded)
+                length += len(decoded)
+                if is_attribute and start != end:
+                    spans.append((length - len(decoded), length))
+            position = end
+
+        return ''.join(pieces), spans
+
+    def find_urls(self, text: str, *, html: bool = False) -> list[str]:
+        """Find the URLs in a text as written, see `rendered_text()` and `_find_urls()`.
+
+        Args:
+            text (str): Text input which should be searched for URLs.
+            html (bool): Whether the text is an HTML document.
+
+        Returns:
+            list: The valid URLs, unique, in order of their first occurrence.
+        """
+        return self._find_urls(*self.rendered_text(text, html=html))
+
+    def _find_urls(self, text: str, attribute_spans: list[tuple[int, int]]) -> list[str]:
         """Find the URLs in a text.
 
         The values of HTML attributes are found in the whole text, as a tag or a value with white space may cross the boundary of a slice;
@@ -204,7 +255,8 @@ class IndicatorFinder:
         found in its text.
 
         Args:
-            text (str): Text input which should be searched for URLs.
+            text (str): The rendered text, see `rendered_text()`.
+            attribute_spans (list): The spans of the HTML attribute values in it.
 
         Returns:
             list: The valid URLs, unique, in order of their first occurrence.
@@ -214,9 +266,10 @@ class IndicatorFinder:
         else:
             url_regex, comma_regex = eml_parser.regexes.url_regex_simple, eml_parser.regexes.url_regex_comma
 
-        attribute_spans = eml_parser.regexes.href_value_spans(text) if self._include_href else []
         attribute_starts = [start for start, _ in attribute_spans]
-        attribute_urls = [self.clean_url(eml_parser.decode.normalize_attribute_url(text[start:end]), in_attribute=True) for start, end in attribute_spans]
+        attribute_urls = [
+            self.clean_url(eml_parser.decode.normalize_attribute_url(text[start:end], unescape=False), in_attribute=True) for start, end in attribute_spans
+        ]
         found_urls: dict[str, None] = {}
         next_attribute = 0
         offset = 0
@@ -266,9 +319,6 @@ class IndicatorFinder:
         if in_attribute:
             url = (url[1:] if url[:1] in ('"', "'") else url).strip(_C0_CONTROL_OR_SPACE)
         else:
-            if '&' in url:
-                url = html.unescape(url)
-
             # Remove leading spaces and quote characters, and the characters browsers drop from URLs
             url = url.lstrip(_URL_LEADING_JUNK).replace('\r', '').replace('\n', '').replace('\t', '')
             url = url[: _end_of_text_url(url)]
@@ -344,6 +394,60 @@ class IndicatorFinder:
             return False
 
         return self._hosts.valid_domain_or_ip(host) is not None or self._hosts.obfuscated_ip(host) is not None
+
+
+# An address match whose local part holds a URL (`//www.example.com/login?email=a@example.com`): the address local part may contain "/",
+# "?" and "=", so a match can start in the URL in front of the address. A local part is taken as URL if it contains "://", starts with "//",
+# has a path followed by a query (`/...?`) or a query parameter (`?...=`). "=", "&", "/" and "?" alone are kept: they are valid in addresses
+# and used by VERP/SRS (`list+user=example.com@...`) and Lotus Notes (`Name/OU&X/Org@Domain`, `CN=Name/O=Org@Domain`). RFC 5322 also allows
+# a local part like `a/b?c`, which is read as URL here: such addresses are not used, while addresses in URLs are common.
+_URL_IN_LOCAL_PART = regex.compile(r"""://|\A//|/.*\?|\?.*=""", flags=regex.DOTALL)
+_URL_PATH_OR_QUERY_PREFIX = regex.compile(r""".*[?=&/:]""", flags=regex.DOTALL)
+# The nearest character in front which ends a token, searched backwards (at most _MAX_LOGIN_PREFIX characters).
+_TOKEN_DELIMITER_BEFORE = regex.compile(r"""(?r)[\s"'<>()\[\]{}«»“”‘’]""")
+_MAX_LOGIN_PREFIX = 256
+_URL_SCHEME_PREFIX = regex.compile(r"""[A-Za-z][A-Za-z0-9+.-]*://""")
+# the user of a login without scheme (`user:password@host/path`, RFC 3986 userinfo)
+_LOGIN_USER = regex.compile(r"""[A-Za-z0-9._~%!$'*+,;-]+:""")
+_LOGIN_HOST_END = regex.compile(r"""(?::[0-9]{1,5})?/""")
+
+
+def _address_or_url_login(text: str, start: int, end: int) -> tuple[str | None, str | None]:
+    """The address to report for an address match in *text*, and the URL without scheme if the match is the login part of one.
+
+    - In the path or query of a URL (`http://example.com/login?email=a@example.com`) the address is the part after the URL.
+    - The login part of a URL with scheme (`https://user:password@example.com/`, `https://www.bank.example@evil.example/`) is no address;
+      the URL and its host are reported anyway.
+    - The login part of a URL without scheme (`user:password@example.com:8080/path`) is no address either, the URL is reported instead.
+
+    Args:
+        text: The text.
+        start: The start of the match.
+        end: The end of the match.
+
+    Returns:
+        The address (or None) and the URL without scheme (or None).
+    """
+    value = text[start:end]
+    local_part = value.rpartition('@')[0]
+    lower = max(0, start - _MAX_LOGIN_PREFIX)
+    delimiter = _TOKEN_DELIMITER_BEFORE.search(text, lower, start) if text[start - 1 : start] == ':' else None
+    # without the start of the token (more than _MAX_LOGIN_PREFIX characters back) the match is taken as an address
+    if text[start - 1 : start] == ':' and (delimiter is not None or lower == 0):
+        token_start = delimiter.end() if delimiter else 0
+        prefix = text[token_start:start]
+        scheme = _URL_SCHEME_PREFIX.match(prefix)
+        if scheme is not None and not any(char in prefix[scheme.end() :] + local_part for char in '/?#'):
+            return None, None  # https://user:password@host, not http://host:8080/?email=a@example.com
+        if scheme is None and local_part[:2] == '//' and not any(char in local_part[2:] for char in '/?#'):
+            return None, None  # https://user@host: the match starts at "//"
+        if scheme is None and local_part[:2] != '//' and _LOGIN_USER.fullmatch(prefix) and prefix.lower() != 'mailto:' and _LOGIN_HOST_END.match(text, end):
+            rest = text[token_start:]
+            return None, rest[: _end_of_text_url(rest)]
+
+    if _URL_IN_LOCAL_PART.search(local_part):
+        return _URL_PATH_OR_QUERY_PREFIX.sub('', local_part, count=1) + value[len(local_part) :], None
+    return value, None
 
 
 def _host_of(url: str) -> str | None:

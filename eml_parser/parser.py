@@ -383,7 +383,7 @@ class EmlParser:
             dict: The entry.
         """
         entry: dict[str, typing.Any] = {}
-        indicators = self._indicators.find(body_part.text, self._whitelist)
+        indicators = self._indicators.find(body_part.text, self._whitelist, html=body_part.html)
 
         # The field names of BodyIndicators are the keys of the entry, e.g. "uri" or "uri_hash".
         for key, values in vars(indicators).items():

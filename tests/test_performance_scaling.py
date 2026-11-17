@@ -294,6 +294,27 @@ SHAPES: dict[str, Shape] = {
     'body-url-idn-label-length': Shape(
         lambda n: _message(f'http://{"".join(chr(0x20000 + i) for i in range(n))}.xn--p1ai/x', 'text/plain; charset=utf-8'), (250, 500, 1_000), 'code points'
     ),
+    # character references (GHSA-g6w4-pg2r-xx6w): the text is resolved once, before the search; an encoded URL is found and checked
+    'body-character-references-encoded-urls': Shape(
+        lambda n: _message(_lines(f'https&#58;&#47;&#47;h{i}&#46;example&#46;test/p{i}' for i in range(n)), 'text/html; charset=us-ascii'),
+        REPORT_FIELD_COUNTS,
+        'URLs',
+    ),
+    'body-character-references-plain-text': Shape(
+        lambda n: _message(_lines((f'w{i}&#46;x &copy &section=1 &#38;#46;' for i in range(n)), 10)), (50_000, 100_000, 200_000), 'words'
+    ),
+    'body-character-references-long-unknown-names': Shape(
+        lambda n: _message(_lines(('&' + 'a' * 40 for _ in range(n)), 10), 'text/html; charset=us-ascii'), (50_000, 100_000, 200_000), 'references'
+    ),
+    # addresses in URLs and URL login parts: the start of the token in front of a login is searched back at most 256 characters (few distinct
+    # hosts, like the other shapes: more distinct hosts and addresses than the 32 768 entries of the validation cache add calls once)
+    'body-addresses-in-urls': Shape(
+        lambda n: _message(_lines(f'http://h{i % 89}.example.test/u?email=u{i}@d{i % 97}.example.test' for i in range(n))), REPORT_FIELD_COUNTS, 'URLs'
+    ),
+    'body-url-logins': Shape(lambda n: _message(_lines(f'user{i}:pw{i}@h{i % 89}.example.test:8080/p' for i in range(n))), REPORT_FIELD_COUNTS, 'logins'),
+    'body-long-login-prefixes': Shape(
+        lambda n: _message(_lines(('x' * 200 + f':u{i}@h.example.test' for i in range(n)), 1)), (2_000, 4_000, 8_000), 'addresses'
+    ),
     'body-unc-shares': Shape(lambda n: _message(_lines(f'\\\\h{i}.example.test\\share{i}' for i in range(n))), REPORT_FIELD_COUNTS, 'shares'),
     # --- MIME structure and attachments ---
     'mime-text-parts': Shape(

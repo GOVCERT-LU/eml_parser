@@ -315,3 +315,23 @@ def test_sender_falls_back_to_the_compat32_value(monkeypatch: pytest.MonkeyPatch
 
     # Assert
     assert sender == 'joerg@example.com'
+
+
+# (Delivered-To value, addresses): Delivered-To is no address field of the stdlib; it used to be parsed from its decoded text
+DELIVERED_TO_CASES = [
+    ('=?utf-8?Q?=3B?= <victim@example.org>', ['victim@example.org']),
+    ('=?utf-8?B?O8SA?= <victim@example.org>', ['victim@example.org']),
+    ('victim@example.org (a, b)', ['victim@example.org']),
+    ('<@relay.example.org,@relay2.example.org:victim@example.org>', ['victim@example.org']),
+    ('a@example.org, B <b@example.org>', ['a@example.org', 'b@example.org']),
+]
+
+
+def test_delivered_to_is_parsed_as_address_list() -> None:
+    """Encoded display names, comments and routes in Delivered-To do not lose or repeat its addresses."""
+
+    def check(value: str, expected: list[str]) -> None:
+        raw = f'From: a@example.org\r\nDelivered-To: {value}\r\nSubject: t\r\n\r\nbody\r\n'.encode()
+        assert eml_parser.parser.EmlParser().decode_email_bytes(raw)['header']['delivered_to'] == expected
+
+    tests.table.assert_all_cases(check, DELIVERED_TO_CASES)

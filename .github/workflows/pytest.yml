@@ -30,3 +30,6 @@ jobs:
       - name: Test with pytest
         run: |
           uv run pytest -v tests
+      - name: Property-based tests (Hypothesis)
+        run: |
+          uv run pytest -v --run-property -m property tests

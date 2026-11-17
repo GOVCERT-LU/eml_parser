@@ -400,3 +400,33 @@ def test_repaired_multipart_with_an_encoded_transfer_encoding_is_split() -> None
     # Assert
     assert [(part['content_type'], part['boundary']) for part in body] == [('text/plain', 'real')]
     assert body[0]['uri'] == ['http://evil.example.com/']
+
+
+@pytest.mark.parametrize(
+    ('content_type', 'filename', 'expected'),
+    [
+        ('text/html', '', True),
+        ('application/xhtml+xml', '', True),
+        ('image/svg+xml', '', True),
+        ('text/plain', 'page.htm', True),
+        ('application/octet-stream', 'invoice.hta', True),
+        ('text/plain', '', False),
+        ('text/plain', 'notes.txt', False),
+    ],
+)
+def test_is_html_part(content_type: str, filename: str, expected: bool) -> None:
+    """HTML documents are recognised by their content type or the extension of their file name."""
+    part = EmailMessage()
+    part['Content-Type'] = content_type
+
+    assert eml_parser.mime.is_html_part(part, filename) is expected
+
+
+def test_text_parts_know_whether_they_are_html() -> None:
+    """The HTML part of a multipart/alternative is marked as HTML, the plain text part is not."""
+    msg = email.message_from_bytes(
+        b'Content-Type: multipart/alternative; boundary="b"\r\n\r\n--b\r\nContent-Type: text/plain\r\n\r\nt\r\n--b\r\nContent-Type: text/html\r\n\r\n<p>h</p>\r\n--b--\r\n',
+        policy=email.policy.default,
+    )
+
+    assert [part.html for part in eml_parser.mime.text_parts(msg, 100)] == [False, True]

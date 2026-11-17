@@ -167,6 +167,20 @@ def _parse_address_value(name: str, value: str | email.header.Header, email_rege
     return pairs
 
 
+def _address_values(msg: email.message.Message, name: str) -> list[str]:
+    """The values of an address field, parsed as address lists.
+
+    A field which the policy does not know as address field (`Delivered-To`) is parsed from its raw value as an address list, like `To`.
+    Its decoded text would lose or repeat addresses: a display name which decodes to a special (`=?utf-8?Q?=3B?=` is ";"), a comment
+    with "," or an obsolete route.
+    """
+    header_factory = getattr(msg.policy, 'header_factory', None)
+    if header_factory is None or issubclass(header_factory[name], email.headerregistry.AddressHeader):
+        return msg.get_all(name, [])
+
+    return [msg.policy.header_fetch_parse('to', value) for field_name, value in raw_items(msg) if field_name.lower() == name.lower()]
+
+
 def addresses(msg: email.message.Message, name: str, email_regex: regex.Pattern[str], email_force_tld: bool) -> list[str]:
     """Return the e-mail addresses of a header field, lower-cased.
 
@@ -180,7 +194,7 @@ def addresses(msg: email.message.Message, name: str, email_regex: regex.Pattern[
         list: The addresses, in order.
     """
     try:
-        pairs = _getaddresses(msg.get_all(name, []), email_regex)
+        pairs = _getaddresses(_address_values(msg, name), email_regex)
     except (IndexError, AttributeError):
         pairs = email.utils.getaddresses(regex_addresses(msg, name, email_regex))
     except ValueError:
