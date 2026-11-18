@@ -208,11 +208,13 @@ class EmlParser:
             # The data is only sliced, so line endings and the message body stay untouched.
             eml_file = eml_file[eml_parser.mime.find_header_start(eml_file) :]
 
-        self.msg = email.message_from_bytes(eml_file, policy=self.policy)
-        eml_parser.mime.repair_multipart(self.msg, self.policy)
-        eml_parser.policy.limit_header_parsing(self.msg)
+        # Each header value is parsed once for the whole parse, the stdlib would parse it again on every access.
+        with eml_parser.policy.parsed_header_cache():
+            self.msg = email.message_from_bytes(eml_file, policy=self.policy)
+            eml_parser.mime.repair_multipart(self.msg, self.policy)
+            eml_parser.policy.limit_header_parsing(self.msg)
 
-        return self._parse_email()
+            return self._parse_email()
 
     def _parse_email(self) -> dict[str, typing.Any]:
         """Parse the message in `self.msg` into the result of `decode_email_bytes()`."""

@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Fixes
+- Fix header fields being parsed again on every access by the parser in messages with more than 1 024 distinct header values (all versions; before v4.2.1 in every message): the stdlib parses a value on every access, and the process-wide cache of 1 024 parsed values added in v4.2.1 only covered messages with fewer values (v4.7.1, 8 000 Received fields: 3 stdlib parses per field, 1.76 s CPU, 241 MiB peak). The parsed values are now cached for one parse of a message only: one parse per field, 0.55 s, 128 MiB. The output is unchanged on `samples/`.
+- Fix the header cache keeping memory between messages (since v4.2.1): it held the parse trees of the last 1 024 values, about 125 times the size of a value, so five crafted mails of about 2 MiB left about 1 GiB held in the process after their parse. Nothing is kept between messages now. Messages with values repeated across many mails are parsed again in each mail: measured +10 % CPU on one pass over `samples/`, +54 % on 2 000 synthetic mails with repeated values.
+### Changes
+- The private `CustomPolicy._fetch_fixed_header` is no longer an `lru_cache`, so its `cache_clear()` and `cache_info()` are gone. The cache for one parse is `policy.parsed_header_cache()`, used by `EmlParser.decode_email_bytes()`.
+### Tests
+- The scaling tests measure the header cache as it is used in production (no unbounded cache any more); new shape `header-fields-received-around-1024` and unit tests for one parse per field and no state between messages.
+
 ## [v4.7.1]
 ### Fixes
 - Fix indicators written with HTML character references in the text of a body not being reported (all versions; the fix of CVE-2026-55618 in v3.0.2 only covered dots in an URL which was found as such; vulnerability report by @lanjianchun, thanks): references were only decoded in matches of the URL pattern and in attribute values, so `https&#58;&#47;&#47;phishing&#46;example&#46;com/login`, `www.phishing&#46;example&#46;com`, `user&#64;example.com` or `198&#46;51&#46;100&#46;7` in a text/html or text/plain part gave no URL, domain, address or IP address, and partly encoded ones gave fragments (`user@phishing&#46;example&#46;com` the address `user@phishing`, `p&#1072;ypal.com` the domain `ypal.com`). Every text part is now decoded once, as its reader sees it, before the indicators are searched (`decode.decode_character_references()`, `IndicatorFinder.rendered_text()`):

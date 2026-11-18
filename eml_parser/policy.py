@@ -1,11 +1,13 @@
 """The policy which parses the header fields of a message, and the limits up to which they are parsed in structured form."""
 
 import collections
+import collections.abc
+import contextlib
+import contextvars
 import email.errors
 import email.headerregistry
 import email.message
 import email.policy
-import functools
 import logging
 import typing
 
@@ -42,6 +44,30 @@ class LossyAddressParseError(IndexError):
     It is an IndexError, the error older Python versions raise for some of these values (bug 27257), so the same workarounds
     apply to all of them: the addresses are extracted by regex and the value is read with the compat32 policy.
     """
+
+
+# The parsed header values of the message being parsed, by (policy, name, raw value), see `parsed_header_cache()`. None outside of it.
+_PARSED_HEADERS: contextvars.ContextVar[dict[tuple[email.policy.Policy, str, str], tuple[str, str | None]] | None] = contextvars.ContextVar(
+    'eml_parser_parsed_headers', default=None
+)
+
+
+@contextlib.contextmanager
+def parsed_header_cache() -> collections.abc.Iterator[None]:
+    """Parse each header value at most once while the block runs, i.e. during one parse of a message (`EmlParser.decode_email_bytes()`).
+
+    The stdlib parses a header value again on every access (`get()`, `get_all()`, `items()`), and one parse of a message accesses most
+    fields several times. Inside the block `CustomPolicy.fetch_fixed_header()` keeps the parsed values in a dict which is dropped when the
+    block ends, also on an exception, so no state is kept between messages. Its size is bounded by the message: only values within
+    `constants.MAX_PARSED_HEADER_SIZE` and the header parsing limits of `limit_header_parsing()` are parsed. The cache belongs to the
+    current context (thread or task), and a nested block, e.g. a message parsed from a `part_hook`, has its own. A thread started inside
+    the block starts with an empty context: its header accesses are not cached, they give the same results.
+    """
+    token = _PARSED_HEADERS.set({})
+    try:
+        yield
+    finally:
+        _PARSED_HEADERS.reset(token)
 
 
 class UnparsedHeaderValue(str):
@@ -102,19 +128,27 @@ class CustomPolicy(email.policy.EmailPolicy):
     def fetch_fixed_header(self, name: str, value: str) -> str:
         """Early fix parsing issues and pass the name/value to the parent header_fetch_parse method for proper parsing.
 
-        The stdlib parses a header again on every access (`get()`, `get_all()`, `items()`), which are several per header, so the results are cached in `_fetch_fixed_header`.
-        The warning is logged here, once per access, because the cached method must stay pure and would otherwise only warn on the first occurrence of a value.
+        Within `parsed_header_cache()` each value is parsed once and the result is reused on every further access. Exceptions are not
+        cached, the value is parsed again on the next access. The warning is logged here, once per access, because `_fetch_fixed_header`
+        must stay pure for the cache and would otherwise only warn on the first access.
         """
-        result, warning = self._fetch_fixed_header(name, value)
+        cache = _PARSED_HEADERS.get()
+        if cache is None:
+            result, warning = self._fetch_fixed_header(name, value)
+        else:
+            key = (self, name, value)
+            cached = cache.get(key)
+            if cached is None:
+                cached = cache[key] = self._fetch_fixed_header(name, value)
+            result, warning = cached
 
         if warning is not None:
             logger.warning(warning)
 
         return result
 
-    @functools.lru_cache(maxsize=1024)  # noqa: B019 - the cache is bounded, so it keeps at most 1024 policies alive
     def _fetch_fixed_header(self, name: str, value: str) -> tuple[str, str | None]:
-        """Cached pure variant of `fetch_fixed_header` which reports its warning as the second return value instead of logging it."""
+        """Pure variant of `fetch_fixed_header` which reports its warning as the second return value instead of logging it."""
         header = name.lower()
 
         if header == 'message-id' and '[' in value and not self.email_regex.match(value):

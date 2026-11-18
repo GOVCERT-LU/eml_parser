@@ -34,10 +34,10 @@ Only ratios between sizes are compared, never absolute numbers, so the tests wor
 
 Measurement details
 -------------------
-* Header cache: ``CustomPolicy._fetch_fixed_header`` caches parsed header values in a bounded LRU cache. When a message has
-  more distinct values than the cache holds, accesses miss and values are parsed more than once. That is a constant
-  factor, but it starts at a size threshold and would look like super-linear growth between sizes on either side of it.
-  The tests therefore give the cache an unbounded size and clear it before each measurement.
+* Header cache: the parsed header values are cached for one parse of a message (``policy.parsed_header_cache()``) and
+  nothing is kept between messages, so every measurement starts cold and the tests measure the production code as it is.
+  Up to v4.7.1 a process-wide cache of 1,024 values was used instead: beyond 1,024 distinct values a message's fields were
+  parsed three times, which the shape ``header-fields-received-around-1024`` shows as a jump between its sizes.
 * Header parsing limits: beyond ``constants.MAX_PARSED_HEADER_FIELDS`` fields or ``MAX_PARSED_HEADER_BYTES`` bytes, header
   values are kept raw instead of being parsed. That would hide the cost of the structured parsing above the limit (21,000
   fields is above it), so the limits are switched off, except for shapes that test the limits themselves
@@ -81,7 +81,6 @@ size limit of the parser (e.g. ``EmlParser.MULTIPART_RECURSION_LIMIT`` or ``cons
 import base64
 import contextlib
 import dataclasses
-import functools
 import gc
 import logging
 import math
@@ -206,6 +205,9 @@ class Shape:
     header_limits: bool = False
 
 
+# Thirty words, e.g. for the comment of a header field.
+_WORDS = ' '.join(f'word{k}' for k in range(30))
+
 SHAPES: dict[str, Shape] = {
     # --- header fields (MSL-2026-030), at the sizes of the report ---
     # the reporter's exact input: constant 1 MiB, the header block split into more and more distinct fields
@@ -220,6 +222,15 @@ SHAPES: dict[str, Shape] = {
     'header-fields-received': Shape(
         lambda n: _message(headers=(f'Received: from h{i}.example.test by mx.example.test; Thu, 15 Oct 2026 12:00:00 +0000' for i in range(n))),
         REPORT_FIELD_COUNTS,
+        'header fields',
+    ),
+    # distinct values on both sides of 1,024: up to v4.7.1 a process-wide cache of 1,024 parsed values made every field parsed
+    # three times beyond it (on v4.7.1 the call count from 600 to 1,200 exceeds the budget of exponent 1.3), now each value is
+    # parsed once per message. The comment makes the stdlib parse the main cost of a field. The values differ per size, so no
+    # measurement profits from values another one cached.
+    'header-fields-received-around-1024': Shape(
+        lambda n: _message(headers=(f'Received: from h{n}-{i}.example.test ({_WORDS}) by mx.example.test; Thu, 15 Oct 2026 12:00:00 +0000' for i in range(n))),
+        (600, 1_200, 2_400),
         'header fields',
     ),
     # address headers are parsed by the stdlib address parser and the address extraction
@@ -382,23 +393,9 @@ class _BudgetExceeded(BaseException):
     """Stops a measurement early. A BaseException, so that `except Exception` in the parser cannot swallow it."""
 
 
-@pytest.fixture
-def header_cache(monkeypatch: pytest.MonkeyPatch) -> typing.Any:
-    """Give the parsed header cache an unbounded size for the test, see "Measurement details" in the module docstring."""
-    cached = eml_parser.parser.CustomPolicy._fetch_fixed_header  # noqa: SLF001 - the cache has no public interface
-    if not hasattr(cached, '__wrapped__'):
-        return None
-
-    unbounded = functools.lru_cache(maxsize=None)(cached.__wrapped__)
-    monkeypatch.setattr(eml_parser.parser.CustomPolicy, '_fetch_fixed_header', unbounded)
-    return unbounded
-
-
 @contextlib.contextmanager
-def _quiet_parse_environment(header_cache: typing.Any) -> typing.Iterator[None]:
-    """Cold header cache, no log output (some shapes log a warning per field) and no garbage collection."""
-    if header_cache is not None:
-        header_cache.cache_clear()
+def _quiet_parse_environment() -> typing.Iterator[None]:
+    """No log output (some shapes log a warning per field) and no garbage collection."""
     gc.collect()
     gc.disable()
     logging.disable(logging.CRITICAL)
@@ -418,7 +415,7 @@ def _parse(shape: Shape, raw: bytes) -> None:
             ep.decode_email_bytes(raw)
 
 
-def _count_calls(shape: Shape, raw: bytes, header_cache: typing.Any, budget: float = math.inf) -> tuple[int, bool]:
+def _count_calls(shape: Shape, raw: bytes, budget: float = math.inf) -> tuple[int, bool]:
     """Count the Python and C function calls made while parsing raw. Returns the count and whether the budget stopped the run."""
     calls = 0
 
@@ -429,7 +426,7 @@ def _count_calls(shape: Shape, raw: bytes, header_cache: typing.Any, budget: flo
             if calls > budget:
                 raise _BudgetExceeded
 
-    with _quiet_parse_environment(header_cache):
+    with _quiet_parse_environment():
         sys.setprofile(profiler)
         try:
             _parse(shape, raw)
@@ -459,11 +456,11 @@ def _cpu_time_limit(seconds: float) -> typing.Iterator[None]:
         signal.signal(signal.SIGPROF, previous)
 
 
-def _cpu_time(run: typing.Callable[[], object], header_cache: typing.Any, budget: float = math.inf) -> tuple[float, bool]:
+def _cpu_time(run: typing.Callable[[], object], budget: float = math.inf) -> tuple[float, bool]:
     """Best CPU time of CPU_REPETITIONS calls of run. Returns the time and whether the budget stopped the run."""
     best = math.inf
     for _ in range(CPU_REPETITIONS):
-        with _quiet_parse_environment(header_cache):
+        with _quiet_parse_environment():
             start = time.process_time()
             try:
                 with _cpu_time_limit(budget):
@@ -485,7 +482,7 @@ def _exponent(value_ratio: float, size_ratio: float) -> float:
 
 @pytest.mark.slow
 @pytest.mark.parametrize('name', list(SHAPES))
-def test_parsing_cost_scales_linearly(name: str, header_cache: typing.Any, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_parsing_cost_scales_linearly(name: str, monkeypatch: pytest.MonkeyPatch) -> None:
     shape = SHAPES[name]
     sizes = shape.sizes
     if not shape.header_limits:
@@ -494,12 +491,12 @@ def test_parsing_cost_scales_linearly(name: str, header_cache: typing.Any, monke
     messages = [shape.build(n) for n in sizes]
 
     # 1. Function calls, every step between two sizes.
-    previous_calls, _ = _count_calls(shape, messages[0], header_cache)
+    previous_calls, _ = _count_calls(shape, messages[0])
     report = [f'{sizes[0]:,} {shape.unit}: {previous_calls:,} calls']
     for i in range(1, len(sizes)):
         size_ratio = sizes[i] / sizes[i - 1]
         budget = previous_calls * size_ratio**shape.max_call_exponent
-        calls, stopped = _count_calls(shape, messages[i], header_cache, budget)
+        calls, stopped = _count_calls(shape, messages[i], budget)
         exponent = _exponent(calls / previous_calls, size_ratio)
         if stopped:
             report.append(f'{sizes[i]:,} {shape.unit}: stopped after {calls:,} calls, exponent > {exponent:.2f}')
@@ -516,9 +513,9 @@ def test_parsing_cost_scales_linearly(name: str, header_cache: typing.Any, monke
 
     # 2. CPU time, smallest to largest size.
     size_ratio = sizes[-1] / sizes[0]
-    small, _ = _cpu_time(lambda: _parse(shape, messages[0]), header_cache)
+    small, _ = _cpu_time(lambda: _parse(shape, messages[0]))
     # Generous budget: the allowed growth, doubled for timing noise, plus a second for very small timings.
-    large, stopped = _cpu_time(lambda: _parse(shape, messages[-1]), header_cache, budget=2 * small * size_ratio**MAX_CPU_EXPONENT + 1)
+    large, stopped = _cpu_time(lambda: _parse(shape, messages[-1]), budget=2 * small * size_ratio**MAX_CPU_EXPONENT + 1)
     exponent = _exponent(large / small, size_ratio)
     timing = [f'{sizes[0]:,} {shape.unit}: {small * 1000:,.0f} ms CPU', f'{sizes[-1]:,} {shape.unit}: {large * 1000:,.0f} ms CPU']
     if stopped:
@@ -538,11 +535,11 @@ def test_regex_cost_scales_linearly(name: str) -> None:
     small_text, large_text = (prefix + unit * n for n in REGEX_SIZES)
     size_ratio = REGEX_SIZES[-1] / REGEX_SIZES[0]
 
-    small, _ = _cpu_time(lambda: pattern.findall(small_text), None)
+    small, _ = _cpu_time(lambda: pattern.findall(small_text))
     # A signal cannot interrupt a search, so the budget is enforced by the timeout of the regex module.
     budget = 2 * small * size_ratio**MAX_CPU_EXPONENT + 1
     try:
-        large, stopped = _cpu_time(lambda: pattern.findall(large_text, timeout=budget), None)
+        large, stopped = _cpu_time(lambda: pattern.findall(large_text, timeout=budget))
     except TimeoutError:
         large, stopped = budget, True
     exponent = _exponent(large / small, size_ratio)
